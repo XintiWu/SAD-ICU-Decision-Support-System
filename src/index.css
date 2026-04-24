@@ -1,0 +1,17 @@
+@import "tailwindcss";
+
+/* 先提供乾淨底層，後續會依你的線稿再定調整體視覺語言 */
+:root {
+  color-scheme: light;
+}
+
+html,
+body {
+  height: 100%;
+}
+
+body {
+  margin: 0;
+  background: #f7f7f5;
+  color: #1f2937;
+}
