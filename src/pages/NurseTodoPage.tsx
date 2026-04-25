@@ -6,6 +6,7 @@ export function NurseTodoPage() {
   const [filter, setFilter] = useState<'全部' | '待完成' | '已完成'>('全部')
   const [kindFilter, setKindFilter] = useState<Set<TaskKind>>(new Set())
   const [tasks, setTasks] = useState<Task[]>(() => getDemoTasks())
+  const [expandedBeds, setExpandedBeds] = useState<Set<string>>(new Set())
 
   const counts = useMemo(() => {
     const done = tasks.filter((t) => t.done).length
@@ -42,6 +43,8 @@ export function NurseTodoPage() {
     return byKind
   }, [tasks])
 
+  const beds = useMemo(() => groupByBed(shownByKind), [shownByKind])
+
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <section className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
@@ -67,39 +70,66 @@ export function NurseTodoPage() {
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
           <span className="text-xs font-semibold text-slate-600">標籤篩選</span>
-          {(['給藥', '檢查', '監測', '家屬', '紀錄'] as TaskKind[]).map((k) => (
-            <KindFilterPill
-              key={k}
-              kind={k}
-              active={kindFilter.has(k)}
-              onClick={() =>
-                setKindFilter((prev) => {
-                  const next = new Set(prev)
-                  if (next.has(k)) next.delete(k)
-                  else next.add(k)
-                  return next
-                })
-              }
-            />
-          ))}
-          {kindFilter.size > 0 ? (
-            <button
-              type="button"
-              onClick={() => setKindFilter(new Set())}
-              className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-black/10 hover:bg-black/5"
-            >
-              清除
-            </button>
-          ) : null}
+          <div className="ml-auto flex flex-1 flex-wrap justify-end gap-2">
+            {(['給藥', '檢查', '監測', '家屬', '紀錄'] as TaskKind[]).map((k) => (
+              <KindFilterPill
+                key={k}
+                kind={k}
+                active={kindFilter.has(k)}
+                onClick={() =>
+                  setKindFilter((prev) => {
+                    const next = new Set(prev)
+                    if (next.has(k)) next.delete(k)
+                    else next.add(k)
+                    return next
+                  })
+                }
+              />
+            ))}
+            {kindFilter.size > 0 ? (
+              <button
+                type="button"
+                onClick={() => setKindFilter(new Set())}
+                className="rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-slate-700 ring-1 ring-black/10 hover:bg-black/5"
+              >
+                清除
+              </button>
+            ) : null}
+          </div>
         </div>
 
-        <div className="mt-5 grid gap-4">
-          {groupByBed(shownByKind).map(([bedLabel, items]) => (
-            <div key={bedLabel} className="rounded-2xl bg-[#fafaf8] p-4 ring-1 ring-black/5">
-              <div className="text-xs font-semibold text-slate-800">{bedLabel}</div>
-              <ul className="mt-3 grid gap-2">
-                {items.map((t) => (
-                  <li key={t.id} className="flex items-center gap-3 rounded-xl bg-white p-3 ring-1 ring-black/5">
+        <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {beds.map(([bedLabel, items]) => {
+            const isExpanded = expandedBeds.has(bedLabel)
+            const visibleCount = isExpanded ? items.length : Math.min(4, items.length)
+            const hiddenCount = Math.max(0, items.length - visibleCount)
+            const visibleItems = items.slice(0, visibleCount)
+
+            return (
+              <div key={bedLabel} className="rounded-2xl bg-[#fafaf8] p-3 ring-1 ring-black/5">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="text-xs font-semibold text-slate-800">{bedLabel}</div>
+                  {hiddenCount > 0 ? (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedBeds((prev) => {
+                          const next = new Set(prev)
+                          if (next.has(bedLabel)) next.delete(bedLabel)
+                          else next.add(bedLabel)
+                          return next
+                        })
+                      }
+                      className="shrink-0 rounded-full bg-white px-2 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10 hover:bg-black/5"
+                    >
+                      +{hiddenCount} 更多
+                    </button>
+                  ) : null}
+                </div>
+
+                <ul className="mt-2 grid gap-1.5">
+                  {visibleItems.map((t) => (
+                    <li key={t.id} className="flex items-center gap-2 rounded-xl bg-white p-2 ring-1 ring-black/5">
                     <input
                       type="checkbox"
                       checked={!!t.done}
@@ -117,26 +147,44 @@ export function NurseTodoPage() {
                       className="h-4 w-4 accent-black"
                     />
                     <div className="min-w-0 flex-1">
-                      <div className={`truncate text-sm ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                        {t.title}
-                      </div>
-                      <div className="mt-1 flex items-center gap-2 text-xs text-slate-600">
-                        <KindPill kind={t.kind} />
-                        {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
-                        {t.at ? <span>完成 {t.at}</span> : null}
+                      <div className="flex min-w-0 items-baseline gap-2">
+                        <div
+                          className={`min-w-0 flex-1 truncate text-sm ${
+                            t.done ? 'text-slate-400 line-through' : 'text-slate-900'
+                          }`}
+                        >
+                          {t.title}
+                        </div>
+                        {t.at ? <span className="shrink-0 text-xs text-slate-500">完成 {t.at}</span> : null}
                       </div>
                     </div>
-                    <button
-                      type="button"
-                      className="rounded-lg px-2 py-1 text-xs font-semibold text-slate-700 ring-1 ring-black/10 hover:bg-black/5"
-                    >
-                      詳情
-                    </button>
+                    <div className="flex shrink-0 items-center justify-end gap-1.5 text-xs">
+                      <KindPill kind={t.kind} />
+                      {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
+                    </div>
                   </li>
-                ))}
-              </ul>
-            </div>
-          ))}
+                  ))}
+                </ul>
+
+                {items.length > 4 ? (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setExpandedBeds((prev) => {
+                        const next = new Set(prev)
+                        if (next.has(bedLabel)) next.delete(bedLabel)
+                        else next.add(bedLabel)
+                        return next
+                      })
+                    }
+                    className="mt-2 w-full rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-black/10 hover:bg-black/5"
+                  >
+                    {isExpanded ? '收合' : '顯示全部'}
+                  </button>
+                ) : null}
+              </div>
+            )
+          })}
         </div>
       </section>
 

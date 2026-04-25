@@ -1,47 +1,87 @@
-export type BedId = 'bed1' | 'bed2' | 'bed3'
+import { INITIAL_BY_NURSE, NURSES, PATIENTS, type NurseId } from '../data/allocationMock'
+
+export type BedId =
+  | 'bed1'
+  | 'bed2'
+  | 'bed3'
+  | 'bed4'
+  | 'bed5'
+  | 'bed6'
+  | 'bed7'
+  | 'bed8'
+  | 'bed9'
+  | 'bed10'
+  | 'bed11'
+  | 'bed12'
+  | 'bed13'
+  | 'bed14'
+  | 'bed15'
+  | 'bed16'
+  | 'bed17'
+
+export type Sex = '男' | '女'
 
 export type Patient = {
   bedId: BedId
   bedLabel: string
   diagnosis: string
+  sex: Sex
+  age: number
+  attendingPhysician: string
   objective: ObjectiveFactors
   subjective?: SubjectiveFactors
 }
 
 export type ObjectiveFactorKey =
-  | '病情嚴重度'
-  | '藥物與輸液頻率'
-  | '檢查與處置次數'
-  | '監測需求'
-  | '特殊照護需求'
+  | '負壓隔離病房'
+  | '高呼吸器需求'
+  | '藥物種類數'
+  | '藥物使用頻率'
+  | 'CRRT（持續型 A）'
+  | 'IABP（持續型 B）'
+  | 'ECMO（持續型 B）'
+  | 'PRONE（持續型B）'
+  | '低溫治療（持續性 B）'
+  | '大量輸血（單次 C）'
+  | '跟Plasma（單次C）'
 
 export type ObjectiveFactors = Record<ObjectiveFactorKey, number>
 
-export type SubjectiveFactorKey =
-  | '病人活動/翻身協助'
-  | '給藥與點滴處理'
-  | '檢查與處置配合'
-  | '監測與紀錄頻率'
-  | '呼吸道/管路照護'
-  | '傷口/皮膚照護'
-  | '家屬溝通與衛教'
-  | '文書/交班整理'
-
 export type SubjectiveLevel = 0 | 1 | 2
-export type SubjectiveFactors = Record<SubjectiveFactorKey, SubjectiveLevel>
+
+export type SubjectiveFactors = {
+  'RASS 鎮靜分數（原始數值）': number | null
+  '躁動且有下床風險': boolean
+  '躁動且有拔管風險': boolean
+  '引流管': boolean
+  '需人工管灌': boolean
+  '換藥頻繁程度': SubjectiveLevel
+  '生理狀態監測頻繁程度': SubjectiveLevel
+}
 
 export function objectiveTotal(o: ObjectiveFactors) {
   return Object.values(o).reduce((a, b) => a + b, 0)
 }
 
 export function subjectiveTotal(s: SubjectiveFactors) {
-  return Object.values(s).reduce<number>((a, b) => a + b, 0)
-}
+  const yes = (v: boolean) => (v ? 2 : 0)
+  const rassPoints = (v: number | null) => {
+    if (v == null || Number.isNaN(v)) return 0
+    const a = Math.abs(v)
+    if (a <= 1) return 0
+    if (a <= 3) return 1
+    return 2
+  }
 
-export type HandoverItem = {
-  bedLabel: string
-  summary: string
-  risk?: 'high' | 'mid' | 'low'
+  return (
+    rassPoints(s['RASS 鎮靜分數（原始數值）']) +
+    yes(s['躁動且有下床風險']) +
+    yes(s['躁動且有拔管風險']) +
+    yes(s['引流管']) +
+    yes(s['需人工管灌']) +
+    s['換藥頻繁程度'] +
+    s['生理狀態監測頻繁程度']
+  )
 }
 
 export type TaskKind = '給藥' | '檢查' | '監測' | '家屬' | '紀錄'
@@ -61,93 +101,396 @@ export type OrderItem = {
   text: string
 }
 
+export type ShiftKey = 'day'
+
 const store = {
   lastImportedAt: undefined as string | undefined,
-  lastHandoverAt: '2026-04-23T06:00:00.000Z' as string,
-  lastHandoverBy: '護理師 陳美麗' as string,
-  nextHandoverAt: '2026-04-23T14:00:00.000Z' as string,
-  handover: [
-    {
-      bedLabel: '床 1',
-      summary: '俯臥/翻身配合需協助；留意 SpO₂ 與呼吸器參數；抽血結果待回報',
-      risk: 'mid',
-    },
-    {
-      bedLabel: '床 2',
-      summary: '血壓偏不穩；Norepinephrine 需留意；Vancomycin 下一次 18:30；抽血結果待回報',
-      risk: 'high',
-    },
-    {
-      bedLabel: '床 3',
-      summary: '術後換藥時間 10:00；觀察出血與疼痛；輸液量需記錄',
-      risk: 'low',
-    },
-  ] as HandoverItem[],
+  onDutyCharge: '小組長 李小華' as string,
+  currentNurseId: 'n1' as NurseId,
+  currentShift: 'day' as ShiftKey,
   patients: [
     {
       bedId: 'bed1',
       bedLabel: '床 1',
       diagnosis: 'ARDS',
+      sex: '男',
+      age: 68,
+      attendingPhysician: '張志明醫師',
       objective: {
-        病情嚴重度: 5,
-        藥物與輸液頻率: 2,
-        檢查與處置次數: 2,
-        監測需求: 2,
-        特殊照護需求: 1,
+        負壓隔離病房: 1,
+        高呼吸器需求: 1,
+        藥物種類數: 6,
+        藥物使用頻率: 8,
+        'CRRT（持續型 A）': 1,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 1,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
       },
       subjective: {
-        '病人活動/翻身協助': 2,
-        '給藥與點滴處理': 2,
-        '檢查與處置配合': 1,
-        '監測與紀錄頻率': 2,
-        '呼吸道/管路照護': 2,
-        '傷口/皮膚照護': 1,
-        '家屬溝通與衛教': 0,
-        '文書/交班整理': 1,
+        'RASS 鎮靜分數（原始數值）': -3,
+        '躁動且有下床風險': false,
+        '躁動且有拔管風險': true,
+        '引流管': false,
+        '需人工管灌': true,
+        '換藥頻繁程度': 1,
+        '生理狀態監測頻繁程度': 2,
       },
     },
     {
       bedId: 'bed2',
       bedLabel: '床 2',
       diagnosis: '敗血症',
+      sex: '女',
+      age: 74,
+      attendingPhysician: '林怡君醫師',
       objective: {
-        病情嚴重度: 4,
-        藥物與輸液頻率: 3,
-        檢查與處置次數: 2,
-        監測需求: 3,
-        特殊照護需求: 2,
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 8,
+        藥物使用頻率: 10,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 1,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 1,
+        '跟Plasma（單次C）': 1,
       },
       subjective: {
-        '病人活動/翻身協助': 1,
-        '給藥與點滴處理': 2,
-        '檢查與處置配合': 2,
-        '監測與紀錄頻率': 2,
-        '呼吸道/管路照護': 2,
-        '傷口/皮膚照護': 1,
-        '家屬溝通與衛教': 1,
-        '文書/交班整理': 1,
+        'RASS 鎮靜分數（原始數值）': 2,
+        '躁動且有下床風險': true,
+        '躁動且有拔管風險': true,
+        '引流管': true,
+        '需人工管灌': false,
+        '換藥頻繁程度': 1,
+        '生理狀態監測頻繁程度': 2,
       },
     },
     {
       bedId: 'bed3',
       bedLabel: '床 3',
       diagnosis: '術後照護',
+      sex: '男',
+      age: 52,
+      attendingPhysician: '王建宏醫師',
       objective: {
-        病情嚴重度: 2,
-        藥物與輸液頻率: 1,
-        檢查與處置次數: 1,
-        監測需求: 1,
-        特殊照護需求: 0,
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 3,
+        藥物使用頻率: 4,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
       },
       subjective: {
-        '病人活動/翻身協助': 1,
-        '給藥與點滴處理': 1,
-        '檢查與處置配合': 1,
-        '監測與紀錄頻率': 1,
-        '呼吸道/管路照護': 0,
-        '傷口/皮膚照護': 1,
-        '家屬溝通與衛教': 1,
-        '文書/交班整理': 1,
+        'RASS 鎮靜分數（原始數值）': 0,
+        '躁動且有下床風險': false,
+        '躁動且有拔管風險': false,
+        '引流管': true,
+        '需人工管灌': false,
+        '換藥頻繁程度': 1,
+        '生理狀態監測頻繁程度': 1,
+      },
+    },
+    {
+      bedId: 'bed4',
+      bedLabel: '床 4',
+      diagnosis: 'COPD 急性惡化',
+      sex: '女',
+      age: 81,
+      attendingPhysician: '陳美玲醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 5,
+        藥物使用頻率: 6,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 1,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed5',
+      bedLabel: '床 5',
+      diagnosis: '心衰竭急性惡化',
+      sex: '男',
+      age: 77,
+      attendingPhysician: '李承翰醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 6,
+        藥物使用頻率: 7,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 1,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed6',
+      bedLabel: '床 6',
+      diagnosis: '腦中風（急性期）',
+      sex: '女',
+      age: 66,
+      attendingPhysician: '周雅雯醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 5,
+        藥物使用頻率: 6,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed7',
+      bedLabel: '床 7',
+      diagnosis: '肺炎併呼吸衰竭',
+      sex: '男',
+      age: 59,
+      attendingPhysician: '郭柏宏醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 1,
+        藥物種類數: 6,
+        藥物使用頻率: 8,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed8',
+      bedLabel: '床 8',
+      diagnosis: '上消化道出血',
+      sex: '女',
+      age: 70,
+      attendingPhysician: '許心怡醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 5,
+        藥物使用頻率: 6,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 1,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed9',
+      bedLabel: '床 9',
+      diagnosis: '腎衰竭（洗腎評估）',
+      sex: '男',
+      age: 63,
+      attendingPhysician: '黃冠霖醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 4,
+        藥物使用頻率: 5,
+        'CRRT（持續型 A）': 1,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed10',
+      bedLabel: '床 10',
+      diagnosis: '糖尿病酮酸中毒',
+      sex: '女',
+      age: 45,
+      attendingPhysician: '吳怡婷醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 7,
+        藥物使用頻率: 10,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 1,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed11',
+      bedLabel: '床 11',
+      diagnosis: '多發外傷（術後）',
+      sex: '男',
+      age: 33,
+      attendingPhysician: '邱子豪醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 6,
+        藥物使用頻率: 7,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 1,
+        '跟Plasma（單次C）': 1,
+      },
+    },
+    {
+      bedId: 'bed12',
+      bedLabel: '床 12',
+      diagnosis: '胰臟炎（重症）',
+      sex: '女',
+      age: 58,
+      attendingPhysician: '蔡佩珊醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 6,
+        藥物使用頻率: 8,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 1,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed13',
+      bedLabel: '床 13',
+      diagnosis: '敗血性休克',
+      sex: '男',
+      age: 72,
+      attendingPhysician: '鄭文彥醫師',
+      objective: {
+        負壓隔離病房: 1,
+        高呼吸器需求: 1,
+        藥物種類數: 9,
+        藥物使用頻率: 12,
+        'CRRT（持續型 A）': 1,
+        'IABP（持續型 B）': 1,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 1,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 1,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed14',
+      bedLabel: '床 14',
+      diagnosis: '心肌梗塞（PCI 後）',
+      sex: '女',
+      age: 64,
+      attendingPhysician: '何冠廷醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 5,
+        藥物使用頻率: 6,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 1,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed15',
+      bedLabel: '床 15',
+      diagnosis: '腸阻塞（術前）',
+      sex: '男',
+      age: 56,
+      attendingPhysician: '杜承恩醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 3,
+        藥物使用頻率: 4,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
+      },
+    },
+    {
+      bedId: 'bed16',
+      bedLabel: '床 16',
+      diagnosis: '肝硬化併腹水',
+      sex: '女',
+      age: 61,
+      attendingPhysician: '蘇雅婷醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 4,
+        藥物使用頻率: 5,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 1,
+      },
+    },
+    {
+      bedId: 'bed17',
+      bedLabel: '床 17',
+      diagnosis: '感染性腦膜炎',
+      sex: '男',
+      age: 49,
+      attendingPhysician: '方志豪醫師',
+      objective: {
+        負壓隔離病房: 0,
+        高呼吸器需求: 0,
+        藥物種類數: 6,
+        藥物使用頻率: 7,
+        'CRRT（持續型 A）': 0,
+        'IABP（持續型 B）': 0,
+        'ECMO（持續型 B）': 0,
+        'PRONE（持續型B）': 0,
+        '低溫治療（持續性 B）': 0,
+        '大量輸血（單次 C）': 0,
+        '跟Plasma（單次C）': 0,
       },
     },
   ] as Patient[],
@@ -199,20 +542,36 @@ export function getLastImportedAt() {
   return store.lastImportedAt
 }
 
-export function getLastHandoverAt() {
-  return store.lastHandoverAt
+export function getOnDutyCharge() {
+  return store.onDutyCharge
 }
 
-export function getLastHandoverBy() {
-  return store.lastHandoverBy
+export function getCurrentShift() {
+  return store.currentShift
 }
 
-export function getNextHandoverAt() {
-  return store.nextHandoverAt
+export function getCurrentNurseId() {
+  return store.currentNurseId
 }
 
-export function getHandoverItems() {
-  return store.handover
+export function getCurrentNurseLabel() {
+  return NURSES[store.currentNurseId]?.shortName ?? '—'
+}
+
+export function setCurrentNurseId(next: NurseId) {
+  store.currentNurseId = next
+}
+
+export function getAssignedBedLabelsForCurrentNurse() {
+  // 原型：以 allocationMock 的分配結果當作「當班分配」
+  const ids = INITIAL_BY_NURSE[store.currentNurseId] ?? []
+  return ids
+    .map((pid) => PATIENTS[pid]?.label ?? '')
+    .map((label) => {
+      const m = label.match(/^床\s*(\d+)\b/)
+      return m ? `床 ${m[1]}` : ''
+    })
+    .filter(Boolean)
 }
 
 export function taskPoints(t: Task) {
@@ -271,7 +630,7 @@ export function deriveObjectiveAndTodos(orders: OrderItem[]) {
     if (t.includes('norepinephrine') || t.includes('drip') || t.includes('升壓')) {
       add(
         o.bedLabel,
-        { 藥物與輸液頻率: 2, 監測需求: 2, 病情嚴重度: 1 },
+        { 藥物使用頻率: 2, 藥物種類數: 1 },
         {
         bedLabel: `${o.bedLabel} — (匯入)`,
         title: '升壓藥滴速/目標壓確認',
@@ -281,14 +640,14 @@ export function deriveObjectiveAndTodos(orders: OrderItem[]) {
       )
     }
     if (t.includes('vancomycin') || t.includes('antibiotic') || t.includes('抗生素')) {
-      add(o.bedLabel, { 藥物與輸液頻率: 1 }, {
+      add(o.bedLabel, { 藥物使用頻率: 1, 藥物種類數: 1 }, {
         bedLabel: `${o.bedLabel} — (匯入)`,
         title: '抗生素給藥',
         kind: '給藥',
       })
     }
     if (t.includes('cbc') || t.includes('抽血') || t.includes('lab')) {
-      add(o.bedLabel, { 檢查與處置次數: 1 }, {
+      add(o.bedLabel, { '大量輸血（單次 C）': 0 }, {
         bedLabel: `${o.bedLabel} — (匯入)`,
         title: '抽血/檢體送驗',
         kind: '檢查',
@@ -296,7 +655,7 @@ export function deriveObjectiveAndTodos(orders: OrderItem[]) {
       })
     }
     if (t.includes('q1h') || t.includes('每小時')) {
-      add(o.bedLabel, { 監測需求: 1 }, {
+      add(o.bedLabel, { 藥物使用頻率: 0 }, {
         bedLabel: `${o.bedLabel} — (匯入)`,
         title: 'Q1H 監測（血壓/生命徵象）',
         kind: '監測',

@@ -1,11 +1,15 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
+import { getCurrentNurseLabel, getCurrentShift } from '../state/demoStore'
 
 export function AppShell({ children }: { children: ReactNode }) {
+  const shift = getCurrentShift()
+  const shiftLabel = shift === 'day' ? '白班 06:00–14:00' : '—'
+  const nurse = getCurrentNurseLabel()
   return (
     <div className="min-h-dvh bg-[#f7f7f5] text-slate-800">
       <header className="sticky top-0 z-10 border-b border-black/10 bg-[#f2f1ee]/95 backdrop-blur">
-        <div className="mx-auto flex max-w-[1120px] items-center justify-between px-6 py-4">
+        <div className="mx-auto flex w-full items-center justify-between px-4 py-4 md:px-8">
           <div className="flex items-center gap-3">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-black text-white">
               ICU
@@ -17,27 +21,26 @@ export function AppShell({ children }: { children: ReactNode }) {
 
           <nav className="hidden items-center gap-2 md:flex">
             <TopNavLink to="/nurse/overview">護理師首頁</TopNavLink>
-            <TopNavLink to="/nurse/handover">交班</TopNavLink>
             <TopNavLink to="/nurse/burden-form">麻煩度填寫</TopNavLink>
             <TopNavLink to="/nurse/todo">TO‑DO</TopNavLink>
             <div className="mx-2 h-5 w-px bg-black/10" />
             <TopNavLink to="/leader/allocation">分床建議</TopNavLink>
+            <TopNavLink to="/leader/allocation-result">分工結果</TopNavLink>
             <TopNavLink to="/leader/war-room">戰情室</TopNavLink>
-            <TopNavLink to="/reports">報表</TopNavLink>
           </nav>
 
           <div className="flex items-center gap-2">
             <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-black/10">
-              白班 06:00–14:00
+              {shiftLabel}
             </span>
             <span className="rounded-full bg-white px-3 py-1 text-xs font-medium text-slate-700 ring-1 ring-black/10">
-              護理師 王小明
+              護理師 {nurse}
             </span>
           </div>
         </div>
       </header>
 
-      <main className="mx-auto w-full max-w-[1120px] px-6 py-8">{children}</main>
+      <main className="mx-auto w-full px-4 py-5 md:px-8">{children}</main>
     </div>
   )
 }
