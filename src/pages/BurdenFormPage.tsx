@@ -248,7 +248,7 @@ export function BurdenFormPage() {
       <div className="mt-4 rounded-2xl bg-[#fff7ed] p-4 text-xs text-[#9a5b1a] ring-1 ring-[#f1d7b8]">
         <div className="font-semibold">客觀量化指標（最新定義）</div>
         <div className="mt-1">
-          1. 負壓隔離病房　2. 高呼吸器需求（PEEP&gt;10 或 FiO₂≈50%）　3. 藥物計數（種類數/頻率）　4. 特殊檢查（A/B/C）
+          1. 負壓隔離病房 2. 高呼吸器需求（PEEP&gt;10 或 FiO₂≈50%） 3. 藥物計數（種類數/頻率） 4. 特殊檢查（A/B/C）
           <span className="pl-2 font-semibold">客觀分數僅顯示系統計算結果，不提供手動更改。</span>
         </div>
       </div>
