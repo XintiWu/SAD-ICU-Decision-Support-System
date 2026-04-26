@@ -54,7 +54,7 @@ export function NurseOverviewPage() {
 
         {myPatients.length === 0 ? (
           <div className="mt-4 rounded-2xl bg-[#fafaf8] p-4 text-sm text-slate-600 ring-1 ring-black/5">
-            目前尚未分配到病患（請至「分工結果」確認分配）
+            目前尚未分配到病患（請至「查看分床結果」確認分配）
           </div>
         ) : (
           <div className="mt-4 grid gap-4 lg:grid-cols-2">

@@ -1,3 +1,5 @@
+import { useMemo, useState } from 'react'
+
 export function WarRoomPage() {
   const nurses: NurseCardModel[] = [
     {
@@ -124,60 +126,43 @@ export function WarRoomPage() {
   const lowCount = nurses.filter((n) => n.tone === 'low').length
 
   return (
-    <div className="grid gap-3">
-      <section className="rounded-2xl bg-white p-4 ring-1 ring-black/10">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <div className="text-sm font-semibold text-slate-900">ICU 戰情室</div>
-              <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 text-[11px] font-semibold text-[#9a5b1a] ring-1 ring-[#f1d7b8]">
-                小組長視角
+    <div className="grid gap-4">
+      <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-[#eef2ff] via-[#f5fbff] to-[#ecfeff] ring-1 ring-black/10 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(2,6,23,0.04)_inset]">
+        <div className="h-1.5 w-full bg-gradient-to-r from-[#1d4ed8] via-[#0ea5e9] to-[#14b8a6]" />
+        <div className="p-4">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="min-w-0">
+              <div className="text-[11px] font-semibold tracking-wide text-slate-600">全體概況 OVERVIEW</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">重點指標（完成 / 急件 / 負擔）</div>
+            </div>
+            <div className="flex flex-wrap gap-2 text-[11px]">
+              <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 ring-1 ring-black/10">
+                護理師 <span className="ml-1 text-sm font-extrabold text-slate-900">{nurses.length}</span>
+              </span>
+              <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 ring-1 ring-black/10">
+                總任務 <span className="ml-1 text-sm font-extrabold text-slate-900">{totalTasks}</span>
               </span>
             </div>
-            <div className="mt-1 text-xs text-slate-600">即時掌握每位護理師任務進度與急件狀態</div>
           </div>
 
-          <div className="rounded-2xl bg-gradient-to-r from-slate-950 via-slate-900 to-slate-800 px-4 py-3 text-white ring-1 ring-black/10">
-            <div className="flex flex-wrap items-center gap-2 text-xs">
-              <span className="font-extrabold tracking-wide">
-                全體概況 <span className="text-white/60">OVERVIEW</span>
-              </span>
-              <span className="mx-1 hidden h-4 w-px bg-white/10 sm:inline-block" />
-
-              <span className="rounded-full bg-white/10 px-3 py-1.5 font-semibold ring-1 ring-white/10">
-                護理師 <span className="ml-1 text-sm font-extrabold">{nurses.length}</span>
-              </span>
-              <span className="rounded-full bg-emerald-500/15 px-3 py-1.5 font-semibold text-emerald-100 ring-1 ring-emerald-400/20">
-                完成 <span className="ml-1 text-sm font-extrabold text-white">{doneTasks}</span>
-                <span className="text-white/70">/{totalTasks}</span>
-              </span>
-              <span className="rounded-full bg-rose-500/15 px-3 py-1.5 font-semibold text-rose-100 ring-1 ring-rose-400/20">
-                急件 <span className="ml-1 text-sm font-extrabold text-white">{urgentTasks}</span>
-              </span>
-              <span className="rounded-full bg-amber-500/15 px-3 py-1.5 font-semibold text-amber-100 ring-1 ring-amber-400/20">
-                負擔
-                <span className="ml-2 text-white/80">
-                  高 <span className="font-extrabold text-white">{highCount}</span>｜中{' '}
-                  <span className="font-extrabold text-white">{midCount}</span>｜低{' '}
-                  <span className="font-extrabold text-white">{lowCount}</span>
-                </span>
-              </span>
-            </div>
+          <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+            <OverviewKpi label="已完成" value={`${doneTasks}`} hint={`${Math.round((doneTasks / Math.max(1, totalTasks)) * 100)}%`} tone="ok" />
+            <OverviewKpi label="未完成" value={`${Math.max(0, totalTasks - doneTasks)}`} hint="待處理" tone="mid" />
+            <OverviewKpi label="急件" value={`${urgentTasks}`} hint="未完成急件" tone={urgentTasks ? 'danger' : 'ok'} />
+            <OverviewKpi
+              label="負擔分布"
+              value={`${highCount}/${midCount}/${lowCount}`}
+              hint="高/中/低"
+              tone={highCount ? 'danger' : midCount ? 'mid' : 'ok'}
+            />
           </div>
         </div>
-      </section>
+      </div>
 
       <section className="rounded-2xl bg-white p-3 ring-1 ring-black/10">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {nurses.map((n) => (
-            <NurseLoadCard
-              key={n.name}
-              name={n.name}
-              remaining={n.remaining}
-              tone={n.tone}
-              assignments={n.assignments}
-              tasks={n.tasks}
-            />
+            <NurseLoadCard key={n.name} name={n.name} remaining={n.remaining} tone={n.tone} assignments={n.assignments} tasks={n.tasks} />
           ))}
         </div>
       </section>
@@ -212,6 +197,7 @@ function NurseLoadCard({
   assignments: { bed: string; patient: string }[]
   tasks: { text: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]
 }) {
+  const [expanded, setExpanded] = useState(false)
   const bar =
     tone === 'high' ? 'bg-[#c64a2c]' : tone === 'mid' ? 'bg-[#d88b2c]' : 'bg-[#2f7a44]'
   const pill =
@@ -226,6 +212,12 @@ function NurseLoadCard({
   const totalCount = tasks.length
   const urgentOpen = tasks.filter((t) => !!t.urgent && !t.done).length
   const burdenLabel = tone === 'high' ? '高' : tone === 'mid' ? '中' : '低'
+
+  const openTasks = useMemo(() => tasks.filter((t) => !t.done), [tasks])
+  const preview = openTasks
+    .slice()
+    .sort((a, b) => Number(!!b.urgent) - Number(!!a.urgent))
+    .slice(0, 3)
 
   const tasksByBed = tasks.reduce<Record<string, { title: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]>>(
     (acc, t) => {
@@ -273,92 +265,153 @@ function NurseLoadCard({
         </div>
       </div>
 
-      <div className="mt-3 grid gap-2.5">
-        {bedOrder.map((bed) => (
-          <section
-            key={bed}
-            className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10"
+      <div className="mt-3 grid gap-2">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2 ring-1 ring-black/10">
+          <div className="min-w-0 text-[11px] font-semibold text-slate-700">
+            床位：{assignments.length ? assignments.map((a) => `床 ${a.bed}`).join('、') : '—'}
+          </div>
+          <button
+            type="button"
+            onClick={() => setExpanded((v) => !v)}
+            className="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-800 ring-1 ring-black/10 hover:bg-slate-50"
+            aria-expanded={expanded}
           >
-            <div className="flex items-center justify-between gap-3 border-b border-black/10 bg-white px-2.5 py-2">
-              <div className="min-w-0 text-xs font-extrabold tracking-wide text-slate-900">
-                床 {bed}
-                <span className="ml-2 font-semibold text-slate-600">{bedPatient.get(bed) ?? ''}</span>
-              </div>
-              <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
-                {tasksByBed[bed]?.filter((t) => !!t.done).length ?? 0}/{tasksByBed[bed]?.length ?? 0}
-              </span>
-            </div>
-            <ul className="grid max-h-44 gap-1.5 overflow-y-auto p-2 pr-1">
-              {(tasksByBed[bed] ?? []).map((t, idx) => (
-                <li
-                  key={`${bed}-${idx}`}
+            {expanded ? '收起細節' : '展開細節'}
+          </button>
+        </div>
+
+        {!expanded ? (
+          <div className="grid gap-1.5">
+            {preview.length ? (
+              preview.map((t, idx) => (
+                <div
+                  key={`preview-${idx}`}
                   className={[
-                    'flex items-start justify-between gap-3 rounded-xl bg-white px-2.5 py-2',
+                    'flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-2',
                     'ring-1 ring-black/10',
-                    t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
+                    t.urgent ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.14)]' : '',
                   ].join(' ')}
                 >
                   <div className="min-w-0">
-                    <div
-                      className={`truncate text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}
-                    >
-                      {t.title}
-                    </div>
+                    <div className="truncate text-xs font-semibold text-slate-900">{t.text}</div>
                     <div className="mt-1 flex items-center gap-2 text-[11px]">
-                      {t.urgent ? (
-                        <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span>
-                      ) : null}
-                      {t.newbie ? (
-                        <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span>
-                      ) : null}
-                      {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
+                      {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
+                      {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
+                      <span className="text-slate-500">未完成</span>
                     </div>
                   </div>
-                  <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 accent-black" />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ))}
-        {tasksByBed['—']?.length ? (
-          <section className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
-            <div className="border-b border-black/10 bg-white px-2.5 py-2 text-xs font-extrabold tracking-wide text-slate-900">
-              其他
-            </div>
-            <ul className="grid max-h-44 gap-1.5 overflow-y-auto p-2 pr-1">
-              {tasksByBed['—'].map((t, idx) => (
-                <li
-                  key={`other-${idx}`}
-                  className={[
-                    'flex items-start justify-between gap-3 rounded-xl bg-white px-2.5 py-2',
-                    'ring-1 ring-black/10',
-                    t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
-                  ].join(' ')}
-                >
-                  <div className="min-w-0">
-                    <div
-                      className={`truncate text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}
-                    >
-                      {t.title}
-                    </div>
-                    <div className="mt-1 flex items-center gap-2 text-[11px]">
-                      {t.urgent ? (
-                        <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span>
-                      ) : null}
-                      {t.newbie ? (
-                        <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span>
-                      ) : null}
-                      {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
-                    </div>
+                  {idx === 0 && openTasks.length > preview.length ? (
+                    <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
+                      還有 {openTasks.length - preview.length} 筆
+                    </span>
+                  ) : null}
+                </div>
+              ))
+            ) : (
+              <div className="rounded-xl bg-[#fafaf8] px-3 py-2 text-xs text-slate-600 ring-1 ring-black/10">目前沒有未完成任務</div>
+            )}
+          </div>
+        ) : (
+          <div className="grid gap-2.5">
+            {bedOrder.map((bed) => (
+              <section key={bed} className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
+                <div className="flex items-center justify-between gap-3 border-b border-black/10 bg-white px-2.5 py-2">
+                  <div className="min-w-0 text-xs font-extrabold tracking-wide text-slate-900">
+                    床 {bed}
+                    <span className="ml-2 font-semibold text-slate-600">{bedPatient.get(bed) ?? ''}</span>
                   </div>
-                  <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 accent-black" />
-                </li>
-              ))}
-            </ul>
-          </section>
-        ) : null}
+                  <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
+                    {tasksByBed[bed]?.filter((t) => !!t.done).length ?? 0}/{tasksByBed[bed]?.length ?? 0}
+                  </span>
+                </div>
+                <ul className="grid max-h-44 gap-1.5 overflow-y-auto p-2 pr-1">
+                  {(tasksByBed[bed] ?? []).map((t, idx) => (
+                    <li
+                      key={`${bed}-${idx}`}
+                      className={[
+                        'flex items-start justify-between gap-3 rounded-xl bg-white px-2.5 py-2',
+                        'ring-1 ring-black/10',
+                        t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
+                      ].join(' ')}
+                    >
+                      <div className="min-w-0">
+                        <div className={`truncate text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                          {t.title}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-[11px]">
+                          {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
+                          {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
+                          {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
+                        </div>
+                      </div>
+                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 accent-black" />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ))}
+            {tasksByBed['—']?.length ? (
+              <section className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
+                <div className="border-b border-black/10 bg-white px-2.5 py-2 text-xs font-extrabold tracking-wide text-slate-900">其他</div>
+                <ul className="grid max-h-44 gap-1.5 overflow-y-auto p-2 pr-1">
+                  {tasksByBed['—'].map((t, idx) => (
+                    <li
+                      key={`other-${idx}`}
+                      className={[
+                        'flex items-start justify-between gap-3 rounded-xl bg-white px-2.5 py-2',
+                        'ring-1 ring-black/10',
+                        t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
+                      ].join(' ')}
+                    >
+                      <div className="min-w-0">
+                        <div className={`truncate text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                          {t.title}
+                        </div>
+                        <div className="mt-1 flex items-center gap-2 text-[11px]">
+                          {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
+                          {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
+                          {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
+                        </div>
+                      </div>
+                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 accent-black" />
+                    </li>
+                  ))}
+                </ul>
+              </section>
+            ) : null}
+          </div>
+        )}
       </div>
     </section>
+  )
+}
+
+function OverviewKpi({
+  label,
+  value,
+  hint,
+  tone,
+}: {
+  label: string
+  value: string
+  hint: string
+  tone: 'ok' | 'mid' | 'danger'
+}) {
+  const pill =
+    tone === 'danger'
+      ? 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f2b3a6]'
+      : tone === 'mid'
+        ? 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]'
+        : 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]'
+
+  return (
+    <div className="rounded-2xl bg-white px-3 py-2 ring-1 ring-black/10">
+      <div className="text-[11px] font-semibold text-slate-600">{label}</div>
+      <div className="mt-1 flex items-end justify-between gap-2">
+        <div className="text-2xl font-extrabold tracking-tight text-slate-900">{value}</div>
+        <span className={`rounded-full px-2.5 py-1 text-[11px] font-semibold ${pill}`}>{hint}</span>
+      </div>
+    </div>
   )
 }
 

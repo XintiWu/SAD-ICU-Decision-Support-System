@@ -166,8 +166,8 @@ export function ChargeAllocationPage() {
       <aside className="rounded-2xl bg-white p-6 ring-1 ring-black/10 lg:sticky lg:top-24 lg:self-start">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-900">負荷概覽</div>
-            <div className="mt-1 text-xs text-slate-600">依負荷由高到低排序，便於快速調整</div>
+            <div className="text-sm font-semibold text-slate-900">麻煩度負荷概覽</div>
+            <div className="mt-1 text-xs text-slate-600">依麻煩度由高到低排序，便於快速調整</div>
           </div>
           <div className="text-right">
             <div className="text-xs text-slate-600">平均</div>

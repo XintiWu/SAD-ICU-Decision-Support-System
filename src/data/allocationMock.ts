@@ -63,7 +63,8 @@ export const PATIENTS: Record<PatientId, Patient> = {
   p17: { id: 'p17', label: '床 17 — 呼吸衰竭', score: 16, tone: 'high' },
 }
 
-export const INITIAL_UNASSIGNED: PatientId[] = ['p5', 'p9', 'p14', 'p17']
+// 需求：不會有未分配
+export const INITIAL_UNASSIGNED: PatientId[] = []
 
 export const INITIAL_BY_NURSE: Record<NurseId, PatientId[]> = {
   n1: ['p2', 'p7'],
@@ -75,5 +76,42 @@ export const INITIAL_BY_NURSE: Record<NurseId, PatientId[]> = {
   n7: ['p10'],
   n8: ['p11'],
   n9: ['p15', 'p16'],
+}
+
+// 下一班（原型示意）：用來做「本班 vs 下一班」並排比較與交班差異
+export const NEXT_UNASSIGNED: PatientId[] = []
+
+export const NEXT_BY_NURSE: Record<NurseId, PatientId[]> = {
+  // 例：床 2 從 n1 轉到 n2（顯示換手）
+  n1: ['p7', 'p12'],
+  n2: ['p2', 'p6'],
+  // 例：床 1 從 n4 轉到 n5
+  n3: ['p3'],
+  n4: ['p8'],
+  n5: ['p1', 'p13'],
+  // 例：高分床位 p14/p17/p5 分散接手
+  n6: ['p4', 'p17'],
+  n7: ['p10', 'p16'],
+  n8: ['p11', 'p14'],
+  n9: ['p15', 'p5'],
+}
+
+// 床位視角（原型示意）：用來判斷「換病患」與「換護理師」
+// - key 用「床 X」與 demoStore 一致
+// - 病患資訊先用字串示意（可替換成你們正式的病患識別）
+export const CURRENT_BED_PATIENT: Record<string, string> = Object.fromEntries(
+  Object.values(PATIENTS).map((p) => {
+    const m = p.label.match(/^床\s*(\d+)\b/)
+    const bed = m ? `床 ${m[1]}` : p.label
+    return [bed, p.label]
+  }),
+)
+
+export const NEXT_BED_PATIENT: Record<string, string> = {
+  ...CURRENT_BED_PATIENT,
+  // 示意：下一班床 2 病患改變（換病患）
+  '床 2': '床 2 — 新收：腦出血（觀察）',
+  // 示意：床 8 診斷更新（也可視為換病患/換資訊）
+  '床 8': '床 8 — 中風（術後）',
 }
 

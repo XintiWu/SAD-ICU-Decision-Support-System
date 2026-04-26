@@ -24,9 +24,11 @@ export type Sex = '男' | '女'
 export type Patient = {
   bedId: BedId
   bedLabel: string
+  patientName: string
   diagnosis: string
   sex: Sex
   age: number
+  admittedAt: string
   attendingPhysician: string
   objective: ObjectiveFactors
   subjective?: SubjectiveFactors
@@ -112,9 +114,11 @@ const store = {
     {
       bedId: 'bed1',
       bedLabel: '床 1',
+      patientName: '陳志豪',
       diagnosis: 'ARDS',
       sex: '男',
       age: 68,
+      admittedAt: '2026-04-22',
       attendingPhysician: '張志明醫師',
       objective: {
         負壓隔離病房: 1,
@@ -142,9 +146,11 @@ const store = {
     {
       bedId: 'bed2',
       bedLabel: '床 2',
+      patientName: '林淑芬',
       diagnosis: '敗血症',
       sex: '女',
       age: 74,
+      admittedAt: '2026-04-20',
       attendingPhysician: '林怡君醫師',
       objective: {
         負壓隔離病房: 0,
@@ -172,9 +178,11 @@ const store = {
     {
       bedId: 'bed3',
       bedLabel: '床 3',
+      patientName: '王建翔',
       diagnosis: '術後照護',
       sex: '男',
       age: 52,
+      admittedAt: '2026-04-24',
       attendingPhysician: '王建宏醫師',
       objective: {
         負壓隔離病房: 0,
@@ -202,9 +210,11 @@ const store = {
     {
       bedId: 'bed4',
       bedLabel: '床 4',
+      patientName: '吳佩蓉',
       diagnosis: 'COPD 急性惡化',
       sex: '女',
       age: 81,
+      admittedAt: '2026-04-18',
       attendingPhysician: '陳美玲醫師',
       objective: {
         負壓隔離病房: 0,
@@ -223,9 +233,11 @@ const store = {
     {
       bedId: 'bed5',
       bedLabel: '床 5',
+      patientName: '李明哲',
       diagnosis: '心衰竭急性惡化',
       sex: '男',
       age: 77,
+      admittedAt: '2026-04-19',
       attendingPhysician: '李承翰醫師',
       objective: {
         負壓隔離病房: 0,
@@ -244,9 +256,11 @@ const store = {
     {
       bedId: 'bed6',
       bedLabel: '床 6',
+      patientName: '周雅婷',
       diagnosis: '腦中風（急性期）',
       sex: '女',
       age: 66,
+      admittedAt: '2026-04-23',
       attendingPhysician: '周雅雯醫師',
       objective: {
         負壓隔離病房: 0,
@@ -265,9 +279,11 @@ const store = {
     {
       bedId: 'bed7',
       bedLabel: '床 7',
+      patientName: '郭柏霖',
       diagnosis: '肺炎併呼吸衰竭',
       sex: '男',
       age: 59,
+      admittedAt: '2026-04-21',
       attendingPhysician: '郭柏宏醫師',
       objective: {
         負壓隔離病房: 0,
@@ -286,9 +302,11 @@ const store = {
     {
       bedId: 'bed8',
       bedLabel: '床 8',
+      patientName: '許心怡',
       diagnosis: '上消化道出血',
       sex: '女',
       age: 70,
+      admittedAt: '2026-04-25',
       attendingPhysician: '許心怡醫師',
       objective: {
         負壓隔離病房: 0,
@@ -307,9 +325,11 @@ const store = {
     {
       bedId: 'bed9',
       bedLabel: '床 9',
+      patientName: '黃冠廷',
       diagnosis: '腎衰竭（洗腎評估）',
       sex: '男',
       age: 63,
+      admittedAt: '2026-04-17',
       attendingPhysician: '黃冠霖醫師',
       objective: {
         負壓隔離病房: 0,
@@ -328,9 +348,11 @@ const store = {
     {
       bedId: 'bed10',
       bedLabel: '床 10',
+      patientName: '吳怡君',
       diagnosis: '糖尿病酮酸中毒',
       sex: '女',
       age: 45,
+      admittedAt: '2026-04-26',
       attendingPhysician: '吳怡婷醫師',
       objective: {
         負壓隔離病房: 0,
@@ -349,9 +371,11 @@ const store = {
     {
       bedId: 'bed11',
       bedLabel: '床 11',
+      patientName: '邱子豪',
       diagnosis: '多發外傷（術後）',
       sex: '男',
       age: 33,
+      admittedAt: '2026-04-16',
       attendingPhysician: '邱子豪醫師',
       objective: {
         負壓隔離病房: 0,
@@ -370,9 +394,11 @@ const store = {
     {
       bedId: 'bed12',
       bedLabel: '床 12',
+      patientName: '蔡佩珊',
       diagnosis: '胰臟炎（重症）',
       sex: '女',
       age: 58,
+      admittedAt: '2026-04-15',
       attendingPhysician: '蔡佩珊醫師',
       objective: {
         負壓隔離病房: 0,
@@ -391,9 +417,11 @@ const store = {
     {
       bedId: 'bed13',
       bedLabel: '床 13',
+      patientName: '鄭文彥',
       diagnosis: '敗血性休克',
       sex: '男',
       age: 72,
+      admittedAt: '2026-04-14',
       attendingPhysician: '鄭文彥醫師',
       objective: {
         負壓隔離病房: 1,
@@ -412,9 +440,11 @@ const store = {
     {
       bedId: 'bed14',
       bedLabel: '床 14',
+      patientName: '何冠廷',
       diagnosis: '心肌梗塞（PCI 後）',
       sex: '女',
       age: 64,
+      admittedAt: '2026-04-13',
       attendingPhysician: '何冠廷醫師',
       objective: {
         負壓隔離病房: 0,
@@ -433,9 +463,11 @@ const store = {
     {
       bedId: 'bed15',
       bedLabel: '床 15',
+      patientName: '杜承恩',
       diagnosis: '腸阻塞（術前）',
       sex: '男',
       age: 56,
+      admittedAt: '2026-04-12',
       attendingPhysician: '杜承恩醫師',
       objective: {
         負壓隔離病房: 0,
@@ -454,9 +486,11 @@ const store = {
     {
       bedId: 'bed16',
       bedLabel: '床 16',
+      patientName: '蘇雅婷',
       diagnosis: '肝硬化併腹水',
       sex: '女',
       age: 61,
+      admittedAt: '2026-04-11',
       attendingPhysician: '蘇雅婷醫師',
       objective: {
         負壓隔離病房: 0,
@@ -475,9 +509,11 @@ const store = {
     {
       bedId: 'bed17',
       bedLabel: '床 17',
+      patientName: '方志豪',
       diagnosis: '感染性腦膜炎',
       sex: '男',
       age: 49,
+      admittedAt: '2026-04-10',
       attendingPhysician: '方志豪醫師',
       objective: {
         負壓隔離病房: 0,
