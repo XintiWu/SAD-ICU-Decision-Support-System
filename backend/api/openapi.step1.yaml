@@ -1,0 +1,263 @@
+openapi: 3.1.0
+info:
+  title: ICU Nursing Allocation API
+  version: 0.1.0
+  description: Step 1 API contract for shifts, nurses, beds, patients, and admissions.
+servers:
+  - url: /api/v1
+paths:
+  /me:
+    get:
+      summary: Get current authenticated user.
+      responses:
+        "200":
+          description: Current user.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/MeResponse"
+  /shifts/current:
+    get:
+      summary: Get the current active shift.
+      parameters:
+        - name: unitName
+          in: query
+          required: false
+          schema:
+            type: string
+            default: ICU
+      responses:
+        "200":
+          description: Current shift.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CurrentShiftResponse"
+  /nurses:
+    get:
+      summary: List nurses, optionally limited to one shift.
+      parameters:
+        - name: shiftId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Nurse list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NursesResponse"
+  /admissions:
+    get:
+      summary: List active admissions.
+      parameters:
+        - name: shiftId
+          in: query
+          required: false
+          schema:
+            type: string
+            format: uuid
+        - name: status
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [active, transferred, discharged]
+            default: active
+      responses:
+        "200":
+          description: Admission list.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/AdmissionsResponse"
+  /nurse/overview:
+    get:
+      summary: Get overview data for the current nurse.
+      parameters:
+        - name: shiftId
+          in: query
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        "200":
+          description: Nurse overview.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NurseOverviewResponse"
+components:
+  schemas:
+    ApiError:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code:
+              type: string
+            message:
+              type: string
+            details:
+              type: object
+    MeResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [id, name, role, currentShiftId]
+          properties:
+            id:
+              type: string
+              format: uuid
+            name:
+              type: string
+            role:
+              type: string
+              enum: [nurse, charge_nurse, admin]
+            currentShiftId:
+              type: string
+              format: uuid
+    CurrentShiftResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          $ref: "#/components/schemas/Shift"
+    NursesResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Nurse"
+    AdmissionsResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: array
+          items:
+            $ref: "#/components/schemas/Admission"
+    NurseOverviewResponse:
+      type: object
+      required: [data]
+      properties:
+        data:
+          type: object
+          required: [shift, onDutyCharge, myPatients, allPatients]
+          properties:
+            shift:
+              type: object
+              required: [id, label]
+              properties:
+                id:
+                  type: string
+                  format: uuid
+                label:
+                  type: string
+            onDutyCharge:
+              $ref: "#/components/schemas/NurseRef"
+            myPatients:
+              type: array
+              items:
+                $ref: "#/components/schemas/Admission"
+            allPatients:
+              type: array
+              items:
+                $ref: "#/components/schemas/Admission"
+    Shift:
+      type: object
+      required: [id, shiftKey, label, startsAt, endsAt, chargeNurse, status]
+      properties:
+        id:
+          type: string
+          format: uuid
+        shiftKey:
+          type: string
+          enum: [day, evening, night]
+        label:
+          type: string
+          example: 白班 06:00-14:00
+        startsAt:
+          type: string
+          format: date-time
+        endsAt:
+          type: string
+          format: date-time
+        chargeNurse:
+          $ref: "#/components/schemas/NurseRef"
+        status:
+          type: string
+          enum: [open, allocating, confirmed, closed]
+    Nurse:
+      allOf:
+        - $ref: "#/components/schemas/NurseRef"
+        - type: object
+          required: [displayName, role, isActive]
+          properties:
+            displayName:
+              type: string
+            role:
+              type: string
+              enum: [nurse, charge_nurse]
+            isActive:
+              type: boolean
+    NurseRef:
+      type: object
+      required: [id, shortName]
+      properties:
+        id:
+          type: string
+          format: uuid
+        shortName:
+          type: string
+    Admission:
+      type: object
+      required:
+        - admissionId
+        - patientId
+        - bedId
+        - bedLabel
+        - patientName
+        - diagnosis
+        - sex
+        - age
+        - admittedAt
+        - attendingPhysician
+      properties:
+        admissionId:
+          type: string
+          format: uuid
+        patientId:
+          type: string
+          format: uuid
+        bedId:
+          type: string
+          format: uuid
+        bedLabel:
+          type: string
+        patientName:
+          type: string
+        diagnosis:
+          type: string
+        sex:
+          type: string
+          enum: [男, 女]
+        age:
+          type: integer
+        admittedAt:
+          type: string
+          format: date
+        attendingPhysician:
+          type: string
+

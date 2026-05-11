@@ -1,122 +1,36 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
+import { apiGet, CURRENT_SHIFT_ID } from '../api/client'
+import type { WarRoomData } from '../api/client'
 
 export function WarRoomPage() {
-  const nurses: NurseCardModel[] = [
-    {
-      name: '護理師 王小明',
-      remaining: 18,
-      tone: 'high',
-      assignments: [
-        { bed: '2', patient: '張○○' },
-        { bed: '7', patient: '李○○' },
-      ],
-      tasks: [
-        { text: '床 2 給藥 Vancomycin', done: true },
-        { text: '床 2 抽血 CBC/Diff', urgent: true },
-        { text: '床 7 量血壓 Q1H' },
-        { text: '床 7 I/O 紀錄回填', done: true },
-      ],
-    },
-    {
-      name: '護理師 陳美麗',
-      remaining: 6,
-      tone: 'low',
-      assignments: [{ bed: '3', patient: '陳○○' }],
-      tasks: [
-        { text: '床 3 傷口換藥', done: true },
-        { text: '床 3 輸液補充', done: true },
-        { text: '床 3 家屬溝通' },
-      ],
-    },
-    {
-      name: '護理師 林志強',
-      remaining: 11,
-      tone: 'mid',
-      assignments: [
-        { bed: '5', patient: '黃○○' },
-        { bed: '9', patient: '吳○○' },
-      ],
-      tasks: [
-        { text: '床 5 心電圖監測' },
-        { text: '床 5 醫囑確認' },
-        { text: '床 9 入院評估', newbie: true },
-        { text: '床 9 路徑衛教', done: true },
-      ],
-    },
-    {
-      name: '護理師 趙怡君',
-      remaining: 9,
-      tone: 'mid',
-      assignments: [{ bed: '1', patient: '周○○' }],
-      tasks: [
-        { text: '床 1 抽痰 PRN', done: true },
-        { text: '床 1 翻身拍背 Q2H' },
-        { text: '床 1 醫囑回覆', done: true },
-      ],
-    },
-    {
-      name: '護理師 張怡婷',
-      remaining: 4,
-      tone: 'low',
-      assignments: [{ bed: '4', patient: '林○○' }],
-      tasks: [
-        { text: '床 4 口腔護理', done: true },
-        { text: '床 4 CVC 照護', done: true },
-        { text: '床 4 交班重點整理', done: true },
-      ],
-    },
-    {
-      name: '護理師 蔡宗翰',
-      remaining: 16,
-      tone: 'high',
-      assignments: [
-        { bed: '6', patient: '許○○' },
-        { bed: '8', patient: '王○○' },
-      ],
-      tasks: [
-        { text: '床 6 監測疼痛評估', urgent: true },
-        { text: '床 6 血糖監測 Q4H' },
-        { text: '床 8 輸血前確認', urgent: true },
-        { text: '床 8 輸血反應監測', urgent: true },
-      ],
-    },
-    {
-      name: '護理師 何佳蓉',
-      remaining: 7,
-      tone: 'low',
-      assignments: [{ bed: '10', patient: '鄭○○' }],
-      tasks: [
-        { text: '床 10 生命徵象記錄', done: true },
-        { text: '床 10 飲食評估' },
-        { text: '床 10 器材盤點', done: true },
-      ],
-    },
-    {
-      name: '護理師 吳承恩',
-      remaining: 13,
-      tone: 'mid',
-      assignments: [
-        { bed: '11', patient: '郭○○' },
-        { bed: '12', patient: '謝○○' },
-      ],
-      tasks: [
-        { text: '床 11 抗生素給藥' },
-        { text: '床 11 血培養送檢', urgent: true },
-        { text: '床 12 氣切照護', done: true },
-      ],
-    },
-    {
-      name: '護理師 江佩珊',
-      remaining: 10,
-      tone: 'mid',
-      assignments: [{ bed: '13', patient: '葉○○' }],
-      tasks: [
-        { text: '床 13 術後觀察', urgent: true },
-        { text: '床 13 傷口評估', done: true },
-        { text: '床 13 疼痛評估' },
-      ],
-    },
-  ]
+  const [data, setData] = useState<WarRoomData | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    apiGet<WarRoomData>(`/war-room?shiftId=${CURRENT_SHIFT_ID}`)
+      .then((nextData) => {
+        if (!alive) return
+        setData(nextData)
+        setError(null)
+      })
+      .catch((err: Error) => {
+        if (!alive) return
+        setError(err.message)
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const nurses: NurseCardModel[] = useMemo(() => (data?.nurses ?? []).map(toNurseCard), [data])
+
+  if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入戰情室...</div>
+  if (error) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
 
   const totalTasks = nurses.reduce((acc, n) => acc + n.tasks.length, 0)
   const doneTasks = nurses.reduce((acc, n) => acc + n.tasks.filter((t) => !!t.done).length, 0)
@@ -176,6 +90,31 @@ type NurseCardModel = {
   tone: 'high' | 'mid' | 'low'
   assignments: { bed: string; patient: string }[]
   tasks: { text: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]
+}
+
+function toNurseCard(row: WarRoomData['nurses'][number]): NurseCardModel {
+  const assignments = row.patients.map((patient) => ({
+    bed: bedNo(patient.bedLabel),
+    patient: patient.patientName,
+  }))
+  const maxScore = row.patients.reduce((max, patient) => Math.max(max, patient.score), 0)
+  return {
+    name: `護理師 ${row.shortName}`,
+    remaining: row.remaining,
+    tone: maxScore >= 22 || row.remaining >= 16 ? 'high' : maxScore >= 14 || row.remaining >= 9 ? 'mid' : 'low',
+    assignments,
+    tasks: row.tasks.map((task) => ({
+      text: `床 ${bedNo(task.bedLabel)} ${task.title}`,
+      urgent: task.urgent,
+      done: task.done,
+      newbie: task.source === '新病人',
+    })),
+  }
+}
+
+function bedNo(label: string) {
+  const match = label.match(/\d+/)
+  return match ? match[0] : '—'
 }
 
 function taskBed(text: string) {
@@ -414,4 +353,3 @@ function OverviewKpi({
     </div>
   )
 }
-

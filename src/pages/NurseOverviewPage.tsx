@@ -1,92 +1,71 @@
-import {
-  getDemoPatients,
-  getAssignedBedLabelsForCurrentNurse,
-  getOnDutyCharge,
-  objectiveTotal,
-  subjectiveTotal,
-  type Patient,
-} from '../state/demoStore'
+import { useEffect, useMemo, useState } from 'react'
+import { CURRENT_SHIFT_ID, apiGet, type ApiAdmission, type BurdenAssessment } from '../api/client'
+
+type OverviewData = {
+  onDutyCharge: { shortName: string }
+  myPatients: ApiAdmission[]
+  allPatients: ApiAdmission[]
+}
 
 export function NurseOverviewPage() {
-  const allPatients = getDemoPatients()
-  const assignedBeds = new Set(getAssignedBedLabelsForCurrentNurse())
-  const myPatients = allPatients.filter((p) => assignedBeds.has(p.bedLabel))
-  const onDutyCharge = getOnDutyCharge()
-  const mySplitAt = Math.ceil(myPatients.length / 2)
-  const myLeft = myPatients.slice(0, mySplitAt)
-  const myRight = myPatients.slice(mySplitAt)
+  const [overview, setOverview] = useState<OverviewData | null>(null)
+  const [burdens, setBurdens] = useState<BurdenAssessment[]>([])
+  const [error, setError] = useState<string | null>(null)
 
-  const allSplitAt = Math.ceil(allPatients.length / 2)
-  const allLeft = allPatients.slice(0, allSplitAt)
-  const allRight = allPatients.slice(allSplitAt)
+  useEffect(() => {
+    Promise.all([
+      apiGet<OverviewData>(`/nurse/overview?shiftId=${CURRENT_SHIFT_ID}`),
+      apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${CURRENT_SHIFT_ID}&scope=all`),
+    ])
+      .then(([overviewData, burdenData]) => {
+        setOverview(overviewData)
+        setBurdens(burdenData)
+      })
+      .catch((err) => setError(err instanceof Error ? err.message : '讀取資料失敗'))
+  }, [])
+
+  const burdenByAdmission = useMemo(
+    () => new Map(burdens.map((b) => [b.admissionId, b])),
+    [burdens],
+  )
+
+  if (error) return <Notice tone="bad" text={error} />
+  if (!overview) return <Notice text="讀取中..." />
 
   return (
     <div className="grid gap-6">
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
-        <div className="flex flex-wrap items-start justify-between gap-4">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">整體班別總覽</div>
-            <div className="mt-1 text-xs text-slate-600">一頁掌握：我的分配床位、負荷與本班概況</div>
-          </div>
-        </div>
-
+        <div className="text-sm font-semibold text-slate-900">整體班別總覽</div>
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
-          <Kpi
-            title="我當班病患"
-            value={`${myPatients.length}`}
-            hint={`本班共有 ${allPatients.length} 位病人`}
-          />
-          <Kpi
-            title="當班小組長"
-            value={onDutyCharge}
-            hint="負責統籌與支援調度"
-            tone="mid"
-          />
+          <Kpi title="我當班病患" value={`${overview.myPatients.length}`} hint={`本班共有 ${overview.allPatients.length} 位病人`} />
+          <Kpi title="當班小組長" value={overview.onDutyCharge.shortName} hint="負責統籌與支援調度" tone="mid" />
         </div>
       </section>
 
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">我的病患</div>
-          </div>
+        <div className="text-sm font-semibold text-slate-900">我的病患</div>
+        <div className="mt-4">
+          <PatientsTable rows={overview.myPatients} burdenByAdmission={burdenByAdmission} />
         </div>
-
-        {myPatients.length === 0 ? (
-          <div className="mt-4 rounded-2xl bg-[#fafaf8] p-4 text-sm text-slate-600 ring-1 ring-black/5">
-            目前尚未分配到病患（請至「查看分床結果」確認分配）
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <PatientsTable rows={myLeft} />
-            <PatientsTable rows={myRight} />
-          </div>
-        )}
       </section>
 
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-sm font-semibold text-slate-900">本班全部病患</div>
-          </div>
+        <div className="text-sm font-semibold text-slate-900">本班全部病患</div>
+        <div className="mt-4">
+          <PatientsTable rows={overview.allPatients} burdenByAdmission={burdenByAdmission} />
         </div>
-
-        {allPatients.length === 0 ? (
-          <div className="mt-4 rounded-2xl bg-[#fafaf8] p-4 text-sm text-slate-600 ring-1 ring-black/5">
-            本班目前沒有病患資料
-          </div>
-        ) : (
-          <div className="mt-4 grid gap-4 lg:grid-cols-2">
-            <PatientsTable rows={allLeft} />
-            <PatientsTable rows={allRight} />
-          </div>
-        )}
       </section>
     </div>
   )
 }
 
-function PatientsTable({ rows }: { rows: Patient[] }) {
+function PatientsTable({
+  rows,
+  burdenByAdmission,
+}: {
+  rows: ApiAdmission[]
+  burdenByAdmission: Map<string, BurdenAssessment>
+}) {
   return (
     <div className="overflow-hidden rounded-2xl ring-1 ring-black/10">
       <table className="w-full text-left text-sm">
@@ -103,22 +82,18 @@ function PatientsTable({ rows }: { rows: Patient[] }) {
         </thead>
         <tbody>
           {rows.map((p) => {
-            const o = objectiveTotal(p.objective)
-            const s = p.subjective ? subjectiveTotal(p.subjective) : null
-            const total = o + (s ?? 0)
-            const level = total >= 22 ? '高' : total >= 14 ? '中' : '低'
+            const burden = burdenByAdmission.get(p.admissionId)
+            const level = burden?.score.level ?? '低'
             return (
-              <tr key={p.bedId} className="border-t border-black/10">
+              <tr key={p.admissionId} className="border-t border-black/10">
                 <td className="px-4 py-3 font-semibold text-slate-900">{p.bedLabel}</td>
                 <td className="px-4 py-3 text-slate-800">{p.diagnosis}</td>
                 <td className="px-4 py-3 font-semibold text-slate-900">{p.sex}</td>
                 <td className="px-4 py-3 font-semibold text-slate-900">{p.age}</td>
                 <td className="px-4 py-3 text-slate-800">{p.attendingPhysician}</td>
-                <td className="px-4 py-3 font-semibold text-slate-900">{total}</td>
+                <td className="px-4 py-3 font-semibold text-slate-900">{burden?.score.totalScore ?? 0}</td>
                 <td className="px-4 py-3">
-                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${levelPill(level)}`}>
-                    {level}
-                  </span>
+                  <span className={`rounded-full px-3 py-1 text-xs font-semibold ${levelPill(level)}`}>{level}</span>
                 </td>
               </tr>
             )
@@ -135,23 +110,8 @@ function levelPill(level: '高' | '中' | '低') {
   return 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]'
 }
 
-function Kpi({
-  title,
-  value,
-  hint,
-  tone,
-}: {
-  title: string
-  value: string
-  hint: string
-  tone?: 'high' | 'mid'
-}) {
-  const pill =
-    tone === 'high'
-      ? 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f2b3a6]'
-      : tone === 'mid'
-        ? 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]'
-        : 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10'
+function Kpi({ title, value, hint, tone }: { title: string; value: string; hint: string; tone?: 'mid' }) {
+  const pill = tone === 'mid' ? 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]' : 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10'
   return (
     <div className="rounded-2xl bg-[#fafaf8] p-4 ring-1 ring-black/5">
       <div className="text-xs font-semibold text-slate-600">{title}</div>
@@ -164,3 +124,6 @@ function Kpi({
   )
 }
 
+function Notice({ text, tone }: { text: string; tone?: 'bad' }) {
+  return <div className={`rounded-2xl bg-white p-6 text-sm ring-1 ${tone === 'bad' ? 'text-[#b3341f] ring-[#f2b3a6]' : 'text-slate-600 ring-black/10'}`}>{text}</div>
+}
