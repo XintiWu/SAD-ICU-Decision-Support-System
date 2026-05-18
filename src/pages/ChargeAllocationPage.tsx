@@ -204,10 +204,10 @@ export function ChargeAllocationPage() {
           <button
             type="button"
             onClick={() => {
-        window.requestAnimationFrame(() => {
-          navigate('/leader/allocation-result', { replace: true })
-        })
-   }}
+  window.requestAnimationFrame(() => {
+    navigate('/leader/allocation-result', { replace: true })
+  })
+}}
             className="mt-3 w-full rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
           >
             確認送出
