@@ -203,7 +203,11 @@ export function ChargeAllocationPage() {
           <div className="mt-2 text-xs text-slate-600">確認送出前，可先用此頁做分床平衡。</div>
           <button
             type="button"
-            onClick={() => navigate('/leader/allocation-result')}
+            onClick={() => {
+        window.requestAnimationFrame(() => {
+          navigate('/leader/allocation-result', { replace: true })
+        })
+   }}
             className="mt-3 w-full rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
           >
             確認送出
