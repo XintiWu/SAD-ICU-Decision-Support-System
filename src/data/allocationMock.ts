@@ -78,6 +78,21 @@ export const INITIAL_BY_NURSE: Record<NurseId, PatientId[]> = {
   n9: ['p15', 'p16'],
 }
 
+// demo 用：系統建議（看起來平均的假分配）
+export const SUGGESTED_UNASSIGNED: PatientId[] = []
+
+export const SUGGESTED_BY_NURSE: Record<NurseId, PatientId[]> = {
+  n1: ['p11', 'p12'], // 19 + 8 = 27
+  n2: ['p5', 'p3'], // 18 + 9 = 27
+  n3: ['p14', 'p7'], // 18 + 9 = 27
+  n4: ['p1', 'p9'], // 16 + 11 = 27
+  n5: ['p17', 'p13'], // 16 + 10 = 26
+  n6: ['p10', 'p16'], // 15 + 12 = 27
+  n7: ['p4', 'p8'], // 14 + 13 = 27
+  n8: ['p15', 'p6'], // 13 + 12 = 25
+  n9: ['p2'], // 17（人數 9 位、床位 17 床的視覺取捨）
+}
+
 // 下一班（原型示意）：用來做「本班 vs 下一班」並排比較與交班差異
 export const NEXT_UNASSIGNED: PatientId[] = []
 

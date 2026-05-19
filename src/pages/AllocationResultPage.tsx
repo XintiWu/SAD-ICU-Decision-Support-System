@@ -1,16 +1,27 @@
-import { INITIAL_BY_NURSE, NEXT_BED_PATIENT, NEXT_BY_NURSE, NURSES, PATIENTS } from '../data/allocationMock'
+import { NEXT_BED_PATIENT, NEXT_BY_NURSE, NURSES, PATIENTS } from '../data/allocationMock'
+import { SaveHandoverSnapshotButton } from '../components/SaveHandoverSnapshotButton'
+import { getAllocationByNurse } from '../state/demoStore'
 import type { NurseId, PatientId } from '../data/allocationMock'
 import { forwardRef, useEffect, useMemo, useRef, useState } from 'react'
 import { getDemoPatients, objectiveTotal, subjectiveTotal } from '../state/demoStore'
 import type { Patient as DemoPatient } from '../state/demoStore'
 
 export function AllocationResultPage() {
-  const currentOwner = useMemo(() => invertByNurse(INITIAL_BY_NURSE), [])
+  const currentOwner = useMemo(() => invertByNurse(getAllocationByNurse()), [])
   const nextOwner = useMemo(() => invertByNurse(NEXT_BY_NURSE), [])
   const patients = useMemo(() => getDemoPatients(), [])
 
   return (
-    <HandoffSheetTable currentOwner={currentOwner} nextOwner={nextOwner} patients={patients} nextBedPatient={NEXT_BED_PATIENT} />
+    <div className="grid gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl bg-white p-4 ring-1 ring-black/10">
+        <div>
+          <div className="text-sm font-semibold text-slate-900">交班分床結果</div>
+          <p className="mt-1 text-xs text-slate-600">確認內容無誤後，可儲存交班快照作為永久紀錄。</p>
+        </div>
+        <SaveHandoverSnapshotButton showNoteField variant="secondary" />
+      </div>
+      <HandoffSheetTable currentOwner={currentOwner} nextOwner={nextOwner} patients={patients} nextBedPatient={NEXT_BED_PATIENT} />
+    </div>
   )
 }
 

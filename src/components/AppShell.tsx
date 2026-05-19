@@ -22,11 +22,12 @@ export function AppShell({ children }: { children: ReactNode }) {
           <nav className="hidden items-center gap-2 md:flex">
             <TopNavLink to="/nurse/overview">護理師首頁</TopNavLink>
             <TopNavLink to="/nurse/burden-form">麻煩度填寫</TopNavLink>
-            <TopNavLink to="/nurse/todo">TO‑DO</TopNavLink>
+            <TopNavLink to="/nurse/stat">STAT 醫囑</TopNavLink>
             <div className="mx-2 h-5 w-px bg-black/10" />
             <TopNavLink to="/leader/allocation">指派分床配對</TopNavLink>
             <TopNavLink to="/leader/allocation-result">查看分床結果</TopNavLink>
             <TopNavLink to="/leader/war-room">戰情室</TopNavLink>
+            <TopNavLink to="/leader/handover-snapshots">交班快照</TopNavLink>
           </nav>
 
           <div className="flex items-center gap-2">

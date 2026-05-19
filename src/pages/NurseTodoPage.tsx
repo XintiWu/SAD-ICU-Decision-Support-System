@@ -1,77 +1,58 @@
-import type { ReactNode } from 'react'
 import { useMemo, useState } from 'react'
-import { getDemoTasks, setDemoTasks, taskPoints, type Task, type TaskKind } from '../state/demoStore'
+import {
+  getDemoStatOrders,
+  statOrderWeight,
+  type StatOrder,
+  type StatOrderKind,
+} from '../state/demoStore'
+
+const KINDS: StatOrderKind[] = ['檢查', '治療', '給藥', '監測', '其他']
 
 export function NurseTodoPage() {
-  const [filter, setFilter] = useState<'全部' | '待完成' | '已完成'>('全部')
-  const [kindFilter, setKindFilter] = useState<Set<TaskKind>>(new Set())
-  const [tasks, setTasks] = useState<Task[]>(() => getDemoTasks())
+  const [kindFilter, setKindFilter] = useState<Set<StatOrderKind>>(new Set())
+  const [orders] = useState<StatOrder[]>(() => sortByOrderedAt(getDemoStatOrders()))
   const [expandedBeds, setExpandedBeds] = useState<Set<string>>(new Set())
 
-  const counts = useMemo(() => {
-    const done = tasks.filter((t) => t.done).length
-    const pending = tasks.length - done
-    return { done, pending, total: tasks.length }
-  }, [tasks])
-
   const shown = useMemo(() => {
-    if (filter === '待完成') return tasks.filter((t) => !t.done)
-    if (filter === '已完成') return tasks.filter((t) => t.done)
-    return tasks
-  }, [filter, tasks])
+    if (kindFilter.size === 0) return orders
+    return orders.filter((o) => kindFilter.has(o.kind))
+  }, [kindFilter, orders])
 
-  const shownByKind = useMemo(() => {
-    if (kindFilter.size === 0) return shown
-    return shown.filter((t) => kindFilter.has(t.kind))
-  }, [kindFilter, shown])
-
-  const remainingPoints = useMemo(
-    () => tasks.filter((t) => !t.done).reduce((acc, t) => acc + taskPoints(t), 0),
-    [tasks],
+  const totalWeight = useMemo(
+    () => orders.reduce((acc, o) => acc + statOrderWeight(o), 0),
+    [orders],
   )
 
-  const progress = useMemo(() => {
-    const kinds: TaskKind[] = ['給藥', '檢查', '監測', '家屬', '紀錄']
-    const byKind = new Map<TaskKind, { done: number; total: number }>()
-    for (const k of kinds) byKind.set(k, { done: 0, total: 0 })
-    for (const t of tasks) {
-      const x = byKind.get(t.kind) ?? { done: 0, total: 0 }
-      x.total += 1
-      if (t.done) x.done += 1
-      byKind.set(t.kind, x)
-    }
-    return byKind
-  }, [tasks])
+  const countByKind = useMemo(() => {
+    const map = new Map<StatOrderKind, number>()
+    for (const k of KINDS) map.set(k, 0)
+    for (const o of orders) map.set(o.kind, (map.get(o.kind) ?? 0) + 1)
+    return map
+  }, [orders])
 
-  const beds = useMemo(() => groupByBed(shownByKind), [shownByKind])
+  const oldestMinutes = useMemo(() => minutesSinceOldest(orders), [orders])
+
+  const beds = useMemo(() => groupByBed(shown), [shown])
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
       <section className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
         <div className="flex items-start justify-between gap-3">
           <div>
-            <div className="text-sm font-semibold text-slate-900">我的待辦清單</div>
+            <div className="text-sm font-semibold text-slate-900">突發立即性醫囑 STAT TODO</div>
             <div className="mt-1 text-xs text-slate-600">
-              依優先級排序；完成後打勾，負荷分數即時更新
+              醫師 bedside 開立之立即檢查/治療；僅供提醒，不需在此標記完成
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <TabButton active={filter === '全部'} onClick={() => setFilter('全部')}>
-              全部（{counts.total}）
-            </TabButton>
-            <TabButton active={filter === '待完成'} onClick={() => setFilter('待完成')}>
-              待完成（{counts.pending}）
-            </TabButton>
-            <TabButton active={filter === '已完成'} onClick={() => setFilter('已完成')}>
-              已完成（{counts.done}）
-            </TabButton>
+          <div className="rounded-full bg-[#ffe8e1] px-3 py-1.5 text-xs font-semibold text-[#b3341f]">
+            共 {orders.length} 筆 STAT
           </div>
         </div>
 
         <div className="mt-4 flex flex-wrap items-center gap-2">
-          <span className="text-xs font-semibold text-slate-600">標籤篩選</span>
+          <span className="text-xs font-semibold text-slate-600">類型篩選</span>
           <div className="ml-auto flex flex-1 flex-wrap justify-end gap-2">
-            {(['給藥', '檢查', '監測', '家屬', '紀錄'] as TaskKind[]).map((k) => (
+            {KINDS.map((k) => (
               <KindFilterPill
                 key={k}
                 kind={k}
@@ -99,6 +80,11 @@ export function NurseTodoPage() {
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2">
+          {beds.length === 0 ? (
+            <p className="col-span-full py-8 text-center text-sm text-slate-500">
+              目前無符合篩選條件的 STAT 醫囑
+            </p>
+          ) : null}
           {beds.map(([bedLabel, items]) => {
             const isExpanded = expandedBeds.has(bedLabel)
             const visibleCount = isExpanded ? items.length : Math.min(4, items.length)
@@ -128,41 +114,24 @@ export function NurseTodoPage() {
                 </div>
 
                 <ul className="mt-2 grid gap-1.5">
-                  {visibleItems.map((t) => (
-                    <li key={t.id} className="flex items-center gap-2 rounded-xl bg-white p-2 ring-1 ring-black/5">
-                    <input
-                      type="checkbox"
-                      checked={!!t.done}
-                      onChange={() =>
-                        setTasks((prev) => {
-                          const next = prev.map((x) =>
-                            x.id === t.id
-                              ? { ...x, done: !x.done, at: !x.done ? nowHHMM() : x.at }
-                              : x,
-                          )
-                          setDemoTasks(next)
-                          return next
-                        })
-                      }
-                      className="h-4 w-4 accent-black"
-                    />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex min-w-0 items-baseline gap-2">
-                        <div
-                          className={`min-w-0 flex-1 truncate text-sm ${
-                            t.done ? 'text-slate-400 line-through' : 'text-slate-900'
-                          }`}
-                        >
-                          {t.title}
+                  {visibleItems.map((o) => (
+                    <li key={o.id} className="rounded-xl bg-white p-3 ring-1 ring-[#f1c4b8]">
+                      <div className="flex items-start gap-2">
+                        <span className="shrink-0 rounded-md bg-[#b3341f] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
+                          STAT
+                        </span>
+                        <div className="min-w-0 flex-1">
+                          <div className="text-sm font-semibold text-slate-900">{o.title}</div>
+                          <div className="mt-1 text-xs text-slate-600">
+                            {o.orderedBy} · {o.orderedAt} 開立
+                          </div>
+                          {o.reason ? (
+                            <div className="mt-1 text-xs text-[#9a3412]">{o.reason}</div>
+                          ) : null}
                         </div>
-                        {t.at ? <span className="shrink-0 text-xs text-slate-500">完成 {t.at}</span> : null}
+                        <KindPill kind={o.kind} />
                       </div>
-                    </div>
-                    <div className="flex shrink-0 items-center justify-end gap-1.5 text-xs">
-                      <KindPill kind={t.kind} />
-                      {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
-                    </div>
-                  </li>
+                    </li>
                   ))}
                 </ul>
 
@@ -189,55 +158,65 @@ export function NurseTodoPage() {
       </section>
 
       <aside className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
-        <div className="text-sm font-semibold text-slate-900">進度</div>
-        <div className="mt-4 grid gap-3 text-sm">
-          {(['給藥', '檢查', '監測', '家屬', '紀錄'] as TaskKind[]).map((k) => {
-            const x = progress.get(k) ?? { done: 0, total: 0 }
-            return <ProgressRow key={k} label={k} done={x.done} total={x.total} />
+        <div className="text-sm font-semibold text-slate-900">STAT 摘要</div>
+        <div className="mt-4 grid gap-2 text-sm">
+          <SummaryRow label="目前 STAT 總數" value={String(orders.length)} highlight />
+          {KINDS.map((k) => {
+            const n = countByKind.get(k) ?? 0
+            if (n === 0) return null
+            return <SummaryRow key={k} label={k} value={String(n)} />
           })}
         </div>
+        {oldestMinutes != null ? (
+          <div className="mt-4 rounded-2xl bg-[#fff1f0] p-4 ring-1 ring-[#fecaca]">
+            <div className="text-xs font-semibold text-[#b3341f]">時間警示</div>
+            <div className="mt-1 text-sm text-[#7f1d1d]">
+              最早一筆 STAT 已開立約 {oldestMinutes} 分鐘
+            </div>
+          </div>
+        ) : null}
         <div className="mt-5 rounded-2xl bg-[#fff7ed] p-4 ring-1 ring-[#f1d7b8]">
-          <div className="text-xs font-semibold text-[#9a5b1a]">剩餘負荷分數</div>
-          <div className="mt-1 text-3xl font-extrabold tracking-tight text-[#b45309]">{remainingPoints}</div>
-          <div className="mt-2 text-xs text-[#9a5b1a]">打勾後即時下降（依任務權重估算）</div>
+          <div className="text-xs font-semibold text-[#9a5b1a]">STAT 加權參考分數</div>
+          <div className="mt-1 text-3xl font-extrabold tracking-tight text-[#b45309]">{totalWeight}</div>
+          <div className="mt-2 text-xs text-[#9a5b1a]">僅供排班/負荷參考，不因勾選下降</div>
         </div>
       </aside>
     </div>
   )
 }
 
-function TabButton({
-  active,
-  onClick,
-  children,
+function SummaryRow({
+  label,
+  value,
+  highlight,
 }: {
-  active: boolean
-  onClick: () => void
-  children: ReactNode
+  label: string
+  value: string
+  highlight?: boolean
 }) {
   return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={[
-        'rounded-full px-3 py-1.5 text-xs font-semibold transition',
-        active ? 'bg-black text-white' : 'bg-white text-slate-700 ring-1 ring-black/10 hover:bg-black/5',
-      ].join(' ')}
-    >
-      {children}
-    </button>
+    <div className="flex items-center justify-between text-xs">
+      <span className={highlight ? 'font-semibold text-slate-900' : 'text-slate-600'}>{label}</span>
+      <span className={highlight ? 'text-lg font-bold text-[#b3341f]' : 'font-semibold text-slate-800'}>
+        {value}
+      </span>
+    </div>
   )
 }
 
-function KindPill({ kind }: { kind: TaskKind }) {
-  const map: Record<TaskKind, string> = {
-    給藥: 'bg-[#e6f0ff] text-[#1e4ea7] ring-1 ring-[#b7cff7]',
+function KindPill({ kind }: { kind: StatOrderKind }) {
+  const map: Record<StatOrderKind, string> = {
     檢查: 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]',
+    治療: 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f1c4b8]',
+    給藥: 'bg-[#e6f0ff] text-[#1e4ea7] ring-1 ring-[#b7cff7]',
     監測: 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]',
-    家屬: 'bg-[#f3e8ff] text-[#6b21a8] ring-1 ring-[#e0c8ff]',
-    紀錄: 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10',
+    其他: 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10',
   }
-  return <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${map[kind]}`}>{kind}</span>
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${map[kind]}`}>
+      {kind}
+    </span>
+  )
 }
 
 function KindFilterPill({
@@ -245,28 +224,28 @@ function KindFilterPill({
   active,
   onClick,
 }: {
-  kind: TaskKind
+  kind: StatOrderKind
   active: boolean
   onClick: () => void
 }) {
-  const map: Record<TaskKind, { on: string; off: string }> = {
-    給藥: {
-      on: 'bg-[#1e4ea7] text-white',
-      off: 'bg-[#e6f0ff] text-[#1e4ea7] ring-1 ring-[#b7cff7]',
-    },
+  const map: Record<StatOrderKind, { on: string; off: string }> = {
     檢查: {
       on: 'bg-[#9a5b1a] text-white',
       off: 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]',
+    },
+    治療: {
+      on: 'bg-[#b3341f] text-white',
+      off: 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f1c4b8]',
+    },
+    給藥: {
+      on: 'bg-[#1e4ea7] text-white',
+      off: 'bg-[#e6f0ff] text-[#1e4ea7] ring-1 ring-[#b7cff7]',
     },
     監測: {
       on: 'bg-[#1e6c3a] text-white',
       off: 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]',
     },
-    家屬: {
-      on: 'bg-[#6b21a8] text-white',
-      off: 'bg-[#f3e8ff] text-[#6b21a8] ring-1 ring-[#e0c8ff]',
-    },
-    紀錄: {
+    其他: {
       on: 'bg-[#334155] text-white',
       off: 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10',
     },
@@ -276,44 +255,49 @@ function KindFilterPill({
     <button
       type="button"
       onClick={onClick}
-      className={['rounded-full px-3 py-1.5 text-xs font-semibold transition hover:brightness-95', cls].join(' ')}
+      className={[
+        'rounded-full px-3 py-1.5 text-xs font-semibold transition hover:brightness-95',
+        cls,
+      ].join(' ')}
     >
       {kind}
     </button>
   )
 }
 
-function ProgressRow({ label, done, total }: { label: string; done: number; total: number }) {
-  const pct = Math.min(100, Math.round((done / Math.max(1, total)) * 100))
-  return (
-    <div className="grid gap-1">
-      <div className="flex items-center justify-between text-xs text-slate-600">
-        <span className="font-semibold text-slate-800">{label}</span>
-        <span>
-          {done}/{total}
-        </span>
-      </div>
-      <div className="h-2 overflow-hidden rounded-full bg-black/5">
-        <div className="h-full bg-[#c64a2c]" style={{ width: `${pct}%` }} />
-      </div>
-    </div>
-  )
-}
-
-function groupByBed(tasks: Task[]) {
-  const map = new Map<string, Task[]>()
-  for (const t of tasks) {
-    const list = map.get(t.bedLabel) ?? []
-    list.push(t)
-    map.set(t.bedLabel, list)
+function groupByBed(orders: StatOrder[]) {
+  const map = new Map<string, StatOrder[]>()
+  for (const o of orders) {
+    const list = map.get(o.bedLabel) ?? []
+    list.push(o)
+    map.set(o.bedLabel, list)
+  }
+  for (const [, list] of map) {
+    list.sort((a, b) => compareOrderedAt(b.orderedAt, a.orderedAt))
   }
   return [...map.entries()]
 }
 
-function nowHHMM() {
-  const d = new Date()
-  const hh = String(d.getHours()).padStart(2, '0')
-  const mm = String(d.getMinutes()).padStart(2, '0')
-  return `${hh}:${mm}`
+function sortByOrderedAt(orders: StatOrder[]) {
+  return [...orders].sort((a, b) => compareOrderedAt(b.orderedAt, a.orderedAt))
 }
 
+function compareOrderedAt(a: string, b: string) {
+  return parseHHMM(a) - parseHHMM(b)
+}
+
+function parseHHMM(s: string) {
+  const m = s.match(/^(\d{1,2}):(\d{2})$/)
+  if (!m) return 0
+  return Number(m[1]) * 60 + Number(m[2])
+}
+
+function minutesSinceOldest(orders: StatOrder[]) {
+  if (orders.length === 0) return null
+  const oldest = orders.reduce((min, o) => (compareOrderedAt(o.orderedAt, min.orderedAt) < 0 ? o : min))
+  const now = new Date()
+  const nowMins = now.getHours() * 60 + now.getMinutes()
+  const oldestMins = parseHHMM(oldest.orderedAt)
+  const diff = nowMins - oldestMins
+  return diff >= 0 ? diff : diff + 24 * 60
+}
