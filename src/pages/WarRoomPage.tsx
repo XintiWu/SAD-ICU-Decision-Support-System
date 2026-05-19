@@ -7,23 +7,31 @@ export function WarRoomPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+    useEffect(() => {
     let alive = true
-    apiGet<WarRoomData>(`/war-room?shiftId=${CURRENT_SHIFT_ID}`)
-      .then((nextData) => {
-        if (!alive) return
-        setData(nextData)
-        setError(null)
-      })
-      .catch((err: Error) => {
-        if (!alive) return
-        setError(err.message)
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
+
+    const load = () => {
+      apiGet<WarRoomData>(`/war-room?shiftId=${CURRENT_SHIFT_ID}`)
+        .then((nextData) => {
+          if (!alive) return
+          setData(nextData)
+          setError(null)
+        })
+        .catch((err: Error) => {
+          if (!alive) return
+          setError(err.message)
+        })
+        .finally(() => {
+          if (alive) setLoading(false)
+        })
+    }
+
+    load()
+    const timer = window.setInterval(load, 5000)
+
     return () => {
       alive = false
+      window.clearInterval(timer)
     }
   }, [])
 
