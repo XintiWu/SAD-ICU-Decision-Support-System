@@ -53,7 +53,7 @@ export function NurseOverviewPage() {
         </div>
 
         {myPatients.length === 0 ? (
-          <div className="mt-4 rounded-2xl bg-[#fafaf8] p-4 text-sm text-slate-600 ring-1 ring-black/5">
+          <div className="mt-4 rounded-2xl bg-surface p-4 text-sm text-slate-600 ring-1 ring-black/5">
             目前尚未分配到病患（請至「查看分床結果」確認分配）
           </div>
         ) : (
@@ -72,7 +72,7 @@ export function NurseOverviewPage() {
         </div>
 
         {allPatients.length === 0 ? (
-          <div className="mt-4 rounded-2xl bg-[#fafaf8] p-4 text-sm text-slate-600 ring-1 ring-black/5">
+          <div className="mt-4 rounded-2xl bg-surface p-4 text-sm text-slate-600 ring-1 ring-black/5">
             本班目前沒有病患資料
           </div>
         ) : (
@@ -90,7 +90,7 @@ function PatientsTable({ rows }: { rows: Patient[] }) {
   return (
     <div className="overflow-hidden rounded-2xl ring-1 ring-black/10">
       <table className="w-full text-left text-sm">
-        <thead className="bg-[#fafaf8] text-xs text-slate-600">
+        <thead className="bg-surface text-xs text-slate-600">
           <tr>
             <th className="px-4 py-3 font-semibold">床號</th>
             <th className="px-4 py-3 font-semibold">診斷</th>
@@ -153,7 +153,7 @@ function Kpi({
         ? 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]'
         : 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10'
   return (
-    <div className="rounded-2xl bg-[#fafaf8] p-4 ring-1 ring-black/5">
+    <div className="rounded-2xl bg-surface p-4 ring-1 ring-black/5">
       <div className="text-xs font-semibold text-slate-600">{title}</div>
       <div className="mt-2 flex items-end justify-between gap-3">
         <div className="text-2xl font-extrabold tracking-tight text-slate-900">{value}</div>

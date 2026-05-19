@@ -220,7 +220,7 @@ function NurseLoadCard({ nurse }: { nurse: NurseCardModel }) {
       </div>
 
       <div className="mt-3 grid gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2 ring-1 ring-black/10">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2 ring-1 ring-black/10">
           <div className="min-w-0 text-[11px] font-semibold text-slate-700">
             床位：{assignments.length ? assignments.map((a) => `床 ${a.bed}`).join('、') : '—'}
           </div>
@@ -242,7 +242,7 @@ function NurseLoadCard({ nurse }: { nurse: NurseCardModel }) {
                 <StatOrderRow key={o.id} order={o} compact />
               ))
             ) : (
-              <div className="rounded-xl bg-[#fafaf8] px-3 py-2 text-xs text-slate-600 ring-1 ring-black/10">
+              <div className="rounded-xl bg-surface px-3 py-2 text-xs text-slate-600 ring-1 ring-black/10">
                 目前無 STAT 醫囑
               </div>
             )}
@@ -260,7 +260,7 @@ function NurseLoadCard({ nurse }: { nurse: NurseCardModel }) {
               const bedStatus = assign ? statusPill(assign.comprehensive) : null
 
               return (
-                <section key={bed} className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
+                <section key={bed} className="overflow-hidden rounded-xl bg-surface ring-1 ring-black/10">
                   <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white px-2.5 py-2">
                     <div className="min-w-0 text-xs font-extrabold tracking-wide text-slate-900">
                       床 {bed}
@@ -268,10 +268,10 @@ function NurseLoadCard({ nurse }: { nurse: NurseCardModel }) {
                     </div>
                     {assign ? (
                       <div className="flex flex-wrap items-center gap-1 text-[10px]">
-                        <span className="rounded-full bg-[#fafaf8] px-2 py-0.5 font-semibold text-slate-700 ring-1 ring-black/10">
+                        <span className="rounded-full bg-surface px-2 py-0.5 font-semibold text-slate-700 ring-1 ring-black/10">
                           客 {assign.objective}
                         </span>
-                        <span className="rounded-full bg-[#fafaf8] px-2 py-0.5 font-semibold text-slate-700 ring-1 ring-black/10">
+                        <span className="rounded-full bg-surface px-2 py-0.5 font-semibold text-slate-700 ring-1 ring-black/10">
                           主 {assign.subjective}
                         </span>
                         <span className="rounded-full bg-white px-2 py-0.5 font-extrabold text-slate-900 ring-1 ring-black/10">

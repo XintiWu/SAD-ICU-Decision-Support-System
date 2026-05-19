@@ -124,13 +124,13 @@ export function BurdenFormPage() {
                         </div>
                         <div className="mt-1 text-xs text-slate-500">客觀分數僅顯示，不可手動更改</div>
                       </div>
-                      <div className="shrink-0 rounded-2xl bg-[#fafaf8] px-3 py-2 text-right ring-1 ring-black/10">
+                      <div className="shrink-0 rounded-2xl bg-surface px-3 py-2 text-right ring-1 ring-black/10">
                         <div className="text-[10px] font-semibold text-slate-600">客觀總分</div>
                         <div className="mt-0.5 text-lg font-extrabold tracking-tight text-slate-900">{total}</div>
                       </div>
                     </div>
 
-                    <div className="mt-4 rounded-2xl bg-[#fafaf8] p-3 ring-1 ring-black/5">
+                    <div className="mt-4 rounded-2xl bg-surface p-3 ring-1 ring-black/5">
                       <div className="grid gap-2 md:grid-cols-2">
                         {objectiveLayout.flatMap((sec) => [
                           <div
@@ -153,13 +153,13 @@ export function BurdenFormPage() {
                                 <div className="flex flex-wrap items-center gap-2">
                                   <div className="truncate text-xs font-semibold text-slate-700">{r.label}</div>
                                   {r.hint ? (
-                                    <span className="rounded-full bg-[#fafaf8] px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-black/10">
+                                    <span className="rounded-full bg-surface px-2 py-0.5 text-[10px] font-semibold text-slate-600 ring-1 ring-black/10">
                                       {r.hint}
                                     </span>
                                   ) : null}
                                 </div>
                               </div>
-                              <div className="min-w-10 rounded-lg bg-[#fafaf8] px-2 py-1 text-right text-sm font-extrabold text-slate-900 ring-1 ring-black/10">
+                              <div className="min-w-10 rounded-lg bg-surface px-2 py-1 text-right text-sm font-extrabold text-slate-900 ring-1 ring-black/10">
                                 {p.objective[r.key]}
                               </div>
                             </div>
@@ -295,10 +295,10 @@ function SubjectivePatientCard({
             {patient.bedLabel} <span className="font-semibold text-slate-700">— {patient.diagnosis}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
-            <span className="rounded-full bg-[#fafaf8] px-3 py-1 font-semibold ring-1 ring-black/10">
+            <span className="rounded-full bg-surface px-3 py-1 font-semibold ring-1 ring-black/10">
               主觀 {sTotal}
             </span>
-            <span className="rounded-full bg-[#fafaf8] px-3 py-1 font-semibold ring-1 ring-black/10">
+            <span className="rounded-full bg-surface px-3 py-1 font-semibold ring-1 ring-black/10">
               客觀 {oTotal}
             </span>
             <span className="rounded-full bg-white px-3 py-1 font-extrabold text-slate-900 ring-1 ring-black/10">
@@ -369,7 +369,7 @@ function SubjectivePatientCard({
 function SubjectiveSummary({ rows }: { rows: Patient[] }) {
   return (
     <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/10">
-      <div className="bg-[#fafaf8] px-4 py-3 text-xs font-semibold text-slate-600">本班病患分數摘要</div>
+      <div className="bg-surface px-4 py-3 text-xs font-semibold text-slate-600">本班病患分數摘要</div>
       <div className="divide-y divide-black/10">
         {rows.map((p) => {
           const s = p.subjective ?? defaultSubjective()
@@ -386,10 +386,10 @@ function SubjectiveSummary({ rows }: { rows: Patient[] }) {
               <div className="shrink-0 text-right">
                 <div className="text-xs font-semibold text-slate-900">{total}</div>
                 <div className="mt-1 flex items-center justify-end gap-2">
-                  <span className="rounded-full bg-[#fafaf8] px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
+                  <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
                     主 {sTotal}
                   </span>
-                  <span className="rounded-full bg-[#fafaf8] px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
+                  <span className="rounded-full bg-surface px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
                     客 {oTotal}
                   </span>
                   <span className={`rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>

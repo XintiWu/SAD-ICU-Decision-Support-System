@@ -49,7 +49,7 @@ export function AllocationNurseLane({
     >
       <header className="pointer-events-none border-b border-black/5 px-3 py-2.5">
         <div className="flex items-center gap-2.5">
-          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-[#f4f3ef] text-sm font-bold text-slate-700">
+          <span className="grid h-9 w-9 shrink-0 place-items-center rounded-full bg-surface-muted text-sm font-bold text-slate-700">
             {surname}
           </span>
           <div className="min-w-0 flex-1">
@@ -68,7 +68,7 @@ export function AllocationNurseLane({
 
       <div
         ref={(el) => onRegisterBody?.(id, el)}
-        className={['min-h-[100px] p-2.5', isOver ? 'bg-[#fafaf8]' : ''].join(' ')}
+        className={['min-h-[100px] p-2.5', isOver ? 'bg-surface' : ''].join(' ')}
       >
         <SortableContext items={items} strategy={rectSortingStrategy}>
           {items.length === 0 ? (
@@ -76,8 +76,8 @@ export function AllocationNurseLane({
               className={[
                 'flex min-h-[88px] items-center justify-center rounded-xl border border-dashed text-xs font-medium',
                 dragging
-                  ? 'border-black/25 bg-[#fafaf8] text-slate-600'
-                  : 'border-black/15 bg-[#fafaf8] text-slate-500',
+                  ? 'border-black/25 bg-surface text-slate-600'
+                  : 'border-black/15 bg-surface text-slate-500',
               ].join(' ')}
             >
               {dragging ? '放開以移入' : '拖入病患'}

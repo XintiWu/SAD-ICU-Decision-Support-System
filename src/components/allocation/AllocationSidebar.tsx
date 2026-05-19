@@ -35,7 +35,7 @@ export function AllocationSidebar({ stats, loadRows, canUndo, onUndo, onSuggest,
         <p className="mt-1 text-xs text-slate-600">依麻煩度加總 · 含床數與與平均差距</p>
       </div>
 
-      <div className="rounded-xl bg-[#fafaf8] p-3 text-xs leading-relaxed text-slate-600 ring-1 ring-black/5">
+      <div className="rounded-xl bg-surface p-3 text-xs leading-relaxed text-slate-600 ring-1 ring-black/5">
         {stats.maxNurseId && stats.minNurseId ? (
           <p>
             <span className="font-semibold text-slate-800">最高</span> {NURSES[stats.maxNurseId].shortName}{' '}

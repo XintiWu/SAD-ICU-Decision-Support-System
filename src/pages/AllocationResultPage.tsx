@@ -158,7 +158,7 @@ function HandoffSheetTable({
   }, [popover])
 
   return (
-    <div className="rounded-2xl bg-[#fafaf8] p-5 ring-1 ring-black/5">
+    <div className="rounded-2xl bg-surface p-5 ring-1 ring-black/5">
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/10">
         <table className="min-w-[1200px] w-full table-fixed text-left text-sm">
           <colgroup>
@@ -173,7 +173,7 @@ function HandoffSheetTable({
             <col style={{ width: '21%' }} />
             <col style={{ width: '10%' }} />
           </colgroup>
-          <thead className="bg-[#fafaf8] text-xs text-slate-600">
+          <thead className="bg-surface text-xs text-slate-600">
             <tr className="border-b border-black/10">
               <th className="px-4 py-3 font-semibold whitespace-nowrap">床位</th>
               <th className="px-4 py-3 font-semibold whitespace-nowrap">主治醫生</th>
@@ -187,7 +187,7 @@ function HandoffSheetTable({
               <th className="px-4 py-3 font-semibold whitespace-nowrap">下個班別護理師</th>
             </tr>
           </thead>
-          <tbody className="bg-[#fafaf8]">
+          <tbody className="bg-surface">
             {rows.map((r) => (
               <tr key={`row:${r.bed}`} className="border-t border-black/10">
                 <td className="px-4 py-3 whitespace-nowrap">
@@ -363,7 +363,7 @@ const ScorePopover = forwardRef<
 
 function KpiMini({ label, value, strong }: { label: string; value: string; strong?: boolean }) {
   return (
-    <div className="rounded-2xl bg-[#fafaf8] p-3 ring-1 ring-black/5">
+    <div className="rounded-2xl bg-surface p-3 ring-1 ring-black/5">
       <div className="text-[11px] font-semibold text-slate-600">{label}</div>
       <div className={`mt-1 text-lg font-extrabold tracking-tight ${strong ? 'text-slate-900' : 'text-slate-800'}`}>{value}</div>
     </div>
@@ -372,7 +372,7 @@ function KpiMini({ label, value, strong }: { label: string; value: string; stron
 
 function ScoreSection({ title, items, emptyText }: { title: string; items: ScoreItem[]; emptyText: string }) {
   return (
-    <div className="rounded-2xl bg-[#fafaf8] p-3 ring-1 ring-black/5">
+    <div className="rounded-2xl bg-surface p-3 ring-1 ring-black/5">
       <div className="text-xs font-extrabold text-slate-800">{title}</div>
       {items.length === 0 ? (
         <div className="mt-2 text-xs font-semibold text-slate-600">{emptyText}</div>

@@ -51,7 +51,7 @@ function AssignRow({ label, load, onClick }: { label: string; load: number | nul
     <button
       type="button"
       onClick={onClick}
-      className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 hover:bg-[#fafaf8] ring-1 ring-transparent hover:ring-black/5"
+      className="flex w-full items-center justify-between rounded-xl px-3 py-2.5 text-left text-sm font-semibold text-slate-800 hover:bg-surface ring-1 ring-transparent hover:ring-black/5"
     >
       <span>{label}</span>
       {load != null ? <span className="text-xs font-medium text-slate-500">目前負荷 {load}</span> : null}

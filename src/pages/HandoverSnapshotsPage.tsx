@@ -29,19 +29,19 @@ export function HandoverSnapshotsPage() {
             <div>
               <div className="text-[11px] font-semibold tracking-wide text-slate-600">HANDOVER ARCHIVE</div>
               <h1 className="mt-1 text-lg font-extrabold tracking-tight text-slate-900">交班快照紀錄</h1>
-              <p className="mt-1 max-w-2xl text-sm text-slate-600">
-                查閱已封存的交班紀錄（分床、病患麻煩度、任務狀態）。本頁僅供瀏覽，若要新增快照請至
-                <Link to="/leader/allocation" className="mx-1 font-semibold text-slate-900 underline underline-offset-2">
+              <p className="mt-1 whitespace-nowrap text-sm text-slate-600">
+                查閱已封存的交班紀錄（分床、病患麻煩度、任務狀態）。本頁僅供瀏覽，若要新增快照請至{' '}
+                <Link to="/leader/allocation" className="font-semibold text-slate-900 underline underline-offset-2">
                   指派分床配對
                 </Link>
-                或
+                {' '}或{' '}
                 <Link
                   to="/leader/allocation-result"
-                  className="mx-1 font-semibold text-slate-900 underline underline-offset-2"
+                  className="font-semibold text-slate-900 underline underline-offset-2"
                 >
                   查看分床結果
                 </Link>
-                儲存。
+                {' '}儲存。
               </p>
             </div>
             <p className="shrink-0 text-sm text-slate-600">
@@ -55,13 +55,13 @@ export function HandoverSnapshotsPage() {
         <aside className="rounded-2xl bg-white p-3 ring-1 ring-black/10">
           <div className="flex items-center justify-between gap-2 px-2 py-1">
             <div className="text-xs font-semibold text-slate-600">歷史快照</div>
-            <span className="rounded-full bg-[#fafaf8] px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
+            <span className="rounded-full bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
               {items.length} 筆
             </span>
           </div>
 
           {items.length === 0 ? (
-            <div className="mt-3 rounded-xl bg-[#fafaf8] p-4 text-sm text-slate-600 ring-1 ring-black/5">
+            <div className="mt-3 rounded-xl bg-surface p-4 text-sm text-slate-600 ring-1 ring-black/5">
               尚無快照。請至「指派分床配對」或「查看分床結果」完成交班後儲存。
             </div>
           ) : (
@@ -75,7 +75,7 @@ export function HandoverSnapshotsPage() {
                       onClick={() => setSearchParams({ id: item.id })}
                       className={[
                         'w-full rounded-xl px-3 py-2.5 text-left transition',
-                        active ? 'bg-black text-white' : 'bg-[#fafaf8] text-slate-800 hover:bg-black/5',
+                        active ? 'bg-black text-white' : 'bg-surface text-slate-800 hover:bg-black/5',
                       ].join(' ')}
                     >
                       <div className="text-xs font-semibold opacity-80">{item.shiftLabel}</div>
@@ -142,7 +142,7 @@ function SnapshotDetail({ snapshot, onDeleted }: { snapshot: HandoverSnapshot; o
               {formatSnapshotDateTime(snapshot.createdAt)}
             </h2>
             <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-              <span className="rounded-full bg-[#fafaf8] px-2.5 py-1 font-semibold ring-1 ring-black/10">
+              <span className="rounded-full bg-surface px-2.5 py-1 font-semibold ring-1 ring-black/10">
                 記錄人 {snapshot.createdBy}
               </span>
               {snapshot.note ? (
@@ -179,7 +179,7 @@ function SnapshotDetail({ snapshot, onDeleted }: { snapshot: HandoverSnapshot; o
         <SectionTitle title="分床分配（封存當下）" subtitle={`${snapshot.nurseBlocks.length} 位護理師有分配床位`} />
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {snapshot.nurseBlocks.map((block) => (
-            <article key={block.nurseId} className="rounded-2xl bg-[#fafaf8] p-4 ring-1 ring-black/10">
+            <article key={block.nurseId} className="rounded-2xl bg-surface p-4 ring-1 ring-black/10">
               <div className="flex items-center justify-between gap-2">
                 <h3 className="text-sm font-extrabold text-slate-900">護理師 {block.nurseName}</h3>
                 <LoadPill load={block.load} />
@@ -209,7 +209,7 @@ function SnapshotDetail({ snapshot, onDeleted }: { snapshot: HandoverSnapshot; o
         ) : (
           <div className="mt-3 overflow-x-auto rounded-xl ring-1 ring-black/10">
             <table className="min-w-full text-left text-sm">
-              <thead className="bg-[#fafaf8] text-xs text-slate-600">
+              <thead className="bg-surface text-xs text-slate-600">
                 <tr>
                   <th className="px-4 py-2 font-semibold">床位</th>
                   <th className="px-4 py-2 font-semibold">任務</th>
@@ -253,7 +253,7 @@ function SectionTitle({ title, subtitle }: { title: string; subtitle: string }) 
 
 function Kpi({ label, value, hint, warn }: { label: string; value: string; hint: string; warn?: boolean }) {
   return (
-    <div className="rounded-2xl bg-[#fafaf8] p-3 ring-1 ring-black/5">
+    <div className="rounded-2xl bg-surface p-3 ring-1 ring-black/5">
       <div className="text-[11px] font-semibold text-slate-600">{label}</div>
       <div className="mt-1 flex items-end justify-between gap-2">
         <div className={`text-2xl font-extrabold ${warn ? 'text-[#b3341f]' : 'text-slate-900'}`}>{value}</div>

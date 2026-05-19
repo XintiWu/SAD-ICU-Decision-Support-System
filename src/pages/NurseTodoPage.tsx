@@ -92,7 +92,7 @@ export function NurseTodoPage() {
             const visibleItems = items.slice(0, visibleCount)
 
             return (
-              <div key={bedLabel} className="rounded-2xl bg-[#fafaf8] p-3 ring-1 ring-black/5">
+              <div key={bedLabel} className="rounded-2xl bg-surface p-3 ring-1 ring-black/5">
                 <div className="flex items-start justify-between gap-3">
                   <div className="text-xs font-semibold text-slate-800">{bedLabel}</div>
                   {hiddenCount > 0 ? (

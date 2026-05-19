@@ -25,7 +25,7 @@ export function AllocationUnassignedStrip({
     <section className="rounded-2xl bg-white ring-1 ring-black/8">
       <header className="flex flex-wrap items-center gap-3 border-b border-black/5 px-4 py-3">
         <div className="flex min-w-0 flex-1 items-center gap-2">
-          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-[#f4f3ef] text-base" aria-hidden>
+          <span className="grid h-8 w-8 shrink-0 place-items-center rounded-lg bg-surface-muted text-base" aria-hidden>
             🛏
           </span>
           <div>
@@ -34,7 +34,7 @@ export function AllocationUnassignedStrip({
           </div>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <span className="rounded-full bg-[#fafaf8] px-2.5 py-1 text-xs font-bold text-slate-600 ring-1 ring-black/5">
+          <span className="rounded-full bg-surface px-2.5 py-1 text-xs font-bold text-slate-600 ring-1 ring-black/5">
             {items.length} 床
           </span>
           {onSuggest ? (
@@ -60,7 +60,7 @@ export function AllocationUnassignedStrip({
           <div
             className={[
               'flex min-h-[64px] flex-wrap items-stretch gap-2 rounded-xl border border-dashed p-2',
-              items.length === 0 ? 'border-[#fecdd3] bg-[#fffafa]' : 'border-black/10 bg-[#fafaf8]/50',
+              items.length === 0 ? 'border-[#fecdd3] bg-[#fffafa]' : 'border-black/10 bg-surface/50',
               isOver ? 'border-[#f87171] bg-[#fff1f2]' : '',
             ].join(' ')}
           >
