@@ -18,16 +18,16 @@ export const users = [
 ]
 
 export const nurses = [
-  { id: '00000000-0000-0000-0000-000000000101', displayName: '護理師 A - 王小明', shortName: '王小明', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000102', displayName: '護理師 B - 陳美麗', shortName: '陳美麗', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000103', displayName: '護理師 C - 林志強', shortName: '林志強', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000104', displayName: '護理師 D - 張雅婷', shortName: '張雅婷', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000105', displayName: '護理師 E - 李家豪', shortName: '李家豪', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000106', displayName: '護理師 F - 吳佩珊', shortName: '吳佩珊', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000107', displayName: '護理師 G - 周柏宇', shortName: '周柏宇', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000108', displayName: '護理師 H - 黃思涵', shortName: '黃思涵', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000109', displayName: '護理師 I - 何俊傑', shortName: '何俊傑', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000110', displayName: '小組長 李小華', shortName: '李小華', isActive: true },
+  { id: '00000000-0000-0000-0000-000000000101', displayName: '護理師 A - 王小明', shortName: '王小明', seniorityLevel: '4-10年',   isActive: true },
+  { id: '00000000-0000-0000-0000-000000000102', displayName: '護理師 B - 陳美麗', shortName: '陳美麗', seniorityLevel: '15年以上', isActive: true },
+  { id: '00000000-0000-0000-0000-000000000103', displayName: '護理師 C - 林志強', shortName: '林志強', seniorityLevel: '4-10年',   isActive: true },
+  { id: '00000000-0000-0000-0000-000000000104', displayName: '護理師 D - 張雅婷', shortName: '張雅婷', seniorityLevel: '10-15年',  isActive: true },
+  { id: '00000000-0000-0000-0000-000000000105', displayName: '護理師 E - 李家豪', shortName: '李家豪', seniorityLevel: '1-4年',    isActive: true },
+  { id: '00000000-0000-0000-0000-000000000106', displayName: '護理師 F - 吳佩珊', shortName: '吳佩珊', seniorityLevel: '4-10年',   isActive: true },
+  { id: '00000000-0000-0000-0000-000000000107', displayName: '護理師 G - 周柏宇', shortName: '周柏宇', seniorityLevel: '1年以下',  isActive: true },
+  { id: '00000000-0000-0000-0000-000000000108', displayName: '護理師 H - 黃思涵', shortName: '黃思涵', seniorityLevel: '1-4年',    isActive: true },
+  { id: '00000000-0000-0000-0000-000000000109', displayName: '護理師 I - 何俊傑', shortName: '何俊傑', seniorityLevel: '1年以下',  isActive: true },
+  { id: '00000000-0000-0000-0000-000000000110', displayName: '小組長 李小華',     shortName: '李小華', seniorityLevel: '15年以上', isActive: true },
 ]
 
 export const shifts = [

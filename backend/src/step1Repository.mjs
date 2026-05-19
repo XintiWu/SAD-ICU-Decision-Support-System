@@ -55,6 +55,7 @@ export function listNurses({ shiftId } = {}) {
         displayName: nurse.displayName,
         shortName: nurse.shortName,
         role: shiftRole ?? user?.role ?? 'nurse',
+        seniorityLevel: nurse.seniorityLevel ?? null,
         isActive: nurse.isActive,
       }
     })
