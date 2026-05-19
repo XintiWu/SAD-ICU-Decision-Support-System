@@ -17,7 +17,7 @@ export function HandoverSnapshotsPage() {
   const selectedId = searchParams.get('id') ?? items[0]?.id ?? null
   const selected = useMemo(
     () => (selectedId ? getHandoverSnapshot(selectedId) : null),
-    [selectedId, items],
+    [selectedId],
   )
 
   return (

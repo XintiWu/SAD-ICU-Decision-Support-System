@@ -9,7 +9,7 @@ import {
   type DragStartEvent,
   type UniqueIdentifier,
 } from '@dnd-kit/core'
-import { useCallback, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { AllocationDragPatientPanel } from '../components/allocation/AllocationDragPatientPanel'
 import { AllocationNurseLane } from '../components/allocation/AllocationNurseLane'
@@ -64,7 +64,9 @@ export function ChargeAllocationPage() {
   const boardRef = useRef<HTMLDivElement>(null)
   const laneBodiesRef = useRef(new Map<string, HTMLElement>())
   const allocationRef = useRef({ unassigned, byNurse })
-  allocationRef.current = { unassigned, byNurse }
+  useEffect(() => {
+    allocationRef.current = { unassigned, byNurse }
+  }, [unassigned, byNurse])
   const lastOverRef = useRef<UniqueIdentifier | null>(null)
   const lastContainerOverRef = useRef<UniqueIdentifier | null>(null)
 
