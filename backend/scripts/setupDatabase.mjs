@@ -58,14 +58,7 @@ async function seedCompleteDemoData(client) {
         id, shift_id, admission_id, submitted_by, status,
         objective_total, subjective_total, total_score, submitted_at, updated_at
       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
-      on conflict (shift_id, admission_id) do update set
-        submitted_by = excluded.submitted_by,
-        status = excluded.status,
-        objective_total = excluded.objective_total,
-        subjective_total = excluded.subjective_total,
-        total_score = excluded.total_score,
-        submitted_at = excluded.submitted_at,
-        updated_at = excluded.updated_at
+      on conflict (shift_id, admission_id) do nothing
       `,
       [
         assessment.id,
