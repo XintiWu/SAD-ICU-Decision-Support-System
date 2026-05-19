@@ -45,9 +45,23 @@ const objectiveRows = [
 ]
 
 const subjectiveByNo = new Map([
-  [1, { rassScore: -3, agitatedFallRisk: false, agitatedTubeRemovalRisk: true, drainageTube: false, tubeFeeding: true, dressingChangeFrequency: 1, vitalMonitoringFrequency: 2 }],
-  [2, { rassScore: 2, agitatedFallRisk: true, agitatedTubeRemovalRisk: true, drainageTube: true, tubeFeeding: false, dressingChangeFrequency: 1, vitalMonitoringFrequency: 2 }],
-  [3, { rassScore: 0, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: true, tubeFeeding: false, dressingChangeFrequency: 1, vitalMonitoringFrequency: 1 }],
+  [1,  { rassScore: -3, agitatedFallRisk: false, agitatedTubeRemovalRisk: true,  drainageTube: false, tubeFeeding: true,  dressingChangeFrequency: 1, vitalMonitoringFrequency: 2 }], // ARDS
+  [2,  { rassScore:  2, agitatedFallRisk: true,  agitatedTubeRemovalRisk: true,  drainageTube: true,  tubeFeeding: false, dressingChangeFrequency: 1, vitalMonitoringFrequency: 2 }], // 敗血症
+  [3,  { rassScore:  0, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: true,  tubeFeeding: false, dressingChangeFrequency: 1, vitalMonitoringFrequency: 1 }], // 術後照護
+  [4,  { rassScore:  1, agitatedFallRisk: false, agitatedTubeRemovalRisk: true,  drainageTube: false, tubeFeeding: false, dressingChangeFrequency: 0, vitalMonitoringFrequency: 2 }], // COPD 急性惡化
+  [5,  { rassScore:  0, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: false, tubeFeeding: false, dressingChangeFrequency: 0, vitalMonitoringFrequency: 2 }], // 心衰竭急性惡化
+  [6,  { rassScore: -2, agitatedFallRisk: true,  agitatedTubeRemovalRisk: false, drainageTube: false, tubeFeeding: true,  dressingChangeFrequency: 0, vitalMonitoringFrequency: 2 }], // 腦中風（急性期）
+  [7,  { rassScore: -2, agitatedFallRisk: false, agitatedTubeRemovalRisk: true,  drainageTube: false, tubeFeeding: true,  dressingChangeFrequency: 0, vitalMonitoringFrequency: 2 }], // 肺炎併呼吸衰竭
+  [8,  { rassScore:  0, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: true,  tubeFeeding: false, dressingChangeFrequency: 1, vitalMonitoringFrequency: 1 }], // 上消化道出血
+  [9,  { rassScore:  0, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: false, tubeFeeding: false, dressingChangeFrequency: 0, vitalMonitoringFrequency: 1 }], // 腎衰竭（洗腎評估）
+  [10, { rassScore:  1, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: false, tubeFeeding: false, dressingChangeFrequency: 0, vitalMonitoringFrequency: 2 }], // 糖尿病酮酸中毒
+  [11, { rassScore: -1, agitatedFallRisk: true,  agitatedTubeRemovalRisk: false, drainageTube: true,  tubeFeeding: false, dressingChangeFrequency: 2, vitalMonitoringFrequency: 2 }], // 多發外傷（術後）
+  [12, { rassScore:  2, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: true,  tubeFeeding: true,  dressingChangeFrequency: 0, vitalMonitoringFrequency: 2 }], // 胰臟炎（重症）
+  [13, { rassScore: -3, agitatedFallRisk: false, agitatedTubeRemovalRisk: true,  drainageTube: true,  tubeFeeding: true,  dressingChangeFrequency: 1, vitalMonitoringFrequency: 2 }], // 敗血性休克
+  [14, { rassScore:  0, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: false, tubeFeeding: false, dressingChangeFrequency: 1, vitalMonitoringFrequency: 1 }], // 心肌梗塞（PCI 後）
+  [15, { rassScore:  0, agitatedFallRisk: false, agitatedTubeRemovalRisk: false, drainageTube: false, tubeFeeding: false, dressingChangeFrequency: 0, vitalMonitoringFrequency: 1 }], // 腸阻塞（術前）
+  [16, { rassScore: -1, agitatedFallRisk: true,  agitatedTubeRemovalRisk: false, drainageTube: true,  tubeFeeding: false, dressingChangeFrequency: 0, vitalMonitoringFrequency: 1 }], // 肝硬化併腹水
+  [17, { rassScore: -2, agitatedFallRisk: true,  agitatedTubeRemovalRisk: false, drainageTube: false, tubeFeeding: false, dressingChangeFrequency: 0, vitalMonitoringFrequency: 2 }], // 感染性腦膜炎
 ])
 
 export const burdenAssessments = admissions.map((admission, index) => {
