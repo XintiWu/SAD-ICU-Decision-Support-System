@@ -173,8 +173,8 @@ function HandoffSheetTable({
             <col style={{ width: '21%' }} />
             <col style={{ width: '10%' }} />
           </colgroup>
-          <thead className="bg-surface text-xs text-slate-600">
-            <tr className="border-b border-black/10">
+          <thead className="bg-[#1E2533] text-xs text-[#E2E8F0]">
+            <tr className="border-b border-[#2D3748]">
               <th className="px-4 py-3 font-semibold whitespace-nowrap">床位</th>
               <th className="px-4 py-3 font-semibold whitespace-nowrap">主治醫生</th>
               <th className="px-4 py-3 font-semibold whitespace-nowrap">病人姓名</th>
@@ -187,9 +187,9 @@ function HandoffSheetTable({
               <th className="px-4 py-3 font-semibold whitespace-nowrap">下個班別護理師</th>
             </tr>
           </thead>
-          <tbody className="bg-surface">
+          <tbody className="bg-white">
             {rows.map((r) => (
-              <tr key={`row:${r.bed}`} className="border-t border-black/10">
+              <tr key={`row:${r.bed}`} className="border-t border-black/10 bg-white">
                 <td className="px-4 py-3 whitespace-nowrap">
                   <div className="text-base font-extrabold tracking-tight text-slate-900">{r.bed}</div>
                 </td>
