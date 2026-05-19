@@ -11,17 +11,34 @@ export function NurseOverviewPage() {
   const [overview, setOverview] = useState<OverviewData | null>(null)
   const [burdens, setBurdens] = useState<BurdenAssessment[]>([])
   const [error, setError] = useState<string | null>(null)
-
+  
   useEffect(() => {
-    Promise.all([
-      apiGet<OverviewData>(`/nurse/overview?shiftId=${CURRENT_SHIFT_ID}`),
-      apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${CURRENT_SHIFT_ID}&scope=all`),
-    ])
-      .then(([overviewData, burdenData]) => {
-        setOverview(overviewData)
-        setBurdens(burdenData)
-      })
-      .catch((err) => setError(err instanceof Error ? err.message : '讀取資料失敗'))
+    let alive = true
+
+    const load = () => {
+      Promise.all([
+        apiGet<OverviewData>(`/nurse/overview?shiftId=${CURRENT_SHIFT_ID}`),
+        apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${CURRENT_SHIFT_ID}&scope=all`),
+      ])
+        .then(([overviewData, burdenData]) => {
+          if (!alive) return
+          setOverview(overviewData)
+          setBurdens(burdenData)
+          setError(null)
+        })
+        .catch((err) => {
+          if (!alive) return
+          setError(err instanceof Error ? err.message : '讀取資料失敗')
+        })
+    }
+
+    load()
+    const timer = window.setInterval(load, 5000)
+
+    return () => {
+      alive = false
+      window.clearInterval(timer)
+    }
   }, [])
 
   const burdenByAdmission = useMemo(

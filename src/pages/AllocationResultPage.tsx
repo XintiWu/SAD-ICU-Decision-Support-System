@@ -8,23 +8,31 @@ export function AllocationResultPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-  useEffect(() => {
+   useEffect(() => {
     let alive = true
-    apiGet<HandoffData>(`/handoff-sheets?shiftId=${CURRENT_SHIFT_ID}`)
-      .then((data) => {
-        if (!alive) return
-        setRows(data.rows)
-        setError(null)
-      })
-      .catch((err: Error) => {
-        if (!alive) return
-        setError(err.message)
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
+
+    const load = () => {
+      apiGet<HandoffData>(`/handoff-sheets?shiftId=${CURRENT_SHIFT_ID}`)
+        .then((data) => {
+          if (!alive) return
+          setRows(data.rows)
+          setError(null)
+        })
+        .catch((err: Error) => {
+          if (!alive) return
+          setError(err.message)
+        })
+        .finally(() => {
+          if (alive) setLoading(false)
+        })
+    }
+
+    load()
+    const timer = window.setInterval(load, 5000)
+
     return () => {
       alive = false
+      window.clearInterval(timer)
     }
   }, [])
 
