@@ -43,7 +43,7 @@ export async function listNurses({ shiftId } = {}) {
   }
   const result = await query(
     `
-    select n.id, n.display_name, n.short_name, n.is_active,
+    select n.id, n.display_name, n.short_name, n.seniority_level, n.is_active,
       coalesce(sn.role, u.role) as role
     from nurses n
     join users u on u.id = n.id
@@ -57,6 +57,7 @@ export async function listNurses({ shiftId } = {}) {
     id: row.id,
     displayName: row.display_name,
     shortName: row.short_name,
+    seniorityLevel: row.seniority_level,
     role: row.role,
     isActive: row.is_active,
   }))
@@ -216,28 +217,59 @@ export async function updateTask({ taskId, patch, userId = ids.currentNurse } = 
   return formatTask(full.rows[0])
 }
 
+
+const SENIORITY_RANK = {
+  '1年以下': 0,
+  '1-4年':   1,
+  '4-10年':  2,
+  '10-15年': 3,
+  '15年以上':4,
+  charge_nurse: 5,
+}
+
 export async function suggestAllocationRun({ shiftId, targetShiftId, userId = ids.chargeNurse } = {}) {
   const user = await getCurrentUser(userId)
   if (!['charge_nurse', 'admin'].includes(user.role)) throw new ApiError(403, 'FORBIDDEN', '只有小組長或管理者可以產生分床建議')
+
   const admissions = await admissionsWithScores(shiftId)
-  const nurses = (await listNurses({ shiftId })).filter((nurse) => nurse.role === 'nurse')
+  const nurses = (await listNurses({ shiftId })).filter((n) => ['nurse', 'charge_nurse'].includes(n.role) && n.isActive)
+
+  const avgScore = admissions.length ? admissions.reduce((s, a) => s + a.score, 0) / admissions.length : 0
+  const TOLERANCE = 5
+
   const runId = randomUUID()
   await withTransaction(async (client) => {
     await client.query(
-      `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','demo-greedy-v1')`,
+      `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','seniority-aware-v1')`,
       [runId, shiftId, targetShiftId ?? shiftId, user.id],
     )
-    const loads = new Map(nurses.map((nurse) => [nurse.id, 0]))
-    const sortOrders = new Map(nurses.map((nurse) => [nurse.id, 0]))
+
+    const loads = new Map(nurses.map((n) => [n.id, 0]))
+    const sortOrders = new Map(nurses.map((n) => [n.id, 0]))
+
     for (const admission of admissions.sort((a, b) => b.score - a.score)) {
-      const nurse = [...nurses].sort((a, b) => (loads.get(a.id) ?? 0) - (loads.get(b.id) ?? 0))[0]
-      const sortOrder = (sortOrders.get(nurse.id) ?? 0) + 1
+      const seniorityKey = (n) => n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年')
+
+      // 找最低負載，保留容差內的候選人
+      const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
+      const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
+
+      // 高分病人給資淺的，低分病人給資深的
+      const isHighBurden = admission.score >= avgScore
+      const selected = [...nearMin].sort((a, b) => {
+        const ra = SENIORITY_RANK[seniorityKey(a)] ?? 2
+        const rb = SENIORITY_RANK[seniorityKey(b)] ?? 2
+        return isHighBurden ? ra - rb : rb - ra
+      })[0]
+
+      if (!selected) continue
+      const sortOrder = (sortOrders.get(selected.id) ?? 0) + 1
       await client.query(
         `insert into allocation_items (allocation_run_id, admission_id, nurse_id, score, sort_order) values ($1,$2,$3,$4,$5)`,
-        [runId, admission.admissionId, nurse.id, admission.score, sortOrder],
+        [runId, admission.admissionId, selected.id, admission.score, sortOrder],
       )
-      loads.set(nurse.id, (loads.get(nurse.id) ?? 0) + admission.score)
-      sortOrders.set(nurse.id, sortOrder)
+      loads.set(selected.id, (loads.get(selected.id) ?? 0) + admission.score)
+      sortOrders.set(selected.id, sortOrder)
     }
   })
   return getAllocationRun({ allocationRunId: runId })
@@ -245,7 +277,7 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
 
 export async function getAllocationRun({ allocationRunId } = {}) {
   const run = await allocationRunRow(allocationRunId)
-  const nurses = (await listNurses({ shiftId: run.shift_id })).filter((nurse) => nurse.role === 'nurse')
+  const nurses = (await listNurses({ shiftId: run.shift_id })).filter((nurse) => ['nurse', 'charge_nurse'].includes(nurse.role))
   const admissions = await listAdmissions({ shiftId: run.shift_id, status: 'active' })
   const admissionMap = new Map(admissions.map((admission) => [admission.admissionId, admission]))
   const items = await query('select * from allocation_items where allocation_run_id = $1 order by nurse_id, sort_order', [run.id])
