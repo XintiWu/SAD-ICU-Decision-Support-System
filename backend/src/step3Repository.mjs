@@ -4,6 +4,17 @@ import { ApiError, getCurrentUser, listAdmissions, listNurses } from './step1Rep
 import { burdenAssessments, objectiveFactorDefinitions, subjectiveFactorDefinitions } from './step2Data.mjs'
 import { allocationItems, allocationRuns } from './step3Data.mjs'
 
+
+// 年資順序：數字越小越資淺（新人優先接高分病人）
+const SENIORITY_RANK = {
+  '1年以下': 0,
+  '1-4年':   1,
+  '4-10年':  2,
+  '10-15年': 3,
+  '15年以上':4,
+  charge_nurse: 5,
+}
+
 export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId = ids.currentShift, userId } = {}) {
   const user = getCurrentUser(userId ?? ids.chargeNurse)
   if (!['charge_nurse', 'admin'].includes(user.role)) {
@@ -16,7 +27,7 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
     targetShiftId,
     createdBy: user.id,
     status: 'draft',
-    algorithmVersion: 'demo-greedy-v1',
+    algorithmVersion: 'seniority-aware-v1',
     suggestedAt: new Date().toISOString(),
     confirmedAt: null,
   }
@@ -25,22 +36,39 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
   const nurses = allocatableNurses(shiftId)
   const loads = new Map(nurses.map((nurse) => [nurse.id, 0]))
   const nextItems = []
+
+  // 由高分到低分排列病人
   const patientScores = admissionsWithScores(shiftId).sort((a, b) => b.score - a.score)
+  const avgScore = patientScores.length
+    ? patientScores.reduce((sum, p) => sum + p.score, 0) / patientScores.length
+    : 0
 
   for (const patient of patientScores) {
-    const nurse = [...nurses].sort((a, b) => (loads.get(a.id) ?? 0) - (loads.get(b.id) ?? 0))[0]
-    if (!nurse) continue
-    const sortOrder = nextItems.filter((item) => item.nurseId === nurse.id).length + 1
+    // 找最低負載，保留負載在容差 5 分內的候選人
+    const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
+    const TOLERANCE = 5
+    const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
+
+    // 決勝：高分病人給資淺的，低分病人給資深的
+    const isHighBurden = patient.score >= avgScore
+    const selected = [...nearMin].sort((a, b) => {
+      const rankA = SENIORITY_RANK[a.role === 'charge_nurse' ? 'charge_nurse' : (a.seniorityLevel ?? '4-10年')] ?? 2
+      const rankB = SENIORITY_RANK[b.role === 'charge_nurse' ? 'charge_nurse' : (b.seniorityLevel ?? '4-10年')] ?? 2
+      return isHighBurden ? rankA - rankB : rankB - rankA
+    })[0]
+
+    if (!selected) continue
+    const sortOrder = nextItems.filter((item) => item.nurseId === selected.id).length + 1
     nextItems.push({
       id: randomUUID(),
       allocationRunId: run.id,
       admissionId: patient.admissionId,
-      nurseId: nurse.id,
+      nurseId: selected.id,
       score: patient.score,
       sortOrder,
       isManualOverride: false,
     })
-    loads.set(nurse.id, (loads.get(nurse.id) ?? 0) + patient.score)
+    loads.set(selected.id, (loads.get(selected.id) ?? 0) + patient.score)
   }
 
   allocationItems.push(...nextItems)
@@ -180,7 +208,7 @@ function patientCard(admission, score, isManualOverride) {
 }
 
 function allocatableNurses(shiftId) {
-  return listNurses({ shiftId }).filter((nurse) => nurse.role === 'nurse' && nurse.isActive)
+  return listNurses({ shiftId }).filter((nurse) => ['nurse', 'charge_nurse'].includes(nurse.role) && nurse.isActive)
 }
 
 function admissionsWithScores(shiftId) {

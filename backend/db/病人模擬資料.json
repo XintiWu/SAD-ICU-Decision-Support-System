@@ -1,0 +1,1383 @@
+[
+    {
+      "床號": "MI-01",
+      "主治醫師": "彭OO",
+      "病人姓名": "林OO",
+      "性別": "男",
+      "年齡": "88",
+      "出生日期": "1937/5/25",
+      "住院天數": "2",
+      "住院日期": "2026/4/16",
+      "診斷 ": "Septic shock with multi-organ failure",
+      "當班使用藥物清單": ["Norepinephrine IVD 30ml/hr", "Vasopressin IVD 5ml/hr", "Tazobactam IVD 2vials Q8H", "Meropenem IVD 2vials Q8H", 
+        "Vancomycin IVD 1vials Q8H", "Pantoprazole IV QD", "TPN 1B QD", "Zinc Sulfate 1vial QD", "Fentanyl IVD 5ml/hr", "Midatin IVD 10ml/hr",
+        "Hydrocortisone IV 100mg Q8H", "Vitamin B1 IVD 50amps Q6H"],
+      "當班開立檢查清單": ["ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin" 
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "藥物計數": {
+          "分數": 15,
+          "選擇項目": ">9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 20,
+          "系統帶入項目": [
+            {
+              "項目": "IABP",
+              "分數": 20
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = -2"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }  
+    },
+    {
+      "床號": "MI-02",
+      "主治醫師": "彭OO",
+      "病人姓名": "王OO",
+      "性別": "男",
+      "年齡": "84",
+      "出生日期": "1941/5/2",
+      "住院天數": "2",
+      "住院日期": "2026/4/16",
+      "診斷 ": "Acute myocardial infarction (AMI) status post percutaneous coronary intervention (PCI), stable",
+      "當班使用藥物清單": ["Aspirin PO 100mg QD", "Clopidogrel PO 75mg QD", "Atorvastatin PO 40mg QD", "Metoprolol PO 25mg BID", "Enalapril PO 5mg BID"],
+      "當班開立檢查清單": null,
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 0,
+          "選擇項目": "<5種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "無",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "無",
+              "分數": 0
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = 0"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-03",
+      "主治醫師": "彭OO",
+      "病人姓名": "李OO",
+      "性別": "男",
+      "年齡": "87",
+      "出生日期": "1938/11/20",
+      "住院天數": "32",
+      "住院日期": "2026/3/17",
+      "診斷 ": "Severe influenza pneumonia complicated with acute respiratory distress syndrome and multi-organ failure",
+      "當班使用藥物清單": [
+        "Tazobactam IVD 2vials Q8H", "Meropenem IVD 2vials Q8H", "Cisatracurium IVD 5ml/hr",
+        "Vancomycin IVD 1vials Q8H", "Pantoprazole IV QD", "TPN 1B QD", "Zinc Sulfate 1vial QD", "Fentanyl IVD 5ml/hr", "Midatin IVD 10ml/hr",
+        "Hydrocortisone IV 100mg Q8H", "Vitamin B1 IVD 50amps Q6H"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray", "Sputum culture"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 20,
+          "選擇項目": "是"
+        },
+        "高呼吸器需求": {
+          "分數": 15,
+          "選擇項目": "是"
+        },
+        "藥物計數": {
+          "分數": 15,
+          "選擇項目": ">9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 20,
+          "系統帶入項目": [
+            {
+              "項目": "Bronchoscopy",
+              "分數": 20
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "是否具特殊管路": {
+          "分數": 15,
+          "選擇項目": "Chest Drainage"
+        },
+        "特殊處置": {
+          "分數": 20,
+          "系統帶入項目": [
+            {
+              "項目": "CRRT",
+              "分數": 20
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = -2"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-04",
+      "主治醫師": "彭OO",
+      "病人姓名": "黃OO",
+      "性別": "女",
+      "年齡": "74",
+      "出生日期": "1951/10/1",
+      "住院天數": "23",
+      "住院日期": "2026/3/26",
+      "診斷 ": "Post percutaneous coronary intervention (PCI), stable",
+      "當班使用藥物清單": [
+        "Aspirin PO 100 mg QD", "Clopidogrel PO 75 mg QD", "Atorvastatin PO 40 mg QHS", "Metoprolol PO 25 mg BID", "Enalapril PO 5 mg BID", "Amlodipine PO 5 mg QD",
+        "Metformin PO 500 mg BID", "Sitagliptin PO 100 mg QD", "Pantoprazole PO 40 mg QD"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray", "Sputum culture"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 0,
+          "選擇項目": "<5種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "Abdominal Echo",
+              "分數": 10
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 15,
+          "選擇結果": "RASS = +1"
+        },
+        "躁動且有下床風險": {
+          "分數": 15,
+          "選擇結果": "是"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 15,
+          "選擇結果": "是"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-05",
+      "主治醫師": "彭OO",
+      "病人姓名": "江OO",
+      "性別": "男",
+      "年齡": "76",
+      "出生日期": "1949/5/25",
+      "住院天數": "2",
+      "住院日期": "2026/4/16",
+      "診斷 ": "End-stage renal disease with hyperkalemia",
+      "當班使用藥物清單": [
+        "Amlodipine PO 5mg QD", "Bisoprolol PO 2.5mg QD", "Losartan PO 50mg QD", "Calcium carbonate PO 500mg TID",
+        "Sevelamer PO 800mg TID", "Sodium polystyrene sulfonate PO 15g QD", "Furosemide PO 40mg BID", "Pantoprazole PO 40mg QD",
+        "Lactulose PO 15mL BID"
+      ],
+      "當班開立檢查清單": [
+        "Blood sugar", "CK", "CKMB", "Troponin-I", "Ca", "Mg", "Phosphate"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 0,
+          "選擇項目": "<5種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "無",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "是否具特殊管路": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "特殊處置": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "Regular HD",
+              "分數": 10
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = 0"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-06",
+      "主治醫師": "胡OO",
+      "病人姓名": "楊OO",
+      "性別": "女",
+      "年齡": "47",
+      "出生日期": "1979/1/8",
+      "住院天數": "43",
+      "住院日期": "2026/3/6",
+      "診斷 ": "IHCA with ROSC, post-cardiac arrest syndrome",
+      "當班使用藥物清單": [
+        "Tazobactam IVD 2vials Q8H", "Meropenem IVD 2vials Q8H", "Cisatracurium IVD 5ml/hr", "Magnesium sulfate IVD", "Potassium chloride IVD", "Calcium gluconate IV",
+        "Vancomycin IVD 1vials Q8H", "Pantoprazole IV QD", "TPN 1B QD", "Zinc Sulfate 1vial QD", "Fentanyl IVD 5ml/hr", "Midatin IVD 10ml/hr",
+        "Hydrocortisone IV 100mg Q8H", "Vitamin B1 IVD 50amps Q6H"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 15,
+          "選擇項目": "是"
+        },
+        "藥物計數": {
+          "分數": 15,
+          "選擇項目": ">9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "Heart Echo",
+              "分數": 10
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 15,
+          "系統帶入項目": [
+            {
+              "項目": "Cooling Therapy",
+              "分數": 15
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = -2"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-07",
+      "主治醫師": "胡OO",
+      "病人姓名": "陳OO",
+      "性別": "男",
+      "年齡": "76",
+      "出生日期": "1950/2/21",
+      "住院天數": "70",
+      "住院日期": "2026/2/7",
+      "診斷 ": "Acute Respiratory Distress Syndrome",
+      "當班使用藥物清單": [
+        "Salbutamol nebulization Q4H", "Ipratropium nebulization Q6H", "Methylprednisolone IV Q6H", "Ceftriaxone IVD QD",
+        "Vancomycin IVD 1vials Q8H", "Pantoprazole IV QD", "Midatin IVD 10ml/hr", "Ampicillin/Sulbactam IVD Q6H",
+        "Hydrocortisone IV 100mg Q8H"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray", "Sputum culture"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 10,
+          "選擇項目": "5-9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "Bronchoscopy",
+              "分數": 10
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 20,
+          "系統帶入項目": [
+            {
+              "項目": "CRRT",
+              "分數": 20
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = 0"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-08",
+      "主治醫師": "胡OO",
+      "病人姓名": "王OO",
+      "性別": "女",
+      "年齡": "62",
+      "出生日期": "1964/3/31",
+      "住院天數": "26",
+      "住院日期": "2026/3/23",
+      "診斷 ": "Cardiogenic Pulmonary Edema",
+      "當班使用藥物清單": [
+        "Tazobactam IVD 2vials Q8H", "Meropenem IVD 2vials Q8H", "Dopamine IVD 5ml/hr", "Furosemide IV 1amp Q8H",
+        "Pantoprazole IV QD", "Hydrocortisone IV 100mg Q8H"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 10,
+          "選擇項目": ">9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "無",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "無",
+              "分數": 0
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = 0"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 10,
+          "選擇結果": "是"
+        }
+      }
+    },
+    {
+      "床號": "MI-09",
+      "主治醫師": "胡OO",
+      "病人姓名": "張OO",
+      "性別": "女",
+      "年齡": "93",
+      "出生日期": "1932/4/24",
+      "住院天數": "39",
+      "住院日期": "2026/3/10",
+      "診斷 ": "Gastrointestinal bleeding, Pressure ulcer",
+      "當班使用藥物清單": [
+        "Tranexamic acid IV QD", "Pantoprazole IV QD", "Ferrous sulfate PO 1tab BID", "Quetiapine PO 12.5mg HS", "Risperidone PO 0.5mg HS",
+        "Amlodipine PO 5mg QD", "Metformin PO 500mg BID", "Folic acid PO 5mg QD"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray", "PENDO"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 0,
+          "選擇項目": "<5種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "Regular HD",
+              "分數": 0
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 20,
+          "選擇結果": "RASS = +2"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 20,
+          "選擇結果": "是"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 10,
+          "選擇結果": "是"
+        }
+      }
+    },
+    {
+      "床號": "MI-10",
+      "主治醫師": "胡OO",
+      "病人姓名": "鍾OO",
+      "性別": "男",
+      "年齡": "70",
+      "出生日期": "1955/10/17",
+      "住院天數": "11",
+      "住院日期": "2026/4/7",
+      "診斷 ": "Severe gastrointestinal bleeding with hemodynamic instability",
+      "當班使用藥物清單": [
+        "Tazobactam IVD 2vials Q8H", "Meropenem IVD 2vials Q8H", "Tranexamic acid IV", "Norepinephrine IVD 30ml/hr", "Vasopressin IVD 5ml/hr", 
+        "Ceftriaxone IV 1vail QD", "TPN 1B QD", "Zinc Sulfate 1vial QD", "Fentanyl IVD 5ml/hr", "Midatin IVD 10ml/hr",
+        "Hydrocortisone IV 100mg Q8H", "Vitamin B1 IVD 50amps Q6H"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray", "Sputum culture"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 15,
+          "選擇項目": ">9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = -2"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-11",
+      "主治醫師": "胡OO",
+      "病人姓名": "張OO",
+      "性別": "男",
+      "年齡": "74",
+      "出生日期": "1952/4/20",
+      "住院天數": "6",
+      "住院日期": "2026/4/13",
+      "診斷 ": "Influenza pneumonia with respiratory failure",
+      "當班使用藥物清單": [
+        "Oseltamivir PO 75 mg BID", "Piperacillin/Tazobactam IVD Q6H", "Vancomycin IVD Q12H", "Methylprednisolone IV Q8H",  "Aspirin PO 100 mg QD", "Amlodipine PO 5 mg QD", "Losartan PO 50 mg QD",
+        "Bisoprolol PO 2.5 mg QD", "Furosemide PO 20 mg QD"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray", "Sputum culture"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "藥物計數": {
+          "分數": 0,
+          "選擇項目": "<5種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "無",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 0,
+          "選擇項目": "無"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "無",
+              "分數": 0
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = 0"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-12",
+      "主治醫師": "李OO",
+      "病人姓名": "童OO",
+      "性別": "女",
+      "年齡": "84",
+      "出生日期": "1941/8/26",
+      "住院天數": "17",
+      "住院日期": "2026/4/1",
+      "診斷 ": "Intracranial hemorrhage status post craniotomy",
+      "當班使用藥物清單": [
+        "Mannitol IV", "Hypertonic saline IV", "Levetiracetam IV 500 mg BID", "Nicardipine IV infusion", "Cefazolin IV Q8H"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray", "Sputum culture"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 10,
+          "選擇項目": "5-9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "EEG",
+              "分數": 10
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "特殊處置": {
+          "分數": 15,
+          "系統帶入項目": [
+            {
+              "項目": "External Ventricular Drain",
+              "分數": 15
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 20,
+          "選擇結果": "RASS = +2"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 20,
+          "選擇結果": "是"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-13",
+      "主治醫師": "李OO",
+      "病人姓名": "林OO",
+      "性別": "男",
+      "年齡": "82",
+      "出生日期": "1944/1/6",
+      "住院天數": "15",
+      "住院日期": "2026/4/3",
+      "診斷 ": "Acute liver failure with hepatic encephalopathy",
+      "當班使用藥物清單": [
+        "Lactulose PO/NG 15 mL TID", "Rifaximin PO 550 mg BID", "Vitamin K IV", "Pantoprazole IV QD", "Potassium chloride IV"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate", "Ammonia",
+        "WBC", "Hb", "Platelet", "BUN", "Creatinine", "AST", "ALT", "Total bilirubin", "Direct bilirubin", "PT", "INR", "aPTT", "CRP",
+        "Procalcitonin", "Portable chest X-ray", "Sputum culture"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 10,
+          "選擇項目": "5-9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 15,
+          "系統帶入項目": [
+            {
+              "項目": "Plasma Exchange",
+              "分數": 15
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = -2"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-14",
+      "主治醫師": "李OO",
+      "病人姓名": "宋OO",
+      "性別": "男",
+      "年齡": "71",
+      "出生日期": "1955/1/23",
+      "住院天數": "45",
+      "住院日期": "2026/3/4",
+      "診斷 ": "Chronic obstructive pulmonary disease",
+      "當班使用藥物清單": [
+        "Methylprednisolone IV Q8H", "Amlodipine PO 5 mg QD", "Losartan PO 50 mg QD", "Atorvastatin PO 20 mg QHS", "Metformin PO 500 mg BID", "Tamsulosin PO 0.4 mg QD",
+        "Pantoprazole PO 40 mg QD", "Lactulose PO 15 mL BID"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Lactate", "Blood sugar",
+        "WBC", "Hb", "Platelet", "PT", "INR", "aPTT", "CRP", "Procalcitonin", "Portable chest X-ray", "Sputum culture"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 0,
+          "選擇項目": "<5種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "無",
+              "分數": 0
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 10,
+          "選擇結果": "RASS = +1"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-15",
+      "主治醫師": "李OO",
+      "病人姓名": "馬OO",
+      "性別": "男",
+      "年齡": "52",
+      "出生日期": "1974/3/8",
+      "住院天數": "7",
+      "住院日期": "2026/4/11",
+      "診斷 ": "Diabetic ketoacidosis",
+      "當班使用藥物清單": [
+        "Regular insulin IVF", "Potassium chloride IVD", "Amlodipine PO 5 mg QD", 
+        "Losartan PO 50 mg QD", "Valsartan PO 80 mg QD", "Bisoprolol PO 2.5 mg QD", 
+        "Metoprolol PO 25 mg BID", "Hydrochlorothiazide PO 12.5 mg QD", "Rosuvastatin PO 10 mg QD"
+      ],
+      "當班開立檢查清單": [
+        "ABG(pH, PaO2, PaCO2, HCO3, Base excess)", "Blood sugar", "Na", "K", "Cl", "Ca", "Mg", "Phosphate",
+        "BUN", "Creatinine", "Amylase", "Lipase", "Serum ketone"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 0,
+          "選擇項目": "<5種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "Abdominal Echo",
+              "分數": 10
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = 0"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-16",
+      "主治醫師": "李OO",
+      "病人姓名": "吳OO",
+      "性別": "男",
+      "年齡": "79",
+      "出生日期": "1947/3/18",
+      "住院天數": "15",
+      "住院日期": "2026/4/3",
+      "診斷 ": "Cardiac arrhythmia under monitoring",
+      "當班使用藥物清單": [
+        "Bisoprolol PO 2.5mg QD", "Metoprolol PO 25mg BID", "Amiodarone PO 200mg QD", "Diltiazem PO 30mg TID"
+      ],
+      "當班開立檢查清單": [
+       "ECG", "Na", "K", "Mg", "Ca", "BUN", "Creatinine", "Thyroid function", "Troponin", "CK", "CKMB"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 0,
+          "選擇項目": "<5種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "TCP",
+              "分數": 10
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = 0"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 10,
+          "選擇結果": "是"
+        },
+        "是否需頻繁換藥": {
+          "分數": 0,
+          "選擇結果": "否"
+        }
+      }
+    },
+    {
+      "床號": "MI-17",
+      "主治醫師": "李OO",
+      "病人姓名": "林OO",
+      "性別": "女",
+      "年齡": "95",
+      "出生日期": "1930/10/21",
+      "住院天數": "4",
+      "住院日期": "2026/4/2",
+      "診斷 ": "Severe pressure ulcer with soft tissue infection",
+      "當班使用藥物清單": [
+        "Tazobactam IVD 2vials Q8H", "Cefazolin IVD Q8H", "Ampicillin/Sulbactam IVD Q6H",
+        "Vancomycin IVD 1vials Q8H", "Pantoprazole IV QD", "Fentanyl IVD 5ml/hr", "Metoclopramide IV 1amp DQ"
+      ],
+      "當班開立檢查清單": [
+        "WBC", "Hb", "Platelet", "CRP", "Procalcitonin", "Na", "K", "BUN", "Creatinine", "Wound culture",
+        "Albumin", "Blood sugar"
+      ],
+      "客觀評估": {
+        "是否需住在負壓隔離病房": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "高呼吸器需求": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "藥物計數": {
+          "分數": 10,
+          "選擇項目": "5-9種針劑藥物"
+        },
+        "待執行的特殊檢查項目": {
+          "分數": 0,
+          "系統帶入項目": [
+            {
+              "項目": "否",
+              "分數": 0
+            }
+          ]
+        },
+        "需頻繁監測生理狀態": {
+          "分數": 10,
+          "選擇項目": "是"
+        },
+        "是否具特殊管路": {
+          "分數": 0,
+          "選擇項目": "否"
+        },
+        "特殊處置": {
+          "分數": 10,
+          "系統帶入項目": [
+            {
+              "項目": "VAC wound therapy",
+              "分數": 10
+            }
+          ]
+        }
+      },
+      "主觀評估": {
+        "RASS鎮靜分數": {
+          "分數": 0,
+          "選擇結果": "RASS = 0"
+        },
+        "躁動且有下床風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "躁動且有自拔管路風險": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需人工管灌": {
+          "分數": 0,
+          "選擇結果": "否"
+        },
+        "是否需頻繁換藥": {
+          "分數": 15,
+          "選擇結果": "是"
+        }
+      }
+    }
+  ]
