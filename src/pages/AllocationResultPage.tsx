@@ -3,30 +3,19 @@ import type { ReactNode } from 'react'
 import { apiGet, CURRENT_SHIFT_ID } from '../api/client'
 import type { HandoffData } from '../api/client'
 
-type OverviewMeta = {
-  onDutyCharge: { shortName: string }
-}
-
 export function AllocationResultPage() {
   const [rows, setRows] = useState<HandoffData['rows']>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [chargeName, setChargeName] = useState<string | null>(null)
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
-  useEffect(() => {
+   useEffect(() => {
     let alive = true
 
     const load = () => {
-      Promise.all([
-        apiGet<HandoffData>(`/handoff-sheets?shiftId=${CURRENT_SHIFT_ID}`),
-        apiGet<OverviewMeta>(`/nurse/overview?shiftId=${CURRENT_SHIFT_ID}`),
-      ])
-        .then(([handoff, overview]) => {
+      apiGet<HandoffData>(`/handoff-sheets?shiftId=${CURRENT_SHIFT_ID}`)
+        .then((data) => {
           if (!alive) return
-          setRows(handoff.rows)
-          setChargeName(overview.onDutyCharge?.shortName ?? null)
-          setUpdatedAt(new Date().toISOString())
+          setRows(data.rows)
           setError(null)
         })
         .catch((err: Error) => {
@@ -58,18 +47,6 @@ export function AllocationResultPage() {
 
   return (
     <div className="grid gap-4">
-      <div className="rounded-2xl bg-white p-4 ring-1 ring-black/10">
-        <div className="text-lg font-extrabold tracking-tight text-slate-900">交班分床結果</div>
-        <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-slate-600">
-          <span>
-            <span className="font-semibold text-slate-800">分床結果時間</span> {updatedAt ? formatDateTime(updatedAt) : '—'}
-          </span>
-          <span className="hidden sm:inline text-slate-300">|</span>
-          <span>
-            <span className="font-semibold text-slate-800">小組長</span> {chargeName ?? '—'}
-          </span>
-        </div>
-      </div>
       <div className="grid gap-2 sm:grid-cols-3">
         <Kpi label="交班床數" value={stats.total} />
         <Kpi label="高負擔" value={stats.high} tone={stats.high ? 'danger' : 'ok'} />
@@ -159,10 +136,4 @@ function burdenPill(score: number) {
 
 function formatDate(value: string) {
   return value.slice(0, 10)
-}
-
-function formatDateTime(iso: string) {
-  const d = new Date(iso)
-  if (Number.isNaN(d.getTime())) return iso
-  return d.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
