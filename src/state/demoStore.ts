@@ -1,4 +1,11 @@
-import { INITIAL_BY_NURSE, NURSES, PATIENTS, type NurseId } from '../data/allocationMock'
+import {
+  INITIAL_BY_NURSE,
+  INITIAL_UNASSIGNED,
+  NURSES,
+  PATIENTS,
+  type NurseId,
+  type PatientId,
+} from '../data/allocationMock'
 
 export type BedId =
   | 'bed1'
@@ -96,6 +103,18 @@ export type Task = {
   urgent?: boolean
   done?: boolean
   at?: string
+}
+
+export type StatOrderKind = '檢查' | '治療' | '給藥' | '監測' | '其他'
+
+export type StatOrder = {
+  id: string
+  bedLabel: string
+  title: string
+  kind: StatOrderKind
+  orderedAt: string
+  orderedBy: string
+  reason?: string
 }
 
 export type OrderItem = {
@@ -531,27 +550,114 @@ const store = {
     },
   ] as Patient[],
   tasks: [
-    // 床 1
     { id: 't1', bedLabel: '床 1 — ARDS', title: '翻身/俯臥評估與協助', kind: '監測', urgent: true },
     { id: 't2', bedLabel: '床 1 — ARDS', title: '抽痰與呼吸道管路照護', kind: '監測' },
     { id: 't3', bedLabel: '床 1 — ARDS', title: 'ABG 送驗與結果追蹤', kind: '檢查', urgent: true },
     { id: 't4', bedLabel: '床 1 — ARDS', title: '補登生命徵象/呼吸器紀錄（07:00–09:00）', kind: '紀錄', done: true, at: '09:12' },
-
-    // 床 2
     { id: 't5', bedLabel: '床 2 — 敗血症', title: '抽血 CBC/Diff', kind: '檢查', urgent: true },
     { id: 't6', bedLabel: '床 2 — 敗血症', title: 'Norepinephrine drip 目標壓/滴速確認', kind: '給藥', urgent: true },
     { id: 't7', bedLabel: '床 2 — 敗血症', title: 'Vancomycin 給藥（18:30）', kind: '給藥' },
     { id: 't8', bedLabel: '床 2 — 敗血症', title: 'I/O 統計與輸液量確認', kind: '紀錄' },
     { id: 't9', bedLabel: '床 2 — 敗血症', title: '家屬更新病況（下午探視）', kind: '家屬' },
     { id: 't10', bedLabel: '床 2 — 敗血症', title: '量血壓 Q1H（10:00）', kind: '監測', done: true, at: '10:05' },
-
-    // 床 3
     { id: 't11', bedLabel: '床 3 — 術後照護', title: '傷口換藥（10:00）', kind: '檢查', urgent: true },
     { id: 't12', bedLabel: '床 3 — 術後照護', title: '疼痛評估與止痛藥效果追蹤', kind: '給藥' },
     { id: 't13', bedLabel: '床 3 — 術後照護', title: '引流量/出血狀況觀察', kind: '監測' },
     { id: 't14', bedLabel: '床 3 — 術後照護', title: '術後衛教重點整理（活動/飲食）', kind: '家屬' },
     { id: 't15', bedLabel: '床 3 — 術後照護', title: '完成交班整理（重點/待追蹤）', kind: '紀錄' },
   ] as Task[],
+  statOrders: [
+    {
+      id: 's1',
+      bedLabel: '床 2 — 敗血症',
+      title: 'STAT 抽血 ABG',
+      kind: '檢查',
+      orderedAt: '11:18',
+      orderedBy: '林怡君醫師',
+      reason: 'SpO2 驟降至 88%',
+    },
+    {
+      id: 's2',
+      bedLabel: '床 2 — 敗血症',
+      title: 'STAT Chest X-ray（床邊）',
+      kind: '檢查',
+      orderedAt: '11:15',
+      orderedBy: '林怡君醫師',
+      reason: '呼吸音左側減弱',
+    },
+    {
+      id: 's3',
+      bedLabel: '床 1 — ARDS',
+      title: 'STAT 升壓藥滴速/目標壓調整',
+      kind: '給藥',
+      orderedAt: '10:52',
+      orderedBy: '張志明醫師',
+      reason: 'MAP < 65 mmHg',
+    },
+    {
+      id: 's4',
+      bedLabel: '床 1 — ARDS',
+      title: 'STAT 床邊 ABG 送驗',
+      kind: '檢查',
+      orderedAt: '10:48',
+      orderedBy: '張志明醫師',
+      reason: 'FiO2 上調後仍低氧',
+    },
+    {
+      id: 's5',
+      bedLabel: '床 3 — 術後照護',
+      title: 'STAT Hb/Hct',
+      kind: '檢查',
+      orderedAt: '10:35',
+      orderedBy: '王建宏醫師',
+      reason: '引流液色澤加深、量增',
+    },
+    {
+      id: 's6',
+      bedLabel: '床 3 — 術後照護',
+      title: 'STAT 通知醫師 bedside 評估',
+      kind: '其他',
+      orderedAt: '10:32',
+      orderedBy: '王建宏醫師',
+      reason: '術後出血疑慮',
+    },
+    {
+      id: 's7',
+      bedLabel: '床 2 — 敗血症',
+      title: 'STAT Norepinephrine 起始/調整',
+      kind: '治療',
+      orderedAt: '10:28',
+      orderedBy: '林怡君醫師',
+      reason: '血壓不穩',
+    },
+    {
+      id: 's8',
+      bedLabel: '床 1 — ARDS',
+      title: 'STAT 俯臥位評估與協助',
+      kind: '治療',
+      orderedAt: '09:55',
+      orderedBy: '張志明醫師',
+      reason: 'PaO2/FiO2 惡化',
+    },
+  ] as StatOrder[],
+  allocationUnassigned: [...INITIAL_UNASSIGNED] as PatientId[],
+  allocationByNurse: structuredClone(INITIAL_BY_NURSE) as Record<NurseId, PatientId[]>,
+}
+
+export function getAllocationByNurse() {
+  return store.allocationByNurse
+}
+
+export function getAllocationUnassigned() {
+  return store.allocationUnassigned
+}
+
+export function setAllocationByNurse(next: Record<NurseId, PatientId[]>) {
+  store.allocationByNurse = next
+}
+
+export function setAllocationUnassigned(next: PatientId[]) {
+  store.allocationUnassigned = next
 }
 
 export function getDemoPatients() {
@@ -568,6 +674,28 @@ export function getDemoTasks() {
 
 export function setDemoTasks(next: Task[]) {
   store.tasks = next
+}
+
+export function taskPoints(t: Task) {
+  const base =
+    t.kind === '給藥'
+      ? 3
+      : t.kind === '檢查'
+        ? 2
+        : t.kind === '監測'
+          ? 2
+          : t.kind === '家屬'
+            ? 1
+            : 1
+  return base + (t.urgent ? 2 : 0)
+}
+
+export function getDemoStatOrders() {
+  return store.statOrders
+}
+
+export function setDemoStatOrders(next: StatOrder[]) {
+  store.statOrders = next
 }
 
 export function setLastImportedAt(iso: string) {
@@ -599,8 +727,7 @@ export function setCurrentNurseId(next: NurseId) {
 }
 
 export function getAssignedBedLabelsForCurrentNurse() {
-  // 原型：以 allocationMock 的分配結果當作「當班分配」
-  const ids = INITIAL_BY_NURSE[store.currentNurseId] ?? []
+  const ids = store.allocationByNurse[store.currentNurseId] ?? []
   return ids
     .map((pid) => PATIENTS[pid]?.label ?? '')
     .map((label) => {
@@ -610,18 +737,18 @@ export function getAssignedBedLabelsForCurrentNurse() {
     .filter(Boolean)
 }
 
-export function taskPoints(t: Task) {
+export function statOrderWeight(o: StatOrder) {
   const base =
-    t.kind === '給藥'
+    o.kind === '給藥'
       ? 3
-      : t.kind === '檢查'
+      : o.kind === '檢查'
         ? 2
-        : t.kind === '監測'
-          ? 2
-          : t.kind === '家屬'
-            ? 1
+        : o.kind === '治療'
+          ? 3
+          : o.kind === '監測'
+            ? 2
             : 1
-  return base + (t.urgent ? 2 : 0)
+  return base + 2
 }
 
 export function parseOrders(text: string): OrderItem[] {
@@ -640,24 +767,21 @@ export function parseOrders(text: string): OrderItem[] {
   return out
 }
 
-export function deriveObjectiveAndTodos(orders: OrderItem[]) {
+export function deriveObjectiveAndStatOrders(orders: OrderItem[]) {
   // 原型規則（可替換成你們報告內的正式規則）
-  // - 含 drip / 升壓藥 / Norepinephrine → 客觀+5、TO‑DO: 滴速確認（急）
-  // - 含 Vancomycin / antibiotic → 客觀+2、TO‑DO: 給藥
-  // - 含 CBC / 抽血 / lab → 客觀+2、TO‑DO: 抽血（急）
-  // - 含 Q1H / 每小時 → 客觀+1、TO‑DO: 監測
   const byBed = new Map<
     string,
-    { objective: Partial<ObjectiveFactors>; tasks: Task[] }
+    { objective: Partial<ObjectiveFactors>; statOrders: StatOrder[] }
   >()
+  const now = nowHHMM()
   const add = (
     bedLabel: string,
     patch: Partial<ObjectiveFactors>,
-    task?: Omit<Task, 'id'>,
+    order?: Omit<StatOrder, 'id'>,
   ) => {
-    const cur = byBed.get(bedLabel) ?? { objective: {}, tasks: [] as Task[] }
+    const cur = byBed.get(bedLabel) ?? { objective: {}, statOrders: [] as StatOrder[] }
     cur.objective = { ...cur.objective, ...sumPatch(cur.objective, patch) }
-    if (task) cur.tasks.push({ id: cryptoId(), ...task })
+    if (order) cur.statOrders.push({ id: cryptoId(), ...order })
     byBed.set(bedLabel, cur)
   }
 
@@ -668,38 +792,54 @@ export function deriveObjectiveAndTodos(orders: OrderItem[]) {
         o.bedLabel,
         { 藥物使用頻率: 2, 藥物種類數: 1 },
         {
-        bedLabel: `${o.bedLabel} — (匯入)`,
-        title: '升壓藥滴速/目標壓確認',
-        kind: '給藥',
-        urgent: true,
+          bedLabel: `${o.bedLabel} — (匯入)`,
+          title: 'STAT 升壓藥滴速/目標壓確認',
+          kind: '給藥',
+          orderedAt: now,
+          orderedBy: '（匯入醫囑）',
         },
       )
     }
     if (t.includes('vancomycin') || t.includes('antibiotic') || t.includes('抗生素')) {
       add(o.bedLabel, { 藥物使用頻率: 1, 藥物種類數: 1 }, {
         bedLabel: `${o.bedLabel} — (匯入)`,
-        title: '抗生素給藥',
+        title: 'STAT 抗生素給藥',
         kind: '給藥',
+        orderedAt: now,
+        orderedBy: '（匯入醫囑）',
       })
     }
     if (t.includes('cbc') || t.includes('抽血') || t.includes('lab')) {
       add(o.bedLabel, { '大量輸血（單次 C）': 0 }, {
         bedLabel: `${o.bedLabel} — (匯入)`,
-        title: '抽血/檢體送驗',
+        title: 'STAT 抽血/檢體送驗',
         kind: '檢查',
-        urgent: true,
+        orderedAt: now,
+        orderedBy: '（匯入醫囑）',
       })
     }
     if (t.includes('q1h') || t.includes('每小時')) {
       add(o.bedLabel, { 藥物使用頻率: 0 }, {
         bedLabel: `${o.bedLabel} — (匯入)`,
-        title: 'Q1H 監測（血壓/生命徵象）',
+        title: 'STAT Q1H 監測（血壓/生命徵象）',
         kind: '監測',
+        orderedAt: now,
+        orderedBy: '（匯入醫囑）',
       })
     }
   }
 
   return byBed
+}
+
+/** @deprecated 使用 deriveObjectiveAndStatOrders */
+export const deriveObjectiveAndTodos = deriveObjectiveAndStatOrders
+
+function nowHHMM() {
+  const d = new Date()
+  const hh = String(d.getHours()).padStart(2, '0')
+  const mm = String(d.getMinutes()).padStart(2, '0')
+  return `${hh}:${mm}`
 }
 
 function sumPatch(

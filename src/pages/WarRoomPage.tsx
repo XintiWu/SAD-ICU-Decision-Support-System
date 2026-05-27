@@ -1,43 +1,120 @@
-import { useEffect, useMemo, useState } from 'react'
-import { apiGet, CURRENT_SHIFT_ID } from '../api/client'
-import type { WarRoomData } from '../api/client'
+import { useMemo, useState } from 'react'
+import { NURSES, PATIENTS, type NurseId } from '../data/allocationMock'
+import {
+  getAllocationByNurse,
+  getDemoPatients,
+  getDemoStatOrders,
+  objectiveTotal,
+  subjectiveTotal,
+  type StatOrder,
+  type StatOrderKind,
+} from '../state/demoStore'
+import { nurseLoadTone } from '../components/allocation/allocationUtils'
+
+function bedKeyFromLabel(label: string) {
+  const m = label.match(/^床\s*(\d+)/)
+  return m ? `床 ${m[1]}` : label
+}
+
+function bedNo(label: string) {
+  const m = label.match(/^床\s*(\d+)/)
+  return m ? Number(m[1]) : 0
+}
+
+function statusPill(total: number) {
+  if (total >= 22) return { label: '高' as const, cls: 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f2b3a6]' }
+  if (total >= 14) return { label: '中' as const, cls: 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]' }
+  return { label: '低' as const, cls: 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]' }
+}
+
+type BedAssignment = {
+  bed: string
+  patient: string
+  objective: number
+  subjective: number
+  comprehensive: number
+  level: '高' | '中' | '低'
+}
+
+type NurseCardModel = {
+  nurseId: NurseId
+  name: string
+  load: number
+  objective: number
+  subjective: number
+  tone: 'high' | 'mid' | 'low'
+  assignments: BedAssignment[]
+  statOrders: StatOrder[]
+}
+
+function buildNurseCards(): NurseCardModel[] {
+  const byNurse = getAllocationByNurse()
+  const patients = getDemoPatients()
+  const patientByBed = new Map(patients.map((p) => [p.bedLabel, p]))
+  const statOrders = getDemoStatOrders()
+
+  return (Object.keys(NURSES) as NurseId[])
+    .map((nurseId) => {
+      const pids = byNurse[nurseId] ?? []
+      const assignments: BedAssignment[] = []
+
+      for (const pid of pids) {
+        const mock = PATIENTS[pid]
+        const bedKey = bedKeyFromLabel(mock.label)
+        const demo = patientByBed.get(bedKey)
+        const o = demo ? objectiveTotal(demo.objective) : 0
+        const s = demo?.subjective ? subjectiveTotal(demo.subjective) : 0
+        const comprehensive = o + s
+        const level = statusPill(comprehensive).label
+
+        assignments.push({
+          bed: bedKey.replace(/^床\s*/, ''),
+          patient: demo?.patientName ?? mock.label.replace(/^床\s*\d+\s*[—-]\s*/, ''),
+          objective: o,
+          subjective: s,
+          comprehensive,
+          level,
+        })
+      }
+
+      assignments.sort((a, b) => Number(a.bed) - Number(b.bed))
+
+      const assignedBeds = new Set(assignments.map((a) => `床 ${a.bed}`))
+      const nurseStats = statOrders.filter((o) => assignedBeds.has(bedKeyFromLabel(o.bedLabel)))
+
+      const objective = assignments.reduce((acc, a) => acc + a.objective, 0)
+      const subjective = assignments.reduce((acc, a) => acc + a.subjective, 0)
+      const load = objective + subjective
+
+      return {
+        nurseId,
+        name: NURSES[nurseId].label,
+        load,
+        objective,
+        subjective,
+        tone: nurseLoadTone(load),
+        assignments,
+        statOrders: sortStatOrders(nurseStats),
+      }
+    })
+    .filter((n) => n.assignments.length > 0)
+    .sort((a, b) => b.load - a.load)
+}
+
+function sortStatOrders(orders: StatOrder[]) {
+  return [...orders].sort((a, b) => bedNo(a.bedLabel) - bedNo(b.bedLabel) || a.orderedAt.localeCompare(b.orderedAt))
+}
 
 export function WarRoomPage() {
-  const [data, setData] = useState<WarRoomData | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [error, setError] = useState<string | null>(null)
+  const nurses = useMemo(() => buildNurseCards(), [])
+  const allStat = useMemo(() => getDemoStatOrders(), [])
 
-  useEffect(() => {
-    let alive = true
-    apiGet<WarRoomData>(`/war-room?shiftId=${CURRENT_SHIFT_ID}`)
-      .then((nextData) => {
-        if (!alive) return
-        setData(nextData)
-        setError(null)
-      })
-      .catch((err: Error) => {
-        if (!alive) return
-        setError(err.message)
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [])
-
-  const nurses: NurseCardModel[] = useMemo(() => (data?.nurses ?? []).map(toNurseCard), [data])
-
-  if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入戰情室...</div>
-  if (error) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
-
-  const totalTasks = nurses.reduce((acc, n) => acc + n.tasks.length, 0)
-  const doneTasks = nurses.reduce((acc, n) => acc + n.tasks.filter((t) => !!t.done).length, 0)
-  const urgentTasks = nurses.reduce((acc, n) => acc + n.tasks.filter((t) => !!t.urgent && !t.done).length, 0)
+  const totalStat = allStat.length
+  const nursesWithStat = nurses.filter((n) => n.statOrders.length > 0).length
   const highCount = nurses.filter((n) => n.tone === 'high').length
   const midCount = nurses.filter((n) => n.tone === 'mid').length
   const lowCount = nurses.filter((n) => n.tone === 'low').length
+  const avgLoad = nurses.length ? Math.round((nurses.reduce((acc, n) => acc + n.load, 0) / nurses.length) * 10) / 10 : 0
 
   return (
     <div className="grid gap-4">
@@ -47,22 +124,22 @@ export function WarRoomPage() {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="min-w-0">
               <div className="text-[11px] font-semibold tracking-wide text-slate-600">全體概況 OVERVIEW</div>
-              <div className="mt-1 text-sm font-semibold text-slate-900">重點指標（完成 / 急件 / 負擔）</div>
+              <div className="mt-1 text-sm font-semibold text-slate-900">STAT 醫囑與綜合負擔（客觀＋主觀）</div>
             </div>
-            <div className="flex flex-wrap gap-2 text-[11px]">
+            <div className="flex flex-wrap items-center gap-2 text-[11px]">
               <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 ring-1 ring-black/10">
                 護理師 <span className="ml-1 text-sm font-extrabold text-slate-900">{nurses.length}</span>
               </span>
-              <span className="rounded-full bg-white px-3 py-1.5 font-semibold text-slate-800 ring-1 ring-black/10">
-                總任務 <span className="ml-1 text-sm font-extrabold text-slate-900">{totalTasks}</span>
+              <span className="rounded-full bg-[#ffe8e1] px-3 py-1.5 font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">
+                STAT <span className="ml-1 text-sm font-extrabold">{totalStat}</span>
               </span>
             </div>
           </div>
 
           <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-            <OverviewKpi label="已完成" value={`${doneTasks}`} hint={`${Math.round((doneTasks / Math.max(1, totalTasks)) * 100)}%`} tone="ok" />
-            <OverviewKpi label="未完成" value={`${Math.max(0, totalTasks - doneTasks)}`} hint="待處理" tone="mid" />
-            <OverviewKpi label="急件" value={`${urgentTasks}`} hint="未完成急件" tone={urgentTasks ? 'danger' : 'ok'} />
+            <OverviewKpi label="STAT 總數" value={`${totalStat}`} hint="本班突發醫囑" tone={totalStat ? 'danger' : 'ok'} />
+            <OverviewKpi label="有 STAT 護理師" value={`${nursesWithStat}`} hint={`共 ${nurses.length} 位`} tone={nursesWithStat ? 'mid' : 'ok'} />
+            <OverviewKpi label="平均綜合負擔" value={`${avgLoad}`} hint="客觀＋主觀" tone="mid" />
             <OverviewKpi
               label="負擔分布"
               value={`${highCount}/${midCount}/${lowCount}`}
@@ -76,7 +153,7 @@ export function WarRoomPage() {
       <section className="rounded-2xl bg-white p-3 ring-1 ring-black/10">
         <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {nurses.map((n) => (
-            <NurseLoadCard key={n.name} name={n.name} remaining={n.remaining} tone={n.tone} assignments={n.assignments} tasks={n.tasks} />
+            <NurseLoadCard key={n.nurseId} nurse={n} />
           ))}
         </div>
       </section>
@@ -84,97 +161,34 @@ export function WarRoomPage() {
   )
 }
 
-type NurseCardModel = {
-  name: string
-  remaining: number
-  tone: 'high' | 'mid' | 'low'
-  assignments: { bed: string; patient: string }[]
-  tasks: { text: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]
-}
-
-function toNurseCard(row: WarRoomData['nurses'][number]): NurseCardModel {
-  const assignments = row.patients.map((patient) => ({
-    bed: bedNo(patient.bedLabel),
-    patient: patient.patientName,
-  }))
-  const maxScore = row.patients.reduce((max, patient) => Math.max(max, patient.score), 0)
-  return {
-    name: `護理師 ${row.shortName}`,
-    remaining: row.remaining,
-    tone: maxScore >= 22 || row.remaining >= 16 ? 'high' : maxScore >= 14 || row.remaining >= 9 ? 'mid' : 'low',
-    assignments,
-    tasks: row.tasks.map((task) => ({
-      text: `床 ${bedNo(task.bedLabel)} ${task.title}`,
-      urgent: task.urgent,
-      done: task.done,
-      newbie: task.source === '新病人',
-    })),
-  }
-}
-
-function bedNo(label: string) {
-  const match = label.match(/\d+/)
-  return match ? match[0] : '—'
-}
-
-function taskBed(text: string) {
-  const m = text.match(/^床\s*(\d+)\s*(.*)$/)
-  if (!m) return null
-  return { bed: m[1], title: m[2].trim() }
-}
-
-function NurseLoadCard({
-  name,
-  remaining,
-  tone,
-  assignments,
-  tasks,
-}: {
-  name: string
-  remaining: number
-  tone: 'high' | 'mid' | 'low'
-  assignments: { bed: string; patient: string }[]
-  tasks: { text: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]
-}) {
+function NurseLoadCard({ nurse }: { nurse: NurseCardModel }) {
   const [expanded, setExpanded] = useState(false)
-  const bar =
-    tone === 'high' ? 'bg-[#c64a2c]' : tone === 'mid' ? 'bg-[#d88b2c]' : 'bg-[#2f7a44]'
+  const { name, load, objective, subjective, tone, assignments, statOrders } = nurse
+
+  const bar = tone === 'high' ? 'bg-[#c64a2c]' : tone === 'mid' ? 'bg-[#d88b2c]' : 'bg-[#2f7a44]'
   const pill =
     tone === 'high'
       ? 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f2b3a6]'
       : tone === 'mid'
         ? 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]'
         : 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]'
-
-  const pct = Math.min(100, Math.round((remaining / 25) * 100))
-  const doneCount = tasks.filter((t) => !!t.done).length
-  const totalCount = tasks.length
-  const urgentOpen = tasks.filter((t) => !!t.urgent && !t.done).length
   const burdenLabel = tone === 'high' ? '高' : tone === 'mid' ? '中' : '低'
 
-  const openTasks = useMemo(() => tasks.filter((t) => !t.done), [tasks])
-  const preview = openTasks
-    .slice()
-    .sort((a, b) => Number(!!b.urgent) - Number(!!a.urgent))
-    .slice(0, 3)
+  const pct = Math.min(100, Math.round((load / 40) * 100))
+  const preview = statOrders.slice(0, 3)
 
-  const tasksByBed = tasks.reduce<Record<string, { title: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]>>(
-    (acc, t) => {
-      const parsed = taskBed(t.text)
-      const bedKey = parsed?.bed ?? '—'
-      const title = parsed?.title?.length ? parsed.title : t.text
-      if (!acc[bedKey]) acc[bedKey] = []
-      acc[bedKey].push({ title, urgent: t.urgent, done: t.done, newbie: t.newbie })
-      return acc
-    },
-    {},
-  )
+  const statByBed = statOrders.reduce<Record<string, StatOrder[]>>((acc, o) => {
+    const key = bedKeyFromLabel(o.bedLabel).replace(/^床\s*/, '')
+    if (!acc[key]) acc[key] = []
+    acc[key].push(o)
+    return acc
+  }, {})
 
-  const bedOrder = [...new Set([...assignments.map((a) => a.bed), ...Object.keys(tasksByBed).filter((k) => k !== '—')])].sort(
+  const bedOrder = [...new Set([...assignments.map((a) => a.bed), ...Object.keys(statByBed)])].sort(
     (a, b) => Number(a) - Number(b),
   )
 
-  const bedPatient = new Map(assignments.map((a) => [a.bed, a.patient]))
+  const assignmentByBed = new Map(assignments.map((a) => [a.bed, a]))
 
   return (
     <section className="flex flex-col rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/10">
@@ -187,25 +201,26 @@ function NurseLoadCard({
           <div className="truncate text-sm font-semibold text-slate-900">{name}</div>
           <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px] text-slate-600">
             <span className="rounded-full bg-white px-2.5 py-0.5 font-semibold text-slate-700 ring-1 ring-black/10">
-              完成 {doneCount}/{totalCount}
+              客觀 {objective}
             </span>
-            {urgentOpen ? (
-              <span className="rounded-full bg-[#ffe8e1] px-2.5 py-0.5 font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">
-                急件 {urgentOpen}
-              </span>
-            ) : null}
-            <span className={`rounded-full px-2.5 py-0.5 font-semibold ${pill}`}>負擔 {burdenLabel}</span>
+            <span className="rounded-full bg-white px-2.5 py-0.5 font-semibold text-slate-700 ring-1 ring-black/10">
+              主觀 {subjective}
+            </span>
+            <span className="rounded-full bg-white px-2.5 py-0.5 font-extrabold text-slate-900 ring-1 ring-black/10">
+              綜合 {load}
+            </span>
+            <span className={`rounded-full px-2.5 py-0.5 font-semibold ${pill}`}>負擔{burdenLabel}</span>
           </div>
         </div>
 
         <div className="shrink-0 text-right">
-          <div className="text-[11px] font-semibold text-slate-500">剩餘</div>
-          <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">{remaining}</div>
+          <div className="text-[11px] font-semibold text-slate-500">綜合</div>
+          <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">{load}</div>
         </div>
       </div>
 
       <div className="mt-3 grid gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2 ring-1 ring-black/10">
+        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-surface px-3 py-2 ring-1 ring-black/10">
           <div className="min-w-0 text-[11px] font-semibold text-slate-700">
             床位：{assignments.length ? assignments.map((a) => `床 ${a.bed}`).join('、') : '—'}
           </div>
@@ -219,109 +234,116 @@ function NurseLoadCard({
           </button>
         </div>
 
+
         {!expanded ? (
           <div className="grid gap-1.5">
             {preview.length ? (
-              preview.map((t, idx) => (
-                <div
-                  key={`preview-${idx}`}
-                  className={[
-                    'flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-2',
-                    'ring-1 ring-black/10',
-                    t.urgent ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.14)]' : '',
-                  ].join(' ')}
-                >
-                  <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold text-slate-900">{t.text}</div>
-                    <div className="mt-1 flex items-center gap-2 text-[11px]">
-                      {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
-                      {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
-                      <span className="text-slate-500">未完成</span>
-                    </div>
-                  </div>
-                  {idx === 0 && openTasks.length > preview.length ? (
-                    <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
-                      還有 {openTasks.length - preview.length} 筆
-                    </span>
-                  ) : null}
-                </div>
+              preview.map((o) => (
+                <StatOrderRow key={o.id} order={o} compact />
               ))
             ) : (
-              <div className="rounded-xl bg-[#fafaf8] px-3 py-2 text-xs text-slate-600 ring-1 ring-black/10">目前沒有未完成任務</div>
+              <div className="rounded-xl bg-surface px-3 py-2 text-xs text-slate-600 ring-1 ring-black/10">
+                目前無 STAT 醫囑
+              </div>
             )}
+            {statOrders.length > preview.length ? (
+              <div className="text-center text-[11px] font-semibold text-slate-500">
+                還有 {statOrders.length - preview.length} 筆 STAT
+              </div>
+            ) : null}
           </div>
         ) : (
           <div className="grid gap-2.5">
-            {bedOrder.map((bed) => (
-              <section key={bed} className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
-                <div className="flex items-center justify-between gap-3 border-b border-black/10 bg-white px-2.5 py-2">
-                  <div className="min-w-0 text-xs font-extrabold tracking-wide text-slate-900">
-                    床 {bed}
-                    <span className="ml-2 font-semibold text-slate-600">{bedPatient.get(bed) ?? ''}</span>
+            {bedOrder.map((bed) => {
+              const assign = assignmentByBed.get(bed)
+              const bedStats = statByBed[bed] ?? []
+              const bedStatus = assign ? statusPill(assign.comprehensive) : null
+
+              return (
+                <section key={bed} className="overflow-hidden rounded-xl bg-surface ring-1 ring-black/10">
+                  <div className="flex flex-wrap items-center justify-between gap-2 border-b border-black/10 bg-white px-2.5 py-2">
+                    <div className="min-w-0 text-xs font-extrabold tracking-wide text-slate-900">
+                      床 {bed}
+                      <span className="ml-2 font-semibold text-slate-600">{assign?.patient ?? ''}</span>
+                    </div>
+                    {assign ? (
+                      <div className="flex flex-wrap items-center gap-1 text-[10px]">
+                        <span className="rounded-full bg-surface px-2 py-0.5 font-semibold text-slate-700 ring-1 ring-black/10">
+                          客 {assign.objective}
+                        </span>
+                        <span className="rounded-full bg-surface px-2 py-0.5 font-semibold text-slate-700 ring-1 ring-black/10">
+                          主 {assign.subjective}
+                        </span>
+                        <span className="rounded-full bg-white px-2 py-0.5 font-extrabold text-slate-900 ring-1 ring-black/10">
+                          綜 {assign.comprehensive}
+                        </span>
+                        {bedStatus ? (
+                          <span className={`rounded-full px-2 py-0.5 font-semibold ${bedStatus.cls}`}>{bedStatus.label}</span>
+                        ) : null}
+                      </div>
+                    ) : null}
                   </div>
-                  <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
-                    {tasksByBed[bed]?.filter((t) => !!t.done).length ?? 0}/{tasksByBed[bed]?.length ?? 0}
-                  </span>
-                </div>
-                <ul className="grid max-h-44 gap-1.5 overflow-y-auto p-2 pr-1">
-                  {(tasksByBed[bed] ?? []).map((t, idx) => (
-                    <li
-                      key={`${bed}-${idx}`}
-                      className={[
-                        'flex items-start justify-between gap-3 rounded-xl bg-white px-2.5 py-2',
-                        'ring-1 ring-black/10',
-                        t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
-                      ].join(' ')}
-                    >
-                      <div className="min-w-0">
-                        <div className={`truncate text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                          {t.title}
-                        </div>
-                        <div className="mt-1 flex items-center gap-2 text-[11px]">
-                          {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
-                          {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
-                          {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
-                        </div>
-                      </div>
-                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 accent-black" />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-            {tasksByBed['—']?.length ? (
-              <section className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
-                <div className="border-b border-black/10 bg-white px-2.5 py-2 text-xs font-extrabold tracking-wide text-slate-900">其他</div>
-                <ul className="grid max-h-44 gap-1.5 overflow-y-auto p-2 pr-1">
-                  {tasksByBed['—'].map((t, idx) => (
-                    <li
-                      key={`other-${idx}`}
-                      className={[
-                        'flex items-start justify-between gap-3 rounded-xl bg-white px-2.5 py-2',
-                        'ring-1 ring-black/10',
-                        t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
-                      ].join(' ')}
-                    >
-                      <div className="min-w-0">
-                        <div className={`truncate text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
-                          {t.title}
-                        </div>
-                        <div className="mt-1 flex items-center gap-2 text-[11px]">
-                          {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
-                          {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
-                          {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
-                        </div>
-                      </div>
-                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 accent-black" />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
+
+                  {bedStats.length ? (
+                    <ul className="grid max-h-52 gap-1.5 overflow-y-auto p-2 pr-1">
+                      {bedStats.map((o) => (
+                        <li key={o.id}>
+                          <StatOrderRow order={o} />
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="px-2.5 py-2 text-[11px] text-slate-500">此床無 STAT 醫囑</div>
+                  )}
+                </section>
+              )
+            })}
           </div>
         )}
       </div>
     </section>
+  )
+}
+
+function StatOrderRow({ order, compact }: { order: StatOrder; compact?: boolean }) {
+  return (
+    <div
+      className={[
+        'rounded-xl bg-white ring-1',
+        compact ? 'px-3 py-2 ring-black/10' : 'p-2.5 ring-[#f1c4b8]',
+      ].join(' ')}
+    >
+      <div className="flex items-start gap-2">
+        <span className="shrink-0 rounded-md bg-[#b3341f] px-1.5 py-0.5 text-[10px] font-bold tracking-wide text-white">
+          STAT
+        </span>
+        <div className="min-w-0 flex-1">
+          <div className={`font-semibold text-slate-900 ${compact ? 'truncate text-xs' : 'text-xs leading-snug'}`}>
+            {order.title}
+          </div>
+          <div className={`mt-1 text-slate-600 ${compact ? 'text-[10px]' : 'text-[11px]'}`}>
+            {order.orderedBy} · {order.orderedAt} 開立
+          </div>
+          {!compact && order.reason ? (
+            <div className="mt-1 text-[11px] text-[#9a3412]">{order.reason}</div>
+          ) : null}
+        </div>
+        <KindPill kind={order.kind} />
+      </div>
+    </div>
+  )
+}
+
+function KindPill({ kind }: { kind: StatOrderKind }) {
+  const map: Record<StatOrderKind, string> = {
+    檢查: 'bg-sky-100 text-sky-800',
+    治療: 'bg-violet-100 text-violet-800',
+    給藥: 'bg-emerald-100 text-emerald-800',
+    監測: 'bg-amber-100 text-amber-800',
+    其他: 'bg-slate-100 text-slate-700',
+  }
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${map[kind]}`}>{kind}</span>
   )
 }
 
