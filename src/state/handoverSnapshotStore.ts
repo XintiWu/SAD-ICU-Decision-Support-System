@@ -1,4 +1,5 @@
 import { NURSES, PATIENTS, type NurseId, type PatientId } from '../data/allocationMock'
+import { parseBedKey } from '../data/patientSimulation'
 import {
   getAllocationByNurse,
   getAllocationUnassigned,
@@ -169,7 +170,7 @@ function buildNurseBlocks(
         const p = PATIENTS[patientId]
         return {
           patientId,
-          bedLabel: p?.label.match(/^床\s*\d+/)?.[0] ?? p?.label ?? patientId,
+          bedLabel: parseBedKey(p?.label ?? patientId),
           label: p?.label ?? patientId,
           score: p?.score ?? 0,
           tone: p?.tone ?? 'low',

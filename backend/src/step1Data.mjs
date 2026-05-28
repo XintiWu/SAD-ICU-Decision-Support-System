@@ -5,29 +5,29 @@ export const ids = {
 }
 
 export const users = [
-  { id: '00000000-0000-0000-0000-000000000101', name: '王小明', role: 'nurse', employeeNo: 'N001' },
-  { id: '00000000-0000-0000-0000-000000000102', name: '陳美麗', role: 'nurse', employeeNo: 'N002' },
-  { id: '00000000-0000-0000-0000-000000000103', name: '林志強', role: 'nurse', employeeNo: 'N003' },
-  { id: '00000000-0000-0000-0000-000000000104', name: '張雅婷', role: 'nurse', employeeNo: 'N004' },
-  { id: '00000000-0000-0000-0000-000000000105', name: '李家豪', role: 'nurse', employeeNo: 'N005' },
-  { id: '00000000-0000-0000-0000-000000000106', name: '吳佩珊', role: 'nurse', employeeNo: 'N006' },
-  { id: '00000000-0000-0000-0000-000000000107', name: '周柏宇', role: 'nurse', employeeNo: 'N007' },
-  { id: '00000000-0000-0000-0000-000000000108', name: '黃思涵', role: 'nurse', employeeNo: 'N008' },
-  { id: '00000000-0000-0000-0000-000000000109', name: '何俊傑', role: 'nurse', employeeNo: 'N009' },
-  { id: '00000000-0000-0000-0000-000000000110', name: '李小華', role: 'charge_nurse', employeeNo: 'N010' },
+  { id: '00000000-0000-0000-0000-000000000101', name: '陳O媚', role: 'nurse', employeeNo: 'N001' },
+  { id: '00000000-0000-0000-0000-000000000102', name: '許O文', role: 'nurse', employeeNo: 'N002' },
+  { id: '00000000-0000-0000-0000-000000000103', name: '李O慧', role: 'nurse', employeeNo: 'N003' },
+  { id: '00000000-0000-0000-0000-000000000104', name: '詹O霏', role: 'nurse', employeeNo: 'N004' },
+  { id: '00000000-0000-0000-0000-000000000105', name: '石O廷', role: 'nurse', employeeNo: 'N005' },
+  { id: '00000000-0000-0000-0000-000000000106', name: '高O欣', role: 'nurse', employeeNo: 'N006' },
+  { id: '00000000-0000-0000-0000-000000000107', name: '周O珊', role: 'nurse', employeeNo: 'N007' },
+  { id: '00000000-0000-0000-0000-000000000108', name: '李O華', role: 'nurse', employeeNo: 'N008' },
+  { id: '00000000-0000-0000-0000-000000000109', name: '林O新', role: 'nurse', employeeNo: 'N009' },
+  { id: '00000000-0000-0000-0000-000000000110', name: '陳O琪', role: 'charge_nurse', employeeNo: 'N010' },
 ]
 
 export const nurses = [
-  { id: '00000000-0000-0000-0000-000000000101', displayName: '護理師 A - 王小明', shortName: '王小明', seniorityLevel: '4-10年',   isActive: true },
-  { id: '00000000-0000-0000-0000-000000000102', displayName: '護理師 B - 陳美麗', shortName: '陳美麗', seniorityLevel: '15年以上', isActive: true },
-  { id: '00000000-0000-0000-0000-000000000103', displayName: '護理師 C - 林志強', shortName: '林志強', seniorityLevel: '4-10年',   isActive: true },
-  { id: '00000000-0000-0000-0000-000000000104', displayName: '護理師 D - 張雅婷', shortName: '張雅婷', seniorityLevel: '10-15年',  isActive: true },
-  { id: '00000000-0000-0000-0000-000000000105', displayName: '護理師 E - 李家豪', shortName: '李家豪', seniorityLevel: '1-4年',    isActive: true },
-  { id: '00000000-0000-0000-0000-000000000106', displayName: '護理師 F - 吳佩珊', shortName: '吳佩珊', seniorityLevel: '4-10年',   isActive: true },
-  { id: '00000000-0000-0000-0000-000000000107', displayName: '護理師 G - 周柏宇', shortName: '周柏宇', seniorityLevel: '1年以下',  isActive: true },
-  { id: '00000000-0000-0000-0000-000000000108', displayName: '護理師 H - 黃思涵', shortName: '黃思涵', seniorityLevel: '1-4年',    isActive: true },
-  { id: '00000000-0000-0000-0000-000000000109', displayName: '護理師 I - 何俊傑', shortName: '何俊傑', seniorityLevel: '1年以下',  isActive: true },
-  { id: '00000000-0000-0000-0000-000000000110', displayName: '小組長 李小華',     shortName: '李小華', seniorityLevel: '15年以上', isActive: true },
+  { id: '00000000-0000-0000-0000-000000000101', displayName: '陳O媚', shortName: '陳O媚', seniorityLevel: '15年以上', isActive: true },
+  { id: '00000000-0000-0000-0000-000000000102', displayName: '許O文', shortName: '許O文', seniorityLevel: '10-15年',  isActive: true },
+  { id: '00000000-0000-0000-0000-000000000103', displayName: '李O慧', shortName: '李O慧', seniorityLevel: '4-10年',   isActive: true },
+  { id: '00000000-0000-0000-0000-000000000104', displayName: '詹O霏', shortName: '詹O霏', seniorityLevel: '4-10年',   isActive: true },
+  { id: '00000000-0000-0000-0000-000000000105', displayName: '石O廷', shortName: '石O廷', seniorityLevel: '4-10年',   isActive: true },
+  { id: '00000000-0000-0000-0000-000000000106', displayName: '高O欣', shortName: '高O欣', seniorityLevel: '4-10年',   isActive: true },
+  { id: '00000000-0000-0000-0000-000000000107', displayName: '周O珊', shortName: '周O珊', seniorityLevel: '4-10年',   isActive: true },
+  { id: '00000000-0000-0000-0000-000000000108', displayName: '李O華', shortName: '李O華', seniorityLevel: '1年以下',  isActive: true },
+  { id: '00000000-0000-0000-0000-000000000109', displayName: '林O新', shortName: '林O新', seniorityLevel: '1年以下',  isActive: true },
+  { id: '00000000-0000-0000-0000-000000000110', displayName: '陳O琪', shortName: '陳O琪', seniorityLevel: '15年以上', isActive: true },
 ]
 
 export const shifts = [

@@ -4,6 +4,11 @@ import type { CSSProperties } from 'react'
 import { AllocationPatientHoverHost } from './AllocationPatientHoverHost'
 import type { EnrichedBed } from './allocationUtils'
 
+function primaryDiagnosis(text: string) {
+  return text.split(',')[0]?.trim() || text
+}
+
+
 const railClass = {
   high: 'bg-[#c64a2c]',
   mid: 'bg-[#d88b2c]',
@@ -48,31 +53,29 @@ export function AllocationPatientCard({ bed, dragging, overlay }: Props) {
     >
       <span className={`absolute bottom-2 left-0 top-2 w-1 rounded-full ${railClass[bed.tone]}`} aria-hidden />
       <div className="min-w-0 flex-1 pl-2.5">
-        <div className="flex items-start justify-between gap-2">
-          <div className="text-sm font-bold text-slate-900">{bed.bedLabel}</div>
+        <div className="flex flex-wrap items-center gap-1">
           <span
             className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold ${pillClass[bed.tone]}`}
             title={`麻煩度分數：${bed.score}`}
           >
             麻煩度 {bed.score}
           </span>
-        </div>
-        <div className="mt-0.5 line-clamp-2 text-xs font-medium leading-snug text-slate-600">{bed.diagnosis}</div>
-        {bed.badges.length ? (
-          <div className="mt-1.5 flex flex-wrap gap-1">
-            {bed.badges.map((b) => (
+          {bed.badges.includes('STAT') ? (
+            <span className="shrink-0 rounded bg-red-100 px-1.5 py-0.5 text-[9px] font-bold text-red-800">STAT</span>
+          ) : null}
+          {bed.badges
+            .filter((b) => b !== 'STAT')
+            .map((b) => (
               <span
                 key={b}
-                className={[
-                  'rounded px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide',
-                  b === 'STAT' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-600',
-                ].join(' ')}
+                className="shrink-0 rounded bg-slate-100 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-slate-600"
               >
                 {b}
               </span>
             ))}
-          </div>
-        ) : null}
+        </div>
+        <div className="mt-1 text-sm font-bold text-slate-900">{bed.bedShort}</div>
+        <div className="mt-0.5 text-xs font-medium leading-snug text-slate-600 break-words">{primaryDiagnosis(bed.diagnosis)}</div>
       </div>
     </div>
   )

@@ -1,4 +1,5 @@
 import { PATIENTS, type NurseId, type PatientId } from '../../data/allocationMock'
+import { parseBedKey } from '../../data/patientSimulation'
 import {
   getDemoPatients,
   getDemoStatOrders,
@@ -53,12 +54,12 @@ const demoByBed = () => {
 }
 
 function bedKeyFromPatientId(pid: PatientId) {
-  const m = PATIENTS[pid].label.match(/^床\s*(\d+)\b/)
-  return m ? `床 ${m[1]}` : ''
+  return parseBedKey(PATIENTS[pid].label)
 }
 
 export function formatBedShort(bedLabel: string) {
-  const m = bedLabel.match(/床\s*(\d+)/)
+  const key = parseBedKey(bedLabel)
+  const m = key.match(/^MI-(\d+)$/i)
   return m ? `${m[1]}床` : bedLabel
 }
 
@@ -66,9 +67,9 @@ export function enrichBed(pid: PatientId): EnrichedBed {
   const mock = PATIENTS[pid]
   const bedKey = bedKeyFromPatientId(pid)
   const demo = demoByBed().get(bedKey)
-  const m = mock.label.match(/^床\s*(\d+)\s*[—-]\s*(.+)$/)
+  const m = mock.label.match(/^(MI-\d+)\s*[—-]\s*(.+)$/i) ?? mock.label.match(/^床\s*(\d+)\s*[—-]\s*(.+)$/)
   const diagnosis = demo?.diagnosis ?? (m ? m[2].trim() : mock.label)
-  const bedLabel = bedKey || (m ? `床${m[1]}` : mock.label)
+  const bedLabel = bedKey || (m ? m[1] : mock.label)
 
   const badges: string[] = []
   if (demo) {
@@ -78,10 +79,7 @@ export function enrichBed(pid: PatientId): EnrichedBed {
     if (demo.objective['ECMO（持續型 B）']) badges.push('ECMO')
     if (demo.objective['IABP（持續型 B）']) badges.push('IABP')
   }
-  const statHit = getDemoStatOrders().some((o) => {
-    const bm = o.bedLabel.match(/^床\s*(\d+)/)
-    return bm && bedKey === `床 ${bm[1]}`
-  })
+  const statHit = getDemoStatOrders().some((o) => parseBedKey(o.bedLabel) === bedKey)
   if (statHit) badges.push('STAT')
 
   return {

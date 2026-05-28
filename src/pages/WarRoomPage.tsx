@@ -82,7 +82,7 @@ export function WarRoomPage() {
       </div>
 
       <section className="rounded-2xl bg-white p-3 ring-1 ring-black/10">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
           {nurses.map((n) => (
             <NurseLoadCard key={n.name} name={n.name} remaining={n.remaining} tone={n.tone} assignments={n.assignments} tasks={n.tasks} />
           ))}
@@ -112,7 +112,7 @@ function toNurseCard(row: WarRoomData['nurses'][number]): NurseCardModel {
     tone: maxScore >= 22 || row.remaining >= 16 ? 'high' : maxScore >= 14 || row.remaining >= 9 ? 'mid' : 'low',
     assignments,
     tasks: row.tasks.map((task) => ({
-      text: `床 ${bedNo(task.bedLabel)} ${task.title}`,
+      text: `${task.bedLabel} ${task.title}`,
       urgent: task.urgent,
       done: task.done,
       newbie: task.source === '新病人',
@@ -185,7 +185,7 @@ function NurseLoadCard({
   const bedPatient = new Map(assignments.map((a) => [a.bed, a.patient]))
 
   return (
-    <section className="flex flex-col rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/10">
+    <section className="flex min-w-0 flex-col overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/10">
       <div className="mb-2 h-2 overflow-hidden rounded-full bg-black/5">
         <div className={`h-full ${bar}`} style={{ width: `${pct}%` }} />
       </div>
@@ -214,7 +214,7 @@ function NurseLoadCard({
 
       <div className="mt-3 grid gap-2">
         <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2 ring-1 ring-black/10">
-          <div className="min-w-0 text-[11px] font-semibold text-slate-700">
+          <div className="min-w-0 flex-1 break-words text-[11px] font-semibold leading-snug text-slate-700">
             床位：{assignments.length ? assignments.map((a) => `床 ${a.bed}`).join('、') : '—'}
           </div>
           <button
@@ -239,9 +239,9 @@ function NurseLoadCard({
                     t.urgent ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.14)]' : '',
                   ].join(' ')}
                 >
-                  <div className="min-w-0">
-                    <div className="truncate text-xs font-semibold text-slate-900">{t.text}</div>
-                    <div className="mt-1 flex items-center gap-2 text-[11px]">
+                  <div className="min-w-0 flex-1 overflow-hidden">
+                    <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-slate-900">{t.text}</div>
+                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
                       {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
                       {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
                       <span className="text-slate-500">未完成</span>
@@ -263,7 +263,7 @@ function NurseLoadCard({
             {bedOrder.map((bed) => (
               <section key={bed} className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
                 <div className="flex items-center justify-between gap-3 border-b border-black/10 bg-white px-2.5 py-2">
-                  <div className="min-w-0 text-xs font-extrabold tracking-wide text-slate-900">
+                  <div className="min-w-0 flex-1 overflow-hidden text-xs font-extrabold tracking-wide text-slate-900">
                     床 {bed}
                     <span className="ml-2 font-semibold text-slate-600">{bedPatient.get(bed) ?? ''}</span>
                   </div>
@@ -281,17 +281,19 @@ function NurseLoadCard({
                         t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
                       ].join(' ')}
                     >
-                      <div className="min-w-0">
-                        <div className={`truncate text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div
+                          className={`line-clamp-2 break-words text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}
+                        >
                           {t.title}
                         </div>
-                        <div className="mt-1 flex items-center gap-2 text-[11px]">
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
                           {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
                           {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
                           {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
                         </div>
                       </div>
-                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 accent-black" />
+                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 shrink-0 accent-black" />
                     </li>
                   ))}
                 </ul>
@@ -310,17 +312,19 @@ function NurseLoadCard({
                         t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
                       ].join(' ')}
                     >
-                      <div className="min-w-0">
-                        <div className={`truncate text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}>
+                      <div className="min-w-0 flex-1 overflow-hidden">
+                        <div
+                          className={`line-clamp-2 break-words text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}
+                        >
                           {t.title}
                         </div>
-                        <div className="mt-1 flex items-center gap-2 text-[11px]">
+                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
                           {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
                           {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
                           {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
                         </div>
                       </div>
-                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 accent-black" />
+                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 shrink-0 accent-black" />
                     </li>
                   ))}
                 </ul>

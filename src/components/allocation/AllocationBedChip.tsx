@@ -4,6 +4,11 @@ import type { CSSProperties } from 'react'
 import { AllocationPatientHoverHost } from './AllocationPatientHoverHost'
 import type { EnrichedBed } from './allocationUtils'
 
+function primaryDiagnosis(text: string) {
+  return text.split(',')[0]?.trim() || text
+}
+
+
 const railClass = {
   high: 'bg-[#e85d4a]',
   mid: 'bg-[#e8a43a]',
@@ -49,27 +54,31 @@ export function AllocationBedChip({ bed, dragging, overlay, fill }: Props) {
       ].join(' ')}
       {...(overlay ? {} : { ...attributes, ...listeners })}
     >
-      <span className={`h-1 w-full ${railClass[bed.tone]}`} aria-hidden />
-      <div className="flex min-h-[48px] min-w-0 flex-col justify-center px-1.5 py-1.5">
-        <div className="flex min-w-0 items-center justify-between gap-1">
-          <span className="truncate text-[12px] font-bold leading-none text-slate-900">{bed.bedShort}</span>
-          <div className="flex items-center gap-1">
-            <span
-              className="shrink-0 rounded bg-white/80 px-1 py-px text-[9px] font-bold text-slate-700 ring-1 ring-black/10"
-              title={`麻煩度分數：${bed.score}`}
-            >
-              麻 {bed.score}
-            </span>
-            {bed.badges.includes('STAT') ? (
-              <span className="shrink-0 rounded bg-red-100 px-1 py-px text-[9px] font-bold text-red-700">
-                STAT
+      <span className={`h-1 w-full shrink-0 ${railClass[bed.tone]}`} aria-hidden />
+      <div className="flex min-w-0 flex-col gap-1 px-1.5 py-1.5">
+        <div className="flex min-w-0 flex-wrap items-center gap-1">
+          <span
+            className="shrink-0 rounded bg-white/80 px-1 py-px text-[9px] font-bold text-slate-700 ring-1 ring-black/10"
+            title={`麻煩度分數：${bed.score}`}
+          >
+            麻煩度 {bed.score}
+          </span>
+          {bed.badges.includes('STAT') ? (
+            <span className="shrink-0 rounded bg-red-100 px-1 py-px text-[9px] font-bold text-red-700">STAT</span>
+          ) : null}
+          {bed.badges
+            .filter((b) => b !== 'STAT')
+            .map((b) => (
+              <span
+                key={b}
+                className="shrink-0 rounded bg-white/70 px-1 py-px text-[8px] font-bold uppercase tracking-wide text-slate-600 ring-1 ring-black/8"
+              >
+                {b}
               </span>
-            ) : null}
-          </div>
+            ))}
         </div>
-        <div className="mt-1 line-clamp-2 text-[10px] font-medium leading-tight text-slate-600">
-          {bed.diagnosis}
-        </div>
+        <div className="text-[12px] font-bold leading-none text-slate-900">{bed.bedShort}</div>
+        <div className="text-[10px] font-medium leading-snug text-slate-600 break-words">{primaryDiagnosis(bed.diagnosis)}</div>
       </div>
     </div>
   )

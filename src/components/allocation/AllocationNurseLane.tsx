@@ -81,7 +81,7 @@ export function AllocationNurseLane({
               {dragging ? '放開以移入' : '拖入病患'}
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-1.5">
+            <div className="grid grid-cols-3 items-start gap-1.5">
               {items.map((pid) => (
                 <AllocationBedChip
                   key={pid}
