@@ -35,7 +35,25 @@ export function WarRoomPage() {
     }
   }, [])
 
-  const nurses: NurseCardModel[] = useMemo(() => (data?.nurses ?? []).map(toNurseCard), [data])
+  const nurses: NurseCardModel[] = useMemo(() => {
+    const toneRank: Record<NurseCardModel['tone'], number> = { high: 2, mid: 1, low: 0 }
+
+    return (data?.nurses ?? [])
+      .map(toNurseCard)
+      .sort((a, b) => {
+        const aUrgentOpen = a.tasks.some((t) => !!t.urgent && !t.done)
+        const bUrgentOpen = b.tasks.some((t) => !!t.urgent && !t.done)
+        if (aUrgentOpen !== bUrgentOpen) return Number(bUrgentOpen) - Number(aUrgentOpen)
+
+        const toneDiff = toneRank[b.tone] - toneRank[a.tone]
+        if (toneDiff !== 0) return toneDiff
+
+        const remainingDiff = b.remaining - a.remaining
+        if (remainingDiff !== 0) return remainingDiff
+
+        return a.name.localeCompare(b.name, 'zh-Hant')
+      })
+  }, [data])
 
   if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入戰情室...</div>
   if (error) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
