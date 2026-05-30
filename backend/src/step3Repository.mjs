@@ -5,6 +5,11 @@ import { burdenAssessments, objectiveFactorDefinitions, subjectiveFactorDefiniti
 import { allocationItems, allocationRuns } from './step3Data.mjs'
 
 
+function bedNo(label) {
+  const match = String(label ?? '').match(/\d+/)
+  return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+}
+
 // 年資順序：數字越小越資淺（新人優先接高分病人）
 const SENIORITY_RANK = {
   '1年以下': 0,
@@ -27,7 +32,7 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
     targetShiftId,
     createdBy: user.id,
     status: 'draft',
-    algorithmVersion: 'seniority-aware-v1',
+    algorithmVersion: 'seniority-proximity-v1',
     suggestedAt: new Date().toISOString(),
     confirmedAt: null,
   }
@@ -35,7 +40,10 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
 
   const nurses = allocatableNurses(shiftId)
   const loads = new Map(nurses.map((nurse) => [nurse.id, 0]))
+  const assignedBeds = new Map(nurses.map((nurse) => [nurse.id, []]))
   const nextItems = []
+  const TOLERANCE = 5
+  const MAX_BED_GAP = 2
 
   // 由高分到低分排列病人
   const patientScores = admissionsWithScores(shiftId).sort((a, b) => b.score - a.score)
@@ -44,20 +52,30 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
     : 0
 
   for (const patient of patientScores) {
+    const patientBedNo = bedNo(patient.bedLabel)
+
     // 找最低負載，保留負載在容差 5 分內的候選人
     const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
-    const TOLERANCE = 5
     const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
+
+    // 優先選已分配床位與此病人床號相差 ≤ MAX_BED_GAP 的護理師，無符合者才 fallback 全部候選
+    const isNearby = (n) => {
+      const beds = assignedBeds.get(n.id)
+      return beds.length === 0 || beds.some((b) => Math.abs(b - patientBedNo) <= MAX_BED_GAP)
+    }
+    const preferred = nearMin.filter(isNearby)
+    const candidates = preferred.length > 0 ? preferred : nearMin
 
     // 決勝：高分病人給資淺的，低分病人給資深的
     const isHighBurden = patient.score >= avgScore
-    const selected = [...nearMin].sort((a, b) => {
+    const selected = [...candidates].sort((a, b) => {
       const rankA = SENIORITY_RANK[a.role === 'charge_nurse' ? 'charge_nurse' : (a.seniorityLevel ?? '4-10年')] ?? 2
       const rankB = SENIORITY_RANK[b.role === 'charge_nurse' ? 'charge_nurse' : (b.seniorityLevel ?? '4-10年')] ?? 2
       return isHighBurden ? rankA - rankB : rankB - rankA
     })[0]
 
     if (!selected) continue
+    assignedBeds.get(selected.id).push(patientBedNo)
     const sortOrder = nextItems.filter((item) => item.nurseId === selected.id).length + 1
     nextItems.push({
       id: randomUUID(),

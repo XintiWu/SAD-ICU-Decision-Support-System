@@ -240,29 +240,48 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   const runId = randomUUID()
   await withTransaction(async (client) => {
     await client.query(
-      `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','seniority-aware-v1')`,
+      `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','seniority-proximity-v1')`,
       [runId, shiftId, targetShiftId ?? shiftId, user.id],
     )
 
     const loads = new Map(nurses.map((n) => [n.id, 0]))
     const sortOrders = new Map(nurses.map((n) => [n.id, 0]))
+    const assignedBeds = new Map(nurses.map((n) => [n.id, []]))
+    const MAX_BED_GAP = 2
 
     for (const admission of admissions.sort((a, b) => b.score - a.score)) {
+<<<<<<< Updated upstream
       const seniorityKey = (n) => n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年')
+=======
+      const seniorityKey = (n) => (n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年'))
+      const patientBedNo = bedNo(admission.bedLabel)
+>>>>>>> Stashed changes
 
       // 找最低負載，保留容差內的候選人
       const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
       const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
 
+<<<<<<< Updated upstream
       // 高分病人給資淺的，低分病人給資深的
+=======
+      // 優先選已分配床位與此病人床號相差 ≤ MAX_BED_GAP 的護理師，無符合者才 fallback 全部候選
+      const isNearby = (n) => {
+        const beds = assignedBeds.get(n.id)
+        return beds.length === 0 || beds.some((b) => Math.abs(b - patientBedNo) <= MAX_BED_GAP)
+      }
+      const preferred = nearMin.filter(isNearby)
+      const candidates = preferred.length > 0 ? preferred : nearMin
+
+>>>>>>> Stashed changes
       const isHighBurden = admission.score >= avgScore
-      const selected = [...nearMin].sort((a, b) => {
+      const selected = [...candidates].sort((a, b) => {
         const ra = SENIORITY_RANK[seniorityKey(a)] ?? 2
         const rb = SENIORITY_RANK[seniorityKey(b)] ?? 2
         return isHighBurden ? ra - rb : rb - ra
       })[0]
 
       if (!selected) continue
+      assignedBeds.get(selected.id).push(patientBedNo)
       const sortOrder = (sortOrders.get(selected.id) ?? 0) + 1
       await client.query(
         `insert into allocation_items (allocation_run_id, admission_id, nurse_id, score, sort_order) values ($1,$2,$3,$4,$5)`,
