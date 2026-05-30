@@ -2,6 +2,7 @@ import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import type { PatientId } from '../../data/allocationMock'
 import { AllocationBedChip } from './AllocationBedChip'
+import { useOptionalAllocationCatalog } from './allocationCatalog'
 import { enrichBed, LOAD_BAR_MAX, type NurseLoadTone } from './allocationUtils'
 
 const barClass: Record<NurseLoadTone, string> = {
@@ -13,11 +14,11 @@ const barClass: Record<NurseLoadTone, string> = {
 type Props = {
   id: string
   title: string
-  items: PatientId[]
+  items: string[]
   load?: number
   bedCount?: number
   loadTone?: NurseLoadTone
-  activePatientId?: PatientId | null
+  activePatientId?: string | null
   onRegisterBody?: (laneId: string, el: HTMLDivElement | null) => void
 }
 
@@ -31,6 +32,7 @@ export function AllocationNurseLane({
   activePatientId,
   onRegisterBody,
 }: Props) {
+  const catalogCtx = useOptionalAllocationCatalog()
   const { setNodeRef, isOver } = useDroppable({ id: `lane:${id}` })
   const surname = title.charAt(0)
   const beds = bedCount ?? items.length
@@ -82,14 +84,18 @@ export function AllocationNurseLane({
             </div>
           ) : (
             <div className="grid grid-cols-3 items-start gap-1.5">
-              {items.map((pid) => (
-                <AllocationBedChip
-                  key={pid}
-                  bed={enrichBed(pid)}
-                  fill
-                  dragging={activePatientId === pid}
-                />
-              ))}
+              {items.map((pid) => {
+                const bed = catalogCtx?.getBed(pid) ?? (pid.startsWith('p') ? enrichBed(pid as PatientId) : null)
+                if (!bed) return null
+                return (
+                  <AllocationBedChip
+                    key={pid}
+                    bed={bed}
+                    fill
+                    dragging={activePatientId === pid}
+                  />
+                )
+              })}
             </div>
           )}
         </SortableContext>

@@ -3,19 +3,25 @@ import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortabl
 import type { PatientId } from '../../data/allocationMock'
 import { UNASSIGNED_DROP_ID } from './allocationDnd'
 import { AllocationBedChip } from './AllocationBedChip'
+import { useOptionalAllocationCatalog } from './allocationCatalog'
 import { enrichBed } from './allocationUtils'
 
 type Props = {
-  items: PatientId[]
-  activePatientId?: PatientId | null
+  items: string[]
+  activePatientId?: string | null
   onSuggest?: () => void
+  suggestLoading?: boolean
+  disableSuggest?: boolean
 }
 
 export function AllocationUnassignedStrip({
   items,
   activePatientId,
   onSuggest,
+  suggestLoading,
+  disableSuggest,
 }: Props) {
+  const catalogCtx = useOptionalAllocationCatalog()
   const { setNodeRef, isOver } = useDroppable({ id: UNASSIGNED_DROP_ID })
   const dragging = activePatientId != null
 
@@ -29,8 +35,8 @@ export function AllocationUnassignedStrip({
           <div>
             <h2 className="text-sm font-bold text-slate-900">待分配病患</h2>
             <p className="mt-0.5 text-[11px] text-slate-600">
-              進入此頁面時，先顯示<strong className="font-bold text-slate-700">上一班</strong>留下的分床狀態。可按右側
-              <strong className="font-bold text-slate-700">「套用系統建議分床」</strong>作為本班初稿，再拖曳微調並儲存交班快照。
+              依右上角<strong className="font-bold text-slate-700">班別</strong>載入資料。可按
+              <strong className="font-bold text-slate-700">「套用系統建議分床」</strong>呼叫後端演算法，再拖曳微調並確認送出。
             </p>
           </div>
         </div>
@@ -41,10 +47,11 @@ export function AllocationUnassignedStrip({
           {onSuggest ? (
             <button
               type="button"
+              disabled={disableSuggest || suggestLoading}
               onClick={onSuggest}
-              className="rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-extrabold text-white shadow-sm ring-1 ring-black/10 hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30"
+              className="rounded-xl bg-[#2563eb] px-5 py-2.5 text-sm font-extrabold text-white shadow-sm ring-1 ring-black/10 hover:bg-[#1d4ed8] focus:outline-none focus:ring-2 focus:ring-[#2563eb]/30 disabled:opacity-60"
             >
-              套用系統建議分床
+              {suggestLoading ? '產生中…' : '套用系統建議分床'}
             </button>
           ) : null}
         </div>
@@ -72,13 +79,17 @@ export function AllocationUnassignedStrip({
             </span>
             {items.length > 0 ? (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                {items.map((pid) => (
-                  <AllocationBedChip
-                    key={pid}
-                    bed={enrichBed(pid)}
-                    dragging={activePatientId === pid}
-                  />
-                ))}
+                {items.map((pid) => {
+                  const bed = catalogCtx?.getBed(pid) ?? (pid.startsWith('p') ? enrichBed(pid as PatientId) : null)
+                  if (!bed) return null
+                  return (
+                    <AllocationBedChip
+                      key={pid}
+                      bed={bed}
+                      dragging={activePatientId === pid}
+                    />
+                  )
+                })}
               </div>
             ) : null}
           </div>

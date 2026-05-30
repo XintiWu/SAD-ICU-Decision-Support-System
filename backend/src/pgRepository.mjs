@@ -32,6 +32,20 @@ export async function getCurrentShift(unitName = 'ICU') {
   return formatShift(shift)
 }
 
+export async function listShifts({ unitName = 'ICU' } = {}) {
+  const result = await query(
+    `
+    select s.*, n.short_name as charge_short_name
+    from shifts s
+    left join nurses n on n.id = s.charge_nurse_id
+    where s.unit_name = $1
+    order by s.starts_at desc
+    `,
+    [unitName],
+  )
+  return result.rows.map(formatShift)
+}
+
 export async function listNurses({ shiftId } = {}) {
   const params = []
   let join = ''
@@ -248,13 +262,11 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     const sortOrders = new Map(nurses.map((n) => [n.id, 0]))
 
     for (const admission of admissions.sort((a, b) => b.score - a.score)) {
-      const seniorityKey = (n) => n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年')
+      const seniorityKey = (n) => (n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年'))
 
-      // 找最低負載，保留容差內的候選人
       const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
       const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
 
-      // 高分病人給資淺的，低分病人給資深的
       const isHighBurden = admission.score >= avgScore
       const selected = [...nearMin].sort((a, b) => {
         const ra = SENIORITY_RANK[seniorityKey(a)] ?? 2
@@ -275,6 +287,16 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   return getAllocationRun({ allocationRunId: runId })
 }
 
+export async function getLatestAllocationRun({ shiftId } = {}) {
+  if (!shiftId) throw new ApiError(400, 'VALIDATION_ERROR', 'shiftId 為必填', { field: 'shiftId' })
+  const result = await query(
+    `select id from allocation_runs where shift_id = $1 order by (status = 'draft') desc, suggested_at desc limit 1`,
+    [shiftId],
+  )
+  if (!result.rows[0]) return null
+  return getAllocationRun({ allocationRunId: result.rows[0].id })
+}
+
 export async function getAllocationRun({ allocationRunId } = {}) {
   const run = await allocationRunRow(allocationRunId)
   const nurses = (await listNurses({ shiftId: run.shift_id })).filter((nurse) => ['nurse', 'charge_nurse'].includes(nurse.role))
@@ -286,6 +308,7 @@ export async function getAllocationRun({ allocationRunId } = {}) {
     const patients = items.rows
       .filter((item) => item.nurse_id === nurse.id)
       .map((item) => allocationPatient(admissionMap.get(item.admission_id), Number(item.score), item.is_manual_override))
+      .filter(Boolean)
     return { nurseId: nurse.id, shortName: nurse.shortName, load: patients.reduce((sum, p) => sum + p.score, 0), patients }
   })
   const unassigned = admissions.filter((admission) => !assigned.has(admission.admissionId)).map((admission) => allocationPatient(admission, 0, false))
@@ -369,6 +392,7 @@ export async function getHandoffSheet({ shiftId } = {}) {
   for (const nurseRow of allocation.byNurse) {
     for (const patient of nurseRow.patients) {
       const admission = (await listAdmissions({ shiftId, status: 'active' })).find((item) => item.admissionId === patient.admissionId)
+      if (!admission) continue
       rows.push({ ...admission, currentNurse: nurseRow.shortName, nextNurse: nurseRow.shortName, burdenScore: patient.score, handoffDiagnosis: admission.diagnosis })
     }
   }
@@ -519,12 +543,46 @@ async function allocationRunRow(id) {
 }
 
 function allocationPatient(admission, score, isManualOverride) {
+  if (!admission) return null
   return { admissionId: admission.admissionId, bedLabel: admission.bedLabel, patientName: admission.patientName, diagnosis: admission.diagnosis, score, tone: score >= 22 ? 'high' : score >= 14 ? 'mid' : 'low', isManualOverride }
 }
 
 async function latestAllocation(shiftId) {
-  const result = await query('select id from allocation_runs where shift_id = $1 order by confirmed_at desc nulls last, suggested_at desc limit 1', [shiftId])
+  const result = await query(
+    `select id from allocation_runs where shift_id = $1 order by (status = 'draft') desc, suggested_at desc limit 1`,
+    [shiftId],
+  )
+  if (!result.rows[0]) return emptyAllocationForShift(shiftId)
   return getAllocationRun({ allocationRunId: result.rows[0].id })
+}
+
+async function emptyAllocationForShift(shiftId) {
+  const nurses = (await listNurses({ shiftId })).filter((nurse) => ['nurse', 'charge_nurse'].includes(nurse.role))
+  const admissions = await listAdmissions({ shiftId, status: 'active' })
+  const byNurse = nurses.map((nurse) => ({
+    nurseId: nurse.id,
+    shortName: nurse.shortName,
+    load: 0,
+    patients: [],
+  }))
+  const unassigned = admissions.map((admission) => allocationPatient(admission, 0, false))
+  return {
+    allocationRunId: null,
+    shiftId,
+    targetShiftId: null,
+    status: 'none',
+    algorithmVersion: null,
+    suggestedAt: null,
+    confirmedAt: null,
+    unassigned,
+    byNurse,
+    stats: {
+      totalBeds: admissions.length,
+      totalNurses: nurses.length,
+      averageLoad: 0,
+      maxLoad: 0,
+    },
+  }
 }
 
 async function admissionOwner(shiftId, admissionId) {

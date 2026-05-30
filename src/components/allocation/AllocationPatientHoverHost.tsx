@@ -3,9 +3,10 @@ import { createPortal } from 'react-dom'
 import { AllocationPatientHoverDetail } from './AllocationPatientHoverDetail'
 import { getPatientDragDetail } from './allocationUtils'
 import type { PatientId } from '../../data/allocationMock'
+import { useOptionalAllocationCatalog } from './allocationCatalog'
 
 type Props = {
-  patientId: PatientId
+  patientId: string
   children: ReactNode
   disabled?: boolean
 }
@@ -14,6 +15,7 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
   const anchorRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const catalogCtx = useOptionalAllocationCatalog()
 
   const updatePosition = useCallback(() => {
     const el = anchorRef.current
@@ -22,10 +24,12 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
     setPos({ left: rect.left, top: rect.bottom + 8 })
   }, [])
 
-  const patient = getPatientDragDetail(patientId)
+  const patient =
+    catalogCtx?.getBed(patientId) ??
+    (patientId.startsWith('p') ? getPatientDragDetail(patientId as PatientId) : null)
 
   function handleEnter() {
-    if (disabled) return
+    if (disabled || !patient) return
     updatePosition()
     setOpen(true)
   }
@@ -44,7 +48,7 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
       onBlur={handleLeave}
     >
       {children}
-      {open && pos && !disabled
+      {open && pos && patient && !disabled
         ? createPortal(
             <div
               className="pointer-events-none fixed z-[100]"

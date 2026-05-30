@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { apiGet, CURRENT_SHIFT_ID } from '../api/client'
-import type { HandoffData } from '../api/client'
+import { apiGet, type HandoffData } from '../api/client'
+import { useShift } from '../context/ShiftContext'
 
 type OverviewMeta = {
   onDutyCharge: { shortName: string }
 }
 
 export function AllocationResultPage() {
+  const { shiftId, selectedShift } = useShift()
   const [rows, setRows] = useState<HandoffData['rows']>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -16,11 +17,13 @@ export function AllocationResultPage() {
 
   useEffect(() => {
     let alive = true
+    setLoading(true)
+    setRows([])
 
     const load = () => {
       Promise.all([
-        apiGet<HandoffData>(`/handoff-sheets?shiftId=${CURRENT_SHIFT_ID}`),
-        apiGet<OverviewMeta>(`/nurse/overview?shiftId=${CURRENT_SHIFT_ID}`),
+        apiGet<HandoffData>(`/handoff-sheets?shiftId=${shiftId}`),
+        apiGet<OverviewMeta>(`/nurse/overview?shiftId=${shiftId}`),
       ])
         .then(([handoff, overview]) => {
           if (!alive) return
@@ -45,7 +48,7 @@ export function AllocationResultPage() {
       alive = false
       window.clearInterval(timer)
     }
-  }, [])
+  }, [shiftId])
 
   const stats = useMemo(() => {
     const changed = rows.filter((row) => row.currentNurse !== row.nextNurse).length
@@ -60,6 +63,9 @@ export function AllocationResultPage() {
     <div className="grid gap-4">
       <div className="rounded-2xl bg-white p-4 ring-1 ring-black/10">
         <div className="text-lg font-extrabold tracking-tight text-slate-900">交班分床結果</div>
+        {selectedShift ? (
+          <div className="mt-1 text-sm font-medium text-slate-600">{selectedShift.label}</div>
+        ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-slate-600">
           <span>
             <span className="font-semibold text-slate-800">分床結果時間</span> {updatedAt ? formatDateTime(updatedAt) : '—'}

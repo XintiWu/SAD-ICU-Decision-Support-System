@@ -3,8 +3,10 @@ import {
   ApiError,
   confirmAllocationRun,
   getAllocationRun,
+  getLatestAllocationRun,
   getCurrentShift,
   getCurrentUser,
+  listShifts,
   getHandoffSheet,
   getNurseOverview,
   getWarRoom,
@@ -16,7 +18,7 @@ import {
   updateAllocationItems,
   updateBurdenAssessment,
   updateTask,
-} from './src/pgRepository.mjs'
+} from './src/runtimeRepository.mjs'
 
 const port = Number(process.env.PORT ?? 8787)
 const host = process.env.HOST ?? '127.0.0.1'
@@ -55,6 +57,7 @@ async function handleRequest(req, res) {
         endpoints: [
           'GET /api/v1/health',
           'GET /api/v1/me',
+          'GET /api/v1/shifts',
           'GET /api/v1/shifts/current',
           'GET /api/v1/nurses?shiftId={shiftId}',
           'GET /api/v1/admissions?shiftId={shiftId}&status=active',
@@ -63,6 +66,7 @@ async function handleRequest(req, res) {
           'PATCH /api/v1/burden-assessments/{assessmentId}',
           'GET /api/v1/tasks?shiftId={shiftId}&assignee=me&status=pending&kind=給藥',
           'PATCH /api/v1/tasks/{taskId}',
+          'GET /api/v1/allocation-runs/current?shiftId={shiftId}',
           'POST /api/v1/allocation-runs/suggest',
           'GET /api/v1/allocation-runs/{allocationRunId}',
           'PUT /api/v1/allocation-runs/{allocationRunId}/items',
@@ -85,6 +89,12 @@ async function handleRequest(req, res) {
     assertMethod(req, 'GET')
     const userId = getUserId(req, url)
     sendJson(res, { data: await getCurrentUser(userId) })
+    return
+  }
+
+  if (url.pathname === '/api/v1/shifts') {
+    assertMethod(req, 'GET')
+    sendJson(res, { data: await listShifts({ unitName: url.searchParams.get('unitName') ?? 'ICU' }) })
     return
   }
 
@@ -169,6 +179,14 @@ async function handleRequest(req, res) {
         patch: await readJsonBody(req),
         userId: getUserId(req, url),
       }),
+    })
+    return
+  }
+
+  if (url.pathname === '/api/v1/allocation-runs/current') {
+    assertMethod(req, 'GET')
+    sendJson(res, {
+      data: await getLatestAllocationRun({ shiftId: nullable(url.searchParams.get('shiftId')) }),
     })
     return
   }

@@ -11,7 +11,7 @@ export type PatientTone = 'high' | 'mid' | 'low'
 export type NurseLoadTone = 'high' | 'mid' | 'low'
 
 export type EnrichedBed = {
-  id: PatientId
+  id: string
   bedLabel: string
   bedShort: string
   diagnosis: string

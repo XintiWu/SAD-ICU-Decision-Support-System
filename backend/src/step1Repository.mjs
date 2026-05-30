@@ -37,6 +37,13 @@ export function getCurrentShift(unitName = 'ICU') {
   return formatShift(shift)
 }
 
+export function listShifts({ unitName = 'ICU' } = {}) {
+  return shifts
+    .filter((item) => item.unitName === unitName)
+    .sort((a, b) => new Date(b.startsAt).getTime() - new Date(a.startsAt).getTime())
+    .map(formatShift)
+}
+
 export function listNurses({ shiftId } = {}) {
   if (shiftId) ensureShift(shiftId)
 

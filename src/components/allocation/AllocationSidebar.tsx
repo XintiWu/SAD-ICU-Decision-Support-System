@@ -1,6 +1,13 @@
-import { NURSES } from '../../data/allocationMock'
 import type { AllocationStats, NurseLoadRow } from './allocationUtils'
 import { formatDelta } from './allocationUtils'
+import { NURSES } from '../../data/allocationMock'
+import type { NurseId } from '../../data/allocationMock'
+
+function resolveNurseName(nurseNames: Record<string, string> | undefined, nurseId: string) {
+  if (nurseNames?.[nurseId]) return nurseNames[nurseId]
+  const mock = NURSES[nurseId as NurseId]
+  return mock?.shortName ?? nurseId.slice(-4)
+}
 
 const barClass = {
   high: 'bg-[#c64a2c]',
@@ -11,19 +18,25 @@ const barClass = {
 type Props = {
   stats: AllocationStats
   loadRows: NurseLoadRow[]
+  nurseNames?: Record<string, string>
   canUndo?: boolean
   onUndo?: () => void
   onSuggest?: () => void
   onConfirm: () => void
+  confirmDisabled?: boolean
+  readonly?: boolean
 }
 
 export function AllocationSidebar({
   stats,
   loadRows,
+  nurseNames,
   canUndo,
   onUndo,
   onSuggest,
   onConfirm,
+  confirmDisabled,
+  readonly,
 }: Props) {
   const maxBar = Math.max(stats.max, 1)
 
@@ -40,11 +53,11 @@ export function AllocationSidebar({
       <div className="rounded-xl bg-surface p-3 text-xs leading-relaxed text-slate-600 ring-1 ring-black/5">
         {stats.maxNurseId && stats.minNurseId ? (
           <p>
-            <span className="font-semibold text-slate-800">最高</span> {NURSES[stats.maxNurseId].shortName}{' '}
-            {stats.max}
+            <span className="font-semibold text-slate-800">最高</span>{' '}
+            {resolveNurseName(nurseNames, stats.maxNurseId)} {stats.max}
             <span className="mx-1 text-slate-400">·</span>
-            <span className="font-semibold text-slate-800">最低</span> {NURSES[stats.minNurseId].shortName}{' '}
-            {stats.min}
+            <span className="font-semibold text-slate-800">最低</span>{' '}
+            {resolveNurseName(nurseNames, stats.minNurseId)} {stats.min}
           </p>
         ) : null}
         <p className="mt-1.5">{balanceHint}</p>
@@ -54,7 +67,7 @@ export function AllocationSidebar({
         {loadRows.map((row) => (
           <div key={row.nurseId}>
             <div className="mb-1 flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-900">{NURSES[row.nurseId].shortName}</span>
+              <span className="font-semibold text-slate-900">{resolveNurseName(nurseNames, row.nurseId)}</span>
               <span className="text-slate-600">
                 {row.load} · {row.bedCount}床 · Δ{formatDelta(row.deltaFromAvg)}
               </span>
@@ -97,12 +110,13 @@ export function AllocationSidebar({
         <button
           type="button"
           onClick={onConfirm}
-          className="w-full rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/90"
+          disabled={confirmDisabled || readonly}
+          className="w-full rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-50"
         >
           確認送出分床
         </button>
         <p className="text-[11px] leading-relaxed text-slate-500">
-          送出時會一併儲存交班快照；送出後可至「查看分床結果」核對。
+          送出後寫入資料庫並更新「查看分床結果」與戰情室。
         </p>
       </div>
     </aside>
