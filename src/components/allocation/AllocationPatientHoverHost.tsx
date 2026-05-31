@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AllocationPatientHoverDetail } from './AllocationPatientHoverDetail'
-import { useOptionalAllocationCatalog } from './allocationCatalog'
+import { useOptionalAllocationCatalog } from './useAllocationCatalog'
 
 type Props = {
   patientId: string

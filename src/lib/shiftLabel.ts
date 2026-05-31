@@ -1,5 +1,12 @@
 import type { ApiShift } from '../api/client'
-import { shiftStatusLabel } from '../context/ShiftContext'
+
+export function shiftStatusLabel(status: string) {
+  if (status === 'confirmed') return '已確認'
+  if (status === 'open') return '進行中'
+  if (status === 'allocating') return '分配中'
+  if (status === 'closed') return '已結束'
+  return status
+}
 
 export function formatShiftDate(startsAt: string) {
   return new Date(startsAt).toLocaleDateString('zh-TW', {

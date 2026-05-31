@@ -1,14 +1,6 @@
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { apiGet, CURRENT_NURSE_USER_ID, type ApiUser } from '../api/client'
-
-type UserContextValue = {
-  user: ApiUser | null
-  userId: string
-  loading: boolean
-  error: string | null
-}
-
-const UserContext = createContext<UserContextValue | null>(null)
+import { UserContext } from './userContextShared'
 
 export function UserProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<ApiUser | null>(null)
@@ -17,7 +9,6 @@ export function UserProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     let alive = true
-    setLoading(true)
     apiGet<ApiUser>('/me', { userId: CURRENT_NURSE_USER_ID })
       .then((data) => {
         if (!alive) return
@@ -49,10 +40,4 @@ export function UserProvider({ children }: { children: ReactNode }) {
       {children}
     </UserContext.Provider>
   )
-}
-
-export function useUser() {
-  const ctx = useContext(UserContext)
-  if (!ctx) throw new Error('useUser must be used within UserProvider')
-  return ctx
 }

@@ -10,8 +10,8 @@ import {
 import { EmptyAssignedPatientsNotice } from '../components/EmptyAssignedPatientsNotice'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
-import { useShift } from '../context/ShiftContext'
-import { useUser } from '../context/UserContext'
+import { useShift } from '../context/useShift'
+import { useUser } from '../context/useUser'
 import {
   assessmentToRow,
   getIncompleteFields,
@@ -45,6 +45,12 @@ function buildScoresMap(rows: BurdenFormRow[]): Partial<Record<string, BedScore>
 }
 
 export function BurdenFormPage() {
+  const { shiftId } = useShift()
+  const { userId } = useUser()
+  return <BurdenFormPageBody key={`${shiftId}:${userId}`} />
+}
+
+function BurdenFormPageBody() {
   const { shiftId, shifts } = useShift()
   const { userId, user, loading: userLoading, error: userError } = useUser()
   const chargeNurseId = useChargeNurseId()
@@ -70,12 +76,6 @@ export function BurdenFormPage() {
 
   useEffect(() => {
     let alive = true
-    setLoading(true)
-    setError(null)
-    setRows([])
-    setPreviousRows([])
-    setPreviousLabel(null)
-    setOnRoster(null)
 
     async function load() {
       try {

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, type ApiStatOrder } from '../api/client'
-import { useShift } from '../context/ShiftContext'
+import { useShift } from '../context/useShift'
 
 type StatOrderKind = ApiStatOrder['kind']
 const KINDS: StatOrderKind[] = ['檢查', '治療', '給藥', '監測', '其他']
@@ -11,6 +11,10 @@ const KIND_WEIGHT: Record<StatOrderKind, number> = {
 
 export function NurseTodoPage() {
   const { shiftId } = useShift()
+  return <NurseTodoPageBody key={shiftId} shiftId={shiftId} />
+}
+
+function NurseTodoPageBody({ shiftId }: { shiftId: string }) {
   const [kindFilter, setKindFilter] = useState<Set<StatOrderKind>>(new Set())
   const [orders, setOrders] = useState<ApiStatOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -19,8 +23,6 @@ export function NurseTodoPage() {
 
   useEffect(() => {
     let alive = true
-    setLoading(true)
-    setError(null)
     apiGet<ApiStatOrder[]>(
       `/stat-orders?shiftId=${shiftId}&assignee=all&includeCompleted=true`,
     )

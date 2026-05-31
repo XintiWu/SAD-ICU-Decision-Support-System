@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react'
 import { apiGet, type ApiNurse } from '../api/client'
-import { useShift } from '../context/ShiftContext'
+import { useShift } from '../context/useShift'
 
 /** 當班小組長 ID：優先 shifts.chargeNurse，否則查排班 role=charge_nurse */
 export function useChargeNurseId(shiftIdOverride?: string) {
@@ -11,10 +11,7 @@ export function useChargeNurseId(shiftIdOverride?: string) {
   const [fallbackId, setFallbackId] = useState<string | null>(null)
 
   useEffect(() => {
-    if (fromShift) {
-      setFallbackId(null)
-      return
-    }
+    if (fromShift) return
     let alive = true
     apiGet<ApiNurse[]>(`/nurses?shiftId=${shiftId}`)
       .then((rows) => {

@@ -1,7 +1,7 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
 import { AllocationBedChip } from './AllocationBedChip'
-import { useOptionalAllocationCatalog } from './allocationCatalog'
+import { useOptionalAllocationCatalog } from './useAllocationCatalog'
 import { LOAD_BAR_MAX, type NurseLoadTone } from './allocationUtils'
 
 const barClass: Record<NurseLoadTone, string> = {

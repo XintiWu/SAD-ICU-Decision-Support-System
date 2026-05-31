@@ -3,8 +3,8 @@ import { apiGet, type ApiAdmission, type ApiNurse, type BurdenAssessment } from 
 import { EmptyAssignedPatientsNotice } from '../components/EmptyAssignedPatientsNotice'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
-import { useShift } from '../context/ShiftContext'
-import { useUser } from '../context/UserContext'
+import { useShift } from '../context/useShift'
+import { useUser } from '../context/useUser'
 
 type OverviewData = {
   onDutyCharge: { id?: string; shortName: string }
@@ -13,6 +13,12 @@ type OverviewData = {
 }
 
 export function NurseOverviewPage() {
+  const { shiftId } = useShift()
+  const { userId } = useUser()
+  return <NurseOverviewPageBody key={`${shiftId}:${userId}`} />
+}
+
+function NurseOverviewPageBody() {
   const { shiftId, selectedShift } = useShift()
   const { userId, user } = useUser()
   const chargeNurseId = useChargeNurseId()
@@ -23,9 +29,6 @@ export function NurseOverviewPage() {
 
   useEffect(() => {
     let alive = true
-    setOverview(null)
-    setBurdens([])
-    setOnRoster(null)
 
     const load = () => {
       Promise.all([

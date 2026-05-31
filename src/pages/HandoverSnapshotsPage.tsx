@@ -1,25 +1,24 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { apiGet, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
-import { useShift } from '../context/ShiftContext'
+import { useShift } from '../context/useShift'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
 
 export function HandoverSnapshotsPage() {
-  const { shiftId, selectedShift } = useShift()
+  const { shiftId } = useShift()
+  return <HandoverSnapshotsPageBody key={shiftId} shiftId={shiftId} />
+}
+
+function HandoverSnapshotsPageBody({ shiftId }: { shiftId: string }) {
+  const { selectedShift } = useShift()
   const [items, setItems] = useState<HandoffSnapshotListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null)
-  const [selected, setSelected] = useState<HandoffSnapshotDetail | null>(null)
-  const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
     let alive = true
-    setLoading(true)
-    setItems([])
-    setSelectedSnapshotId(null)
-    setSelected(null)
     apiGet<HandoffSnapshotListItem[]>(`/handoff-snapshots?shiftId=${shiftId}`)
       .then((data) => {
         if (!alive) return
@@ -45,41 +44,6 @@ export function HandoverSnapshotsPage() {
     selectedSnapshotId && items.some((item) => item.id === selectedSnapshotId)
       ? selectedSnapshotId
       : (items[0]?.id ?? null)
-
-  useEffect(() => {
-    if (!activeId) {
-      setSelected(null)
-      return
-    }
-    let alive = true
-    setDetailLoading(true)
-    setSelected(null)
-    apiGet<HandoffSnapshotDetail>(`/handoff-snapshots/${activeId}`)
-      .then((data) => {
-        if (!alive) return
-        setSelected(data)
-      })
-      .catch(() => {
-        if (!alive) return
-        setSelected(null)
-      })
-      .finally(() => {
-        if (alive) setDetailLoading(false)
-      })
-    return () => {
-      alive = false
-    }
-  }, [activeId])
-
-  const selectedIndex = items.findIndex((item) => item.id === activeId)
-  const duplicateSnapshotLabels = useMemo(() => {
-    if (!selected || items.length < 2) return []
-    const signature =
-      selected.allocationSignature ?? allocationSignatureFromNurseBlocks(selected.nurseBlocks)
-    return items
-      .filter((item) => item.id !== activeId && item.allocationSignature === signature)
-      .map((item) => formatSnapshotDateTime(item.createdAt))
-  }, [activeId, items, selected])
 
   if (error) {
     return (
@@ -185,17 +149,8 @@ export function HandoverSnapshotsPage() {
         </aside>
 
         <section className="min-w-0">
-          {detailLoading ? (
-            <div className="grid min-h-[320px] place-items-center rounded-2xl bg-white p-8 text-sm text-slate-600 ring-1 ring-black/10">
-              讀取快照內容…
-            </div>
-          ) : selected ? (
-            <SnapshotDetail
-              snapshot={selected}
-              snapshotIndex={selectedIndex}
-              snapshotTotal={items.length}
-              duplicateSnapshotLabels={duplicateSnapshotLabels}
-            />
+          {activeId ? (
+            <HandoverSnapshotDetailSection key={activeId} activeId={activeId} items={items} />
           ) : (
             <EmptyDetail />
           )}
@@ -203,6 +158,67 @@ export function HandoverSnapshotsPage() {
       </div>
     </div>
   )
+}
+
+function HandoverSnapshotDetailSection({
+  activeId,
+  items,
+}: {
+  activeId: string
+  items: HandoffSnapshotListItem[]
+}) {
+  const [selected, setSelected] = useState<HandoffSnapshotDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(true)
+
+  useEffect(() => {
+    let alive = true
+    apiGet<HandoffSnapshotDetail>(`/handoff-snapshots/${activeId}`)
+      .then((data) => {
+        if (!alive) return
+        setSelected(data)
+      })
+      .catch(() => {
+        if (!alive) return
+        setSelected(null)
+      })
+      .finally(() => {
+        if (alive) setDetailLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [activeId])
+
+  const selectedIndex = items.findIndex((item) => item.id === activeId)
+  const duplicateSnapshotLabels = useMemo(() => {
+    if (!selected || items.length < 2) return []
+    const signature =
+      selected.allocationSignature ?? allocationSignatureFromNurseBlocks(selected.nurseBlocks)
+    return items
+      .filter((item) => item.id !== activeId && item.allocationSignature === signature)
+      .map((item) => formatSnapshotDateTime(item.createdAt))
+  }, [activeId, items, selected])
+
+  if (detailLoading) {
+    return (
+      <div className="grid min-h-[320px] place-items-center rounded-2xl bg-white p-8 text-sm text-slate-600 ring-1 ring-black/10">
+        讀取快照內容…
+      </div>
+    )
+  }
+
+  if (selected) {
+    return (
+      <SnapshotDetail
+        snapshot={selected}
+        snapshotIndex={selectedIndex}
+        snapshotTotal={items.length}
+        duplicateSnapshotLabels={duplicateSnapshotLabels}
+      />
+    )
+  }
+
+  return <EmptyDetail />
 }
 
 function formatSnapshotDateTime(iso: string) {

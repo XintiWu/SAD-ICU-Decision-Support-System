@@ -1,6 +1,6 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
-import { useOptionalAllocationCatalog } from './allocationCatalog'
+import { useOptionalAllocationCatalog } from './useAllocationCatalog'
 import { UNASSIGNED_DROP_ID } from './allocationDnd'
 import { AllocationBedChip } from './AllocationBedChip'
 

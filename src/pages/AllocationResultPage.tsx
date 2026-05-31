@@ -4,14 +4,19 @@ import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
 import { apiGet, type HandoffData } from '../api/client'
 import { formatNurseByShortName, formatNurseDisplay } from '../lib/nurseLabel'
-import { useShift } from '../context/ShiftContext'
+import { useShift } from '../context/useShift'
 
 type OverviewMeta = {
   onDutyCharge: { id?: string; shortName: string }
 }
 
 export function AllocationResultPage() {
-  const { shiftId, selectedShift } = useShift()
+  const { shiftId } = useShift()
+  return <AllocationResultPageBody key={shiftId} shiftId={shiftId} />
+}
+
+function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
+  const { selectedShift } = useShift()
   const [handoff, setHandoff] = useState<HandoffData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -19,8 +24,6 @@ export function AllocationResultPage() {
 
   useEffect(() => {
     let alive = true
-    setLoading(true)
-    setHandoff(null)
 
     Promise.all([
       apiGet<HandoffData>(`/handoff-sheets?shiftId=${shiftId}`),
@@ -45,13 +48,14 @@ export function AllocationResultPage() {
     }
   }, [shiftId])
 
-  const rows = handoff?.rows ?? []
-
   const stats = useMemo(() => {
+    const rows = handoff?.rows ?? []
     const changed = rows.filter((row) => row.currentNurse !== row.nextNurse).length
     const high = rows.filter((row) => row.burdenScore >= 22).length
     return { changed, high, total: rows.length }
-  }, [rows])
+  }, [handoff?.rows])
+
+  const rows = handoff?.rows ?? []
 
   const chargeLabel = chargeName
     ? formatNurseDisplay(chargeName, { role: 'charge_nurse' })

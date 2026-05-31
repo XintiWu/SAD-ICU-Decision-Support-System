@@ -58,13 +58,18 @@ import {
   resolveDropContainer,
 } from '../components/allocation/allocationDnd'
 import { useDragAutoScroll } from '../components/allocation/useDragAutoScroll'
-import { useShift } from '../context/ShiftContext'
+import { useShift } from '../context/useShift'
 
 type AllocationSnapshot = BoardState & { allocationRunId: string | null }
 
 const leaderOpts = { userId: CHARGE_USER_ID }
 
 export function ChargeAllocationPage() {
+  const { shiftId } = useShift()
+  return <ChargeAllocationPageBody key={shiftId} />
+}
+
+function ChargeAllocationPageBody() {
   const navigate = useNavigate()
   const { shiftId, selectedShift } = useShift()
 
@@ -141,60 +146,63 @@ export function ChargeAllocationPage() {
     else laneBodiesRef.current.delete(laneId)
   }, [])
 
-  const loadShiftBoard = useCallback(async () => {
-    setLoading(true)
-    setError(null)
-    try {
-      const [nurseRows, admissionRows, latestRun, burdenRows, statRows] = await Promise.all([
-        apiGet<ApiNurse[]>(`/nurses?shiftId=${shiftId}`),
-        apiGet<ApiAdmission[]>(`/admissions?shiftId=${shiftId}&status=active`),
-        apiGet<AllocationRun | null>(`/allocation-runs/current?shiftId=${shiftId}`),
-        apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`),
-        apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${shiftId}`).catch(() => []),
-      ])
+  useEffect(() => {
+    let alive = true
+    void (async () => {
+      try {
+        const [nurseRows, admissionRows, latestRun, burdenRows, statRows] = await Promise.all([
+          apiGet<ApiNurse[]>(`/nurses?shiftId=${shiftId}`),
+          apiGet<ApiAdmission[]>(`/admissions?shiftId=${shiftId}&status=active`),
+          apiGet<AllocationRun | null>(`/allocation-runs/current?shiftId=${shiftId}`),
+          apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`),
+          apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${shiftId}`).catch(() => []),
+        ])
+        if (!alive) return
 
-      const allocatable = nurseRows.filter((n) => n.role === 'nurse' || n.role === 'charge_nurse')
-      const ids = allocatable.map((n) => n.id)
-      const nextCatalog = buildPatientCatalog(admissionRows)
-      mergeBurdenIntoCatalog(nextCatalog, burdenRows)
-      mergeStatIntoCatalog(nextCatalog, statRows)
-      setNurses(allocatable)
-      setAdmissions(admissionRows)
-      setBurdenAssessments(burdenRows)
-      setStatOrders(statRows)
+        const allocatable = nurseRows.filter((n) => n.role === 'nurse' || n.role === 'charge_nurse')
+        const ids = allocatable.map((n) => n.id)
+        const nextCatalog = buildPatientCatalog(admissionRows)
+        mergeBurdenIntoCatalog(nextCatalog, burdenRows)
+        mergeStatIntoCatalog(nextCatalog, statRows)
+        setNurses(allocatable)
+        setAdmissions(admissionRows)
+        setBurdenAssessments(burdenRows)
+        setStatOrders(statRows)
+        setError(null)
 
-      if (latestRun?.allocationRunId) {
-        applyRunToCatalog(nextCatalog, latestRun)
-        const board = runToBoardState(latestRun, ids)
-        setCatalog(new Map(nextCatalog))
-        setUnassigned(board.unassigned)
-        setByNurse(board.byNurse)
-        setAllocationRunId(latestRun.allocationRunId)
-        setRunStatus(latestRun.status)
-        setSuggestedOwner(invertBoard(board.byNurse))
-      } else {
-        const board = emptyBoardState(
-          admissionRows.map((a) => a.admissionId),
-          ids,
-        )
-        setCatalog(new Map(nextCatalog))
-        setUnassigned(board.unassigned)
-        setByNurse(board.byNurse)
-        setAllocationRunId(null)
-        setRunStatus('none')
-        setSuggestedOwner(new Map())
+        if (latestRun?.allocationRunId) {
+          applyRunToCatalog(nextCatalog, latestRun)
+          const board = runToBoardState(latestRun, ids)
+          setCatalog(new Map(nextCatalog))
+          setUnassigned(board.unassigned)
+          setByNurse(board.byNurse)
+          setAllocationRunId(latestRun.allocationRunId)
+          setRunStatus(latestRun.status)
+          setSuggestedOwner(invertBoard(board.byNurse))
+        } else {
+          const board = emptyBoardState(
+            admissionRows.map((a) => a.admissionId),
+            ids,
+          )
+          setCatalog(new Map(nextCatalog))
+          setUnassigned(board.unassigned)
+          setByNurse(board.byNurse)
+          setAllocationRunId(null)
+          setRunStatus('none')
+          setSuggestedOwner(new Map())
+        }
+        setUndoStack([])
+      } catch (err) {
+        if (!alive) return
+        setError(err instanceof Error ? err.message : '載入分床資料失敗')
+      } finally {
+        if (alive) setLoading(false)
       }
-      setUndoStack([])
-    } catch (err) {
-      setError(err instanceof Error ? err.message : '載入分床資料失敗')
-    } finally {
-      setLoading(false)
+    })()
+    return () => {
+      alive = false
     }
   }, [shiftId])
-
-  useEffect(() => {
-    void loadShiftBoard()
-  }, [loadShiftBoard])
 
   function pushUndoFromRef() {
     const { unassigned: u, byNurse: b, allocationRunId: runId } = allocationRef.current

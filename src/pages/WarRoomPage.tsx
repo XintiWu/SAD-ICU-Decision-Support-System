@@ -4,7 +4,7 @@ import { createPortal } from 'react-dom'
 import { apiGet, apiPatch, CURRENT_NURSE_USER_ID, type ApiTask, type WarRoomData } from '../api/client'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
-import { useShift } from '../context/ShiftContext'
+import { useShift } from '../context/useShift'
 
 type WarRoomTask = {
   id: string
@@ -39,7 +39,12 @@ type NurseCardModel = {
 }
 
 export function WarRoomPage() {
-  const { shiftId, selectedShift } = useShift()
+  const { shiftId } = useShift()
+  return <WarRoomPageBody key={shiftId} shiftId={shiftId} />
+}
+
+function WarRoomPageBody({ shiftId }: { shiftId: string }) {
+  const { selectedShift } = useShift()
   const chargeNurseId = useChargeNurseId()
   const actorId = chargeNurseId ?? CURRENT_NURSE_USER_ID
   const [data, setData] = useState<WarRoomData | null>(null)
@@ -74,8 +79,6 @@ export function WarRoomPage() {
 
   useEffect(() => {
     let alive = true
-    setLoading(true)
-    setData(null)
 
     load({ initial: true })
       .finally(() => {

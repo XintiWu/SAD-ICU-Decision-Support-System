@@ -3,8 +3,8 @@ import { NavLink } from 'react-router-dom'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatShiftOption } from '../lib/shiftLabel'
 import { formatNurseDisplay } from '../lib/nurseLabel'
-import { useShift } from '../context/ShiftContext'
-import { useUser } from '../context/UserContext'
+import { useShift } from '../context/useShift'
+import { useUser } from '../context/useUser'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { shifts, shiftId, selectedShift, setShiftId, loading, error } = useShift()
