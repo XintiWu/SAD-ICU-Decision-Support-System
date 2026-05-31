@@ -9,10 +9,12 @@ import { AllocationResultPage } from './pages/AllocationResultPage'
 import { OrdersImportPage } from './pages/OrdersImportPage'
 import { HandoverSnapshotsPage } from './pages/HandoverSnapshotsPage'
 import { ShiftProvider } from './context/ShiftContext'
+import { UserProvider } from './context/UserContext'
 
 function App() {
   return (
     <ShiftProvider>
+      <UserProvider>
       <AppShell>
         <Routes>
           <Route path="/" element={<Navigate to="/nurse/overview" replace />} />
@@ -28,6 +30,7 @@ function App() {
           <Route path="*" element={<Navigate to="/nurse/overview" replace />} />
         </Routes>
       </AppShell>
+      </UserProvider>
     </ShiftProvider>
   )
 }

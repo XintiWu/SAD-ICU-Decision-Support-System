@@ -1,6 +1,42 @@
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://127.0.0.1:8787/api/v1'
+/** 開發時走 Vite proxy（/api/v1 → 8787），避免跨域；也可設 VITE_API_BASE_URL 覆寫 */
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 
+/** 後端無法連線時的預設班別（與 seed / demo 一致） */
 export const CURRENT_SHIFT_ID = '00000000-0000-0000-0000-000000000201'
+
+/** demo 護理師（nurse），一般 API 預設使用者 */
+export const CURRENT_NURSE_USER_ID = '00000000-0000-0000-0000-000000000101'
+
+/** demo 小組長（charge_nurse），呼叫分床 API 時帶入 */
+export const CHARGE_USER_ID = '00000000-0000-0000-0000-000000000110'
+
+export type ApiUser = {
+  id: string
+  name: string
+  displayName: string
+  shortName: string
+  role: string
+  currentShiftId: string
+}
+
+export type ApiNurse = {
+  id: string
+  displayName: string
+  shortName: string
+  role: string
+  seniorityLevel: string | null
+  isActive: boolean
+}
+
+export type ApiShift = {
+  id: string
+  shiftKey: 'day' | 'evening' | 'night'
+  label: string
+  startsAt: string
+  endsAt: string
+  status: string
+  chargeNurse: { id: string; shortName: string } | null
+}
 
 export type ApiAdmission = {
   admissionId: string
@@ -45,14 +81,56 @@ export type ApiTask = {
   id: string
   admissionId: string
   bedLabel: string
+  bedDetail?: string
   title: string
   kind: '給藥' | '檢查' | '監測' | '家屬' | '紀錄'
   urgent: boolean
   status: 'pending' | 'done' | 'cancelled'
   done: boolean
   completedAt: string | null
+  createdAt?: string
   points: number
   source: string
+}
+
+export type HandoffSnapshotListItem = {
+  id: string
+  allocationRunId: string
+  shiftId: string
+  shiftKey: string
+  shiftLabel: string
+  createdAt: string
+  createdBy: string
+  summary: {
+    patientCount: number
+    nurseCount: number
+    statTotal: number
+    taskTotal: number
+    taskOpen: number
+    taskUrgentOpen: number
+    avgLoad: number
+    maxLoad: number
+  }
+}
+
+export type HandoffSnapshotDetail = HandoffSnapshotListItem & {
+  allocation: {
+    unassignedCount: number
+    stats: AllocationRun['stats']
+  }
+  nurseBlocks: Array<{
+    nurseId: string
+    nurseName: string
+    load: number
+    beds: Array<{
+      admissionId: string
+      bedLabel: string
+      label: string
+      score: number
+      tone: 'high' | 'mid' | 'low'
+    }>
+  }>
+  tasks: ApiTask[]
 }
 
 export type AllocationPatient = {
@@ -66,10 +144,10 @@ export type AllocationPatient = {
 }
 
 export type AllocationRun = {
-  allocationRunId: string
+  allocationRunId: string | null
   shiftId: string
-  targetShiftId: string
-  status: 'draft' | 'confirmed' | 'cancelled'
+  targetShiftId: string | null
+  status: 'draft' | 'confirmed' | 'cancelled' | 'none'
   suggestedAt: string
   confirmedAt: string | null
   unassigned: AllocationPatient[]
@@ -114,30 +192,37 @@ export type HandoffData = {
   }>
 }
 
-export async function apiGet<T>(path: string): Promise<T> {
-  return apiRequest<T>(path)
+export async function apiGet<T>(path: string, opts?: ApiRequestOptions): Promise<T> {
+  return apiRequest<T>(path, opts)
 }
 
-export async function apiPost<T>(path: string, body: unknown): Promise<T> {
-  return apiRequest<T>(path, { method: 'POST', body })
+export async function apiPost<T>(path: string, body: unknown, opts?: ApiRequestOptions): Promise<T> {
+  return apiRequest<T>(path, { ...opts, method: 'POST', body })
 }
 
-export async function apiPut<T>(path: string, body: unknown): Promise<T> {
-  return apiRequest<T>(path, { method: 'PUT', body })
+export async function apiPut<T>(path: string, body: unknown, opts?: ApiRequestOptions): Promise<T> {
+  return apiRequest<T>(path, { ...opts, method: 'PUT', body })
 }
 
-export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  return apiRequest<T>(path, { method: 'PATCH', body })
+export async function apiPatch<T>(path: string, body: unknown, opts?: ApiRequestOptions): Promise<T> {
+  return apiRequest<T>(path, { ...opts, method: 'PATCH', body })
 }
 
-async function apiRequest<T>(
-  path: string,
-  options: { method?: string; body?: unknown } = {},
-): Promise<T> {
+type ApiRequestOptions = {
+  method?: string
+  body?: unknown
+  userId?: string
+}
+
+async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Promise<T> {
+  const headers: Record<string, string> = {}
+  if (options.body !== undefined) headers['content-type'] = 'application/json'
+  if (options.userId) headers['X-User-Id'] = options.userId
+
   const response = await fetch(`${API_BASE_URL}${path}`, {
     method: options.method ?? 'GET',
-    headers: options.body ? { 'content-type': 'application/json' } : undefined,
-    body: options.body ? JSON.stringify(options.body) : undefined,
+    headers: Object.keys(headers).length ? headers : undefined,
+    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
   })
   const payload = await response.json()
   if (!response.ok || payload.error) {

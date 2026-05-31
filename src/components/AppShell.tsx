@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
-import { getCurrentNurseLabel, getCurrentShift } from '../state/demoStore'
+import { shiftStatusLabel, useShift } from '../context/ShiftContext'
+import { useUser } from '../context/UserContext'
 
 export function AppShell({ children }: { children: ReactNode }) {
-  const shift = getCurrentShift()
-  const shiftLabel = shift === 'day' ? '白班 06:00–14:00' : '—'
-  const nurse = getCurrentNurseLabel()
+  const { shifts, shiftId, selectedShift, setShiftId, loading, error } = useShift()
+  const { user, loading: userLoading } = useUser()
+  const nurse = user?.shortName ?? (userLoading ? '…' : '—')
+
   return (
     <div className="min-h-dvh bg-canvas text-slate-800">
       <header className="sticky top-0 z-10 border-b border-[#2D3748] bg-[#1E2533]">
@@ -30,10 +32,35 @@ export function AppShell({ children }: { children: ReactNode }) {
             <TopNavLink to="/leader/handover-snapshots">交班快照</TopNavLink>
           </nav>
 
-          <div className="flex items-center gap-2">
-            <span className="rounded-full bg-[#243047] px-3 py-1 text-xs font-medium text-[#94A3B8]">
-              {shiftLabel}
-            </span>
+          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
+            <label className="sr-only" htmlFor="shift-select">
+              班別
+            </label>
+            <select
+              id="shift-select"
+              value={shiftId}
+              disabled={loading || shifts.length === 0}
+              onChange={(e) => setShiftId(e.target.value)}
+              className="max-w-[min(100vw-12rem,18rem)] truncate rounded-full border-0 bg-white px-3 py-1 text-xs font-semibold text-[#1E2533] shadow-sm ring-1 ring-black/10 focus:outline-none focus:ring-2 focus:ring-[#38BDF8]/50 disabled:opacity-60"
+              title={selectedShift?.label ?? error ?? undefined}
+            >
+              {loading ? (
+                <option value={shiftId}>載入班別…</option>
+              ) : shifts.length === 0 ? (
+                <option value={shiftId}>無班別資料</option>
+              ) : (
+                shifts.map((s) => (
+                  <option key={s.id} value={s.id}>
+                    {formatShiftOption(s)}
+                  </option>
+                ))
+              )}
+            </select>
+            {error && !loading ? (
+              <span className="max-w-[14rem] truncate text-[10px] font-medium text-[#fca5a5]" title={error}>
+                {error.includes('endpoint') ? '請重啟後端 npm run api:dev' : error}
+              </span>
+            ) : null}
             <span className="rounded-full bg-[#243047] px-3 py-1 text-xs font-medium text-[#94A3B8]">
               護理師 {nurse}
             </span>
@@ -44,6 +71,15 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="mx-auto w-full px-4 py-5 md:px-8">{children}</main>
     </div>
   )
+}
+
+function formatShiftOption(shift: { label: string; startsAt: string; status: string }) {
+  const date = new Date(shift.startsAt).toLocaleDateString('zh-TW', {
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Taipei',
+  })
+  return `${date} ${shift.label}（${shiftStatusLabel(shift.status)}）`
 }
 
 function TopNavLink({ to, children }: { to: string; children: ReactNode }) {
@@ -63,4 +99,3 @@ function TopNavLink({ to, children }: { to: string; children: ReactNode }) {
     </NavLink>
   )
 }
-

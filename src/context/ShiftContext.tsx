@@ -1,42 +1,49 @@
-/* eslint-disable react-refresh/only-export-components */
-import { createContext, useContext, useEffect, useState, type ReactNode } from 'react'
-import { CURRENT_SHIFT_ID, apiGet } from '../api/client'
+import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { apiGet, CURRENT_SHIFT_ID, type ApiShift } from '../api/client'
 
-type CurrentShift = {
-  shiftId?: string
-  id?: string
-}
+const STORAGE_KEY = 'icu-selected-shift-id'
 
 type ShiftContextValue = {
+  shifts: ApiShift[]
   shiftId: string
+  selectedShift: ApiShift | null
+  setShiftId: (id: string) => void
   loading: boolean
   error: string | null
 }
 
-const ShiftContext = createContext<ShiftContextValue>({
-  shiftId: CURRENT_SHIFT_ID,
-  loading: true,
-  error: null,
-})
+const ShiftContext = createContext<ShiftContextValue | null>(null)
 
 export function ShiftProvider({ children }: { children: ReactNode }) {
-  const [shiftId, setShiftId] = useState(CURRENT_SHIFT_ID)
+  const [shifts, setShifts] = useState<ApiShift[]>([])
+  const [shiftId, setShiftIdState] = useState<string>(() => {
+    if (typeof window === 'undefined') return CURRENT_SHIFT_ID
+    return localStorage.getItem(STORAGE_KEY) ?? CURRENT_SHIFT_ID
+  })
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
 
-    apiGet<CurrentShift>('/shifts/current')
-      .then((data) => {
+    Promise.all([apiGet<ApiShift[]>('/shifts'), apiGet<ApiShift>('/shifts/current')])
+      .then(([list, current]) => {
         if (!alive) return
-        setShiftId(data.shiftId ?? data.id ?? CURRENT_SHIFT_ID)
+        setShifts(list)
+        const stored = localStorage.getItem(STORAGE_KEY)
+        const nextId =
+          stored && list.some((s) => s.id === stored)
+            ? stored
+            : (current?.id ?? list[0]?.id ?? CURRENT_SHIFT_ID)
+        setShiftIdState(nextId)
+        localStorage.setItem(STORAGE_KEY, nextId)
         setError(null)
       })
-      .catch((err) => {
+      .catch((err: unknown) => {
         if (!alive) return
-        setError(err instanceof Error ? err.message : '讀取目前班別失敗')
-        setShiftId(CURRENT_SHIFT_ID)
+        const message = err instanceof Error ? err.message : '載入班別失敗'
+        setError(message)
+        setShifts([])
       })
       .finally(() => {
         if (alive) setLoading(false)
@@ -47,13 +54,34 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
     }
   }, [])
 
-  return (
-    <ShiftContext.Provider value={{ shiftId, loading, error }}>
-      {children}
-    </ShiftContext.Provider>
+  const setShiftId = useCallback((id: string) => {
+    setShiftIdState(id)
+    localStorage.setItem(STORAGE_KEY, id)
+  }, [])
+
+  const selectedShift = useMemo(
+    () => shifts.find((s) => s.id === shiftId) ?? shifts[0] ?? null,
+    [shifts, shiftId],
   )
+
+  const value = useMemo(
+    () => ({ shifts, shiftId, selectedShift, setShiftId, loading, error }),
+    [shifts, shiftId, selectedShift, setShiftId, loading, error],
+  )
+
+  return <ShiftContext.Provider value={value}>{children}</ShiftContext.Provider>
 }
 
 export function useShift() {
-  return useContext(ShiftContext)
+  const ctx = useContext(ShiftContext)
+  if (!ctx) throw new Error('useShift must be used within ShiftProvider')
+  return ctx
+}
+
+export function shiftStatusLabel(status: string) {
+  if (status === 'confirmed') return '已確認'
+  if (status === 'open') return '進行中'
+  if (status === 'allocating') return '分配中'
+  if (status === 'closed') return '已結束'
+  return status
 }
