@@ -246,9 +246,9 @@ export function BurdenFormPage() {
               </p>
             ) : null}
             <p className="mt-2">
-              Demo 登入為陳O媚，僅在 <strong className="font-semibold text-slate-800">5/19 白班</strong>、
-              <strong className="font-semibold text-slate-800">5/8 白班</strong> 有排班與分床；選 5/20
-              或其他班別會是空的。請從右上角切換班別。
+              請確認右上角<strong className="font-semibold text-slate-800">班別</strong>與
+              <strong className="font-semibold text-slate-800">登入身份</strong>
+              一致：只有「本分床分配給該護理師」的病患才會出現。若此班別沒有你的分床，列表會是空的。
             </p>
           </div>
         </div>

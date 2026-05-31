@@ -54,7 +54,6 @@ import {
 } from '../components/allocation/allocationDnd'
 import { useDragAutoScroll } from '../components/allocation/useDragAutoScroll'
 import { useShift } from '../context/ShiftContext'
-import type { NurseId, PatientId } from '../data/allocationMock'
 
 type AllocationSnapshot = BoardState & { allocationRunId: string | null }
 
@@ -97,7 +96,7 @@ export function ChargeAllocationPage() {
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 6 } }))
   const collisionDetection = useMemo(
-    () => createAllocationCollisionDetection(nurseIds as NurseId[]),
+    () => createAllocationCollisionDetection(nurseIds),
     [nurseIds],
   )
 
@@ -213,7 +212,7 @@ export function ChargeAllocationPage() {
   }
 
   function applyContainers(containers: ReturnType<typeof buildContainers>) {
-    const { unassigned: u, byNurse: b } = containersToState(containers, nurseIds as NurseId[])
+    const { unassigned: u, byNurse: b } = containersToState(containers, nurseIds)
     setUnassigned(u)
     setByNurse(b)
     const runId = allocationRef.current.allocationRunId
@@ -234,14 +233,14 @@ export function ChargeAllocationPage() {
     const overId = e.over?.id
     if (!overId) return
     lastOverRef.current = overId
-    if (isContainerDroppableId(overId, nurseIds as NurseId[])) {
+    if (isContainerDroppableId(overId, nurseIds)) {
       lastContainerOverRef.current = overId
     }
   }
 
   function onDragEnd(e: DragEndEvent) {
     if (readonly) return
-    const activePid = String(e.active.id) as PatientId
+    const activePid = String(e.active.id)
     setActiveId(null)
 
     let overId = e.over?.id ?? lastOverRef.current
@@ -253,18 +252,18 @@ export function ChargeAllocationPage() {
     if (!overId) return
 
     const containers = buildContainers(
-      allocationRef.current.unassigned as PatientId[],
-      allocationRef.current.byNurse as Record<NurseId, PatientId[]>,
-      nurseIds as NurseId[],
+      allocationRef.current.unassigned,
+      allocationRef.current.byNurse,
+      nurseIds,
     )
-    const toKey = resolveDropContainer(overId, activePid, containers, nurseIds as NurseId[])
+    const toKey = resolveDropContainer(overId, activePid, containers, nurseIds)
     if (!toKey) return
 
     const next = applyDragMove({
       activeId: activePid,
       overId,
       containers,
-      nurseIds: nurseIds as NurseId[],
+      nurseIds,
     })
     if (!next || containersEqual(next, containers)) return
 
@@ -435,6 +434,7 @@ export function ChargeAllocationPage() {
         <ConfirmAllocationDialog
           stats={stats}
           totalBeds={totalBeds}
+          nurseNames={nurseNames}
           onConfirm={handleConfirm}
           onCancel={() => setConfirmOpen(false)}
         />

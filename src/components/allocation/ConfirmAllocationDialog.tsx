@@ -1,14 +1,19 @@
-import { NURSES } from '../../data/allocationMock'
 import type { AllocationStats } from './allocationUtils'
 
 type Props = {
   stats: AllocationStats
   totalBeds: number
+  nurseNames?: Record<string, string>
   onConfirm: () => void
   onCancel: () => void
 }
 
-export function ConfirmAllocationDialog({ stats, totalBeds, onConfirm, onCancel }: Props) {
+function resolveName(nurseNames: Record<string, string> | undefined, nurseId: string | null) {
+  if (!nurseId) return '—'
+  return nurseNames?.[nurseId] ?? nurseId.slice(-4)
+}
+
+export function ConfirmAllocationDialog({ stats, totalBeds, nurseNames, onConfirm, onCancel }: Props) {
   const warnings: string[] = []
   if (stats.unassignedCount > 0) warnings.push(`仍有 ${stats.unassignedCount} 床未分配`)
   if (stats.spread > 10) warnings.push(`負荷差距達 ${stats.spread} 分，建議再平衡`)
@@ -28,8 +33,8 @@ export function ConfirmAllocationDialog({ stats, totalBeds, onConfirm, onCancel 
           <li>· 班級平均負荷 {stats.avg}</li>
           {stats.maxNurseId && stats.minNurseId ? (
             <li>
-              · 最高 {NURSES[stats.maxNurseId].shortName} {stats.max} / 最低{' '}
-              {NURSES[stats.minNurseId].shortName} {stats.min}
+              · 最高 {resolveName(nurseNames, stats.maxNurseId)} {stats.max} / 最低{' '}
+              {resolveName(nurseNames, stats.minNurseId)} {stats.min}
             </li>
           ) : null}
         </ul>

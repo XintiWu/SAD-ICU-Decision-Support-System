@@ -1,9 +1,8 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
-import type { PatientId } from '../../data/allocationMock'
 import { AllocationBedChip } from './AllocationBedChip'
 import { useOptionalAllocationCatalog } from './allocationCatalog'
-import { enrichBed, LOAD_BAR_MAX, type NurseLoadTone } from './allocationUtils'
+import { LOAD_BAR_MAX, type NurseLoadTone } from './allocationUtils'
 
 const barClass: Record<NurseLoadTone, string> = {
   high: 'bg-[#e85d4a]',
@@ -85,7 +84,7 @@ export function AllocationNurseLane({
           ) : (
             <div className="grid grid-cols-3 items-start gap-1.5">
               {items.map((pid) => {
-                const bed = catalogCtx?.getBed(pid) ?? (pid.startsWith('p') ? enrichBed(pid as PatientId) : null)
+                const bed = catalogCtx?.getBed(pid)
                 if (!bed) return null
                 return (
                   <AllocationBedChip

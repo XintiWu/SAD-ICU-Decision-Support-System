@@ -5,8 +5,7 @@ import { useUser } from '../context/UserContext'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { shifts, shiftId, selectedShift, setShiftId, loading, error } = useShift()
-  const { user, loading: userLoading } = useUser()
-  const nurse = user?.shortName ?? (userLoading ? '…' : '—')
+  const { user, userId, setUserId, nurseOptions, loading: userLoading } = useUser()
 
   return (
     <div className="min-h-dvh bg-canvas text-slate-800">
@@ -61,9 +60,30 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {error.includes('endpoint') ? '請重啟後端 npm run api:dev' : error}
               </span>
             ) : null}
-            <span className="rounded-full bg-[#243047] px-3 py-1 text-xs font-medium text-[#94A3B8]">
-              護理師 {nurse}
-            </span>
+            <label className="sr-only" htmlFor="user-select">
+              登入身份
+            </label>
+            <select
+              id="user-select"
+              value={userId}
+              disabled={userLoading || nurseOptions.length === 0}
+              onChange={(e) => setUserId(e.target.value)}
+              className="max-w-[min(100vw-12rem,9rem)] truncate rounded-full border-0 bg-[#243047] px-3 py-1 text-xs font-semibold text-[#E2E8F0] ring-1 ring-[#2D3748] focus:outline-none focus:ring-2 focus:ring-[#38BDF8]/50 disabled:opacity-60"
+              title={user?.displayName ?? undefined}
+            >
+              {userLoading ? (
+                <option value={userId}>載入…</option>
+              ) : nurseOptions.length === 0 ? (
+                <option value={userId}>{user?.shortName ?? '護理師'}</option>
+              ) : (
+                nurseOptions.map((n) => (
+                  <option key={n.id} value={n.id}>
+                    {n.shortName}
+                    {n.role === 'charge_nurse' ? '（小組長）' : ''}
+                  </option>
+                ))
+              )}
+            </select>
           </div>
         </div>
       </header>

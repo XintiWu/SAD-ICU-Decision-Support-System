@@ -1,10 +1,8 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
-import type { PatientId } from '../../data/allocationMock'
+import { useOptionalAllocationCatalog } from './allocationCatalog'
 import { UNASSIGNED_DROP_ID } from './allocationDnd'
 import { AllocationBedChip } from './AllocationBedChip'
-import { useOptionalAllocationCatalog } from './allocationCatalog'
-import { enrichBed } from './allocationUtils'
 
 type Props = {
   items: string[]
@@ -80,7 +78,7 @@ export function AllocationUnassignedStrip({
             {items.length > 0 ? (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                 {items.map((pid) => {
-                  const bed = catalogCtx?.getBed(pid) ?? (pid.startsWith('p') ? enrichBed(pid as PatientId) : null)
+                  const bed = catalogCtx?.getBed(pid)
                   if (!bed) return null
                   return (
                     <AllocationBedChip

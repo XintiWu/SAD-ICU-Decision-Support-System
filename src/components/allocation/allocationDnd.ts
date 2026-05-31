@@ -4,7 +4,7 @@ import {
   type CollisionDetection,
   type UniqueIdentifier,
 } from '@dnd-kit/core'
-import type { NurseId, PatientId } from '../../data/allocationMock'
+import type { NurseId, PatientId } from '../../types/allocation'
 
 export type AllocationContainers = Record<string, PatientId[]>
 

@@ -1,8 +1,6 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AllocationPatientHoverDetail } from './AllocationPatientHoverDetail'
-import { getPatientDragDetail } from './allocationUtils'
-import type { PatientId } from '../../data/allocationMock'
 import { useOptionalAllocationCatalog } from './allocationCatalog'
 
 type Props = {
@@ -24,9 +22,7 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
     setPos({ left: rect.left, top: rect.bottom + 8 })
   }, [])
 
-  const patient =
-    catalogCtx?.getBed(patientId) ??
-    (patientId.startsWith('p') ? getPatientDragDetail(patientId as PatientId) : null)
+  const patient = catalogCtx?.getBed(patientId) ?? null
 
   function handleEnter() {
     if (disabled || !patient) return

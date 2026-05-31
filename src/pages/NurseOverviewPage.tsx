@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, type ApiAdmission, type BurdenAssessment } from '../api/client'
 import { useShift } from '../context/ShiftContext'
+import { useUser } from '../context/UserContext'
 
 type OverviewData = {
   onDutyCharge: { shortName: string }
@@ -10,6 +11,7 @@ type OverviewData = {
 
 export function NurseOverviewPage() {
   const { shiftId } = useShift()
+  const { userId } = useUser()
   const [overview, setOverview] = useState<OverviewData | null>(null)
   const [burdens, setBurdens] = useState<BurdenAssessment[]>([])
   const [error, setError] = useState<string | null>(null)
@@ -21,8 +23,8 @@ export function NurseOverviewPage() {
 
     const load = () => {
       Promise.all([
-        apiGet<OverviewData>(`/nurse/overview?shiftId=${shiftId}`),
-        apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`),
+        apiGet<OverviewData>(`/nurse/overview?shiftId=${shiftId}`, { userId }),
+        apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`, { userId }),
       ])
         .then(([overviewData, burdenData]) => {
           if (!alive) return
@@ -43,7 +45,7 @@ export function NurseOverviewPage() {
       alive = false
       window.clearInterval(timer)
     }
-  }, [shiftId])
+  }, [shiftId, userId])
 
   const burdenByAdmission = useMemo(
     () => new Map(burdens.map((b) => [b.admissionId, b])),

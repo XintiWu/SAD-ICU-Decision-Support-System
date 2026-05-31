@@ -47,7 +47,7 @@ function formatTaskTime(iso?: string | null) {
 }
 
 export function NurseTodoPage() {
-  const { shiftId } = useShift()
+  const { shiftId, selectedShift } = useShift()
   const [orders, setOrders] = useState<StatOrder[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -167,7 +167,20 @@ export function NurseTodoPage() {
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           {beds.length === 0 ? (
             <p className="col-span-full py-8 text-center text-sm text-slate-500">
-              本班目前沒有待處理的 STAT 醫囑
+              {orders.length === 0 ? (
+                <>
+                  本班目前沒有待處理的 STAT 醫囑
+                  {selectedShift ? (
+                    <span className="mt-2 block text-xs text-slate-400">
+                      班別：{selectedShift.label}
+                      <br />
+                      Demo 資料目前僅 5/8 白班有 urgent tasks；其他班別需後端補 seed。
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                '目前無符合篩選條件的 STAT 醫囑'
+              )}
             </p>
           ) : null}
           {beds.map(([bedLabel, items]) => {

@@ -1,12 +1,9 @@
 import type { AllocationStats, NurseLoadRow } from './allocationUtils'
 import { formatDelta } from './allocationUtils'
-import { NURSES } from '../../data/allocationMock'
-import type { NurseId } from '../../data/allocationMock'
 
 function resolveNurseName(nurseNames: Record<string, string> | undefined, nurseId: string) {
   if (nurseNames?.[nurseId]) return nurseNames[nurseId]
-  const mock = NURSES[nurseId as NurseId]
-  return mock?.shortName ?? nurseId.slice(-4)
+  return nurseId.slice(-4)
 }
 
 const barClass = {
