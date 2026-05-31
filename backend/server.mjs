@@ -80,7 +80,7 @@ async function handleRequest(req, res) {
           'GET /api/v1/war-room?shiftId={shiftId}',
           'GET /api/v1/handoff-sheets?shiftId={shiftId}',
           'GET /api/v1/handoff-snapshots',
-          'GET /api/v1/handoff-snapshots/{allocationRunId}',
+          'GET /api/v1/handoff-snapshots/{snapshotId}',
         ],
       },
     })
@@ -126,6 +126,7 @@ async function handleRequest(req, res) {
       data: await listStatOrders({
         shiftId,
         assignee: url.searchParams.get('assignee') ?? 'all',
+        includeCompleted: url.searchParams.get('includeCompleted') === 'true',
         userId: getUserId(req, url),
       }),
     })
@@ -309,7 +310,7 @@ async function handleRequest(req, res) {
   if (handoffSnapshotMatch) {
     assertMethod(req, 'GET')
     sendJson(res, {
-      data: await getHandoffSnapshot({ allocationRunId: decodeURIComponent(handoffSnapshotMatch[1]) }),
+      data: await getHandoffSnapshot({ snapshotId: decodeURIComponent(handoffSnapshotMatch[1]) }),
     })
     return
   }

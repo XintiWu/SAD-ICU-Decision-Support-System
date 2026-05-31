@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, type ApiStatOrder } from '../api/client'
 import { useShift } from '../context/ShiftContext'
-import { useUser } from '../context/UserContext'
 
 type StatOrderKind = ApiStatOrder['kind']
 const KINDS: StatOrderKind[] = ['檢查', '治療', '給藥', '監測', '其他']
@@ -12,7 +11,6 @@ const KIND_WEIGHT: Record<StatOrderKind, number> = {
 
 export function NurseTodoPage() {
   const { shiftId } = useShift()
-  const { userId } = useUser()
   const [kindFilter, setKindFilter] = useState<Set<StatOrderKind>>(new Set())
   const [orders, setOrders] = useState<ApiStatOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -23,7 +21,9 @@ export function NurseTodoPage() {
     let alive = true
     setLoading(true)
     setError(null)
-    apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${shiftId}&assignee=me`, { userId })
+    apiGet<ApiStatOrder[]>(
+      `/stat-orders?shiftId=${shiftId}&assignee=all&includeCompleted=true`,
+    )
       .then((data) => {
         if (!alive) return
         setOrders(sortByOrderedAt(data))
@@ -38,7 +38,7 @@ export function NurseTodoPage() {
     return () => {
       alive = false
     }
-  }, [shiftId, userId])
+  }, [shiftId])
 
   const shown = useMemo(() => {
     if (kindFilter.size === 0) return orders
@@ -78,7 +78,7 @@ export function NurseTodoPage() {
           <div>
             <div className="text-sm font-semibold text-slate-900">突發立即性醫囑 STAT TODO</div>
             <div className="mt-1 text-xs text-slate-600">
-              僅顯示您負責病患的 STAT 醫囑；僅供提醒，不需在此標記完成
+              顯示本班全部病患的 STAT 醫囑；僅供提醒，不受戰情室勾選影響
             </div>
           </div>
           <div className="rounded-full bg-[#ffe8e1] px-3 py-1.5 text-xs font-semibold text-[#b3341f]">
@@ -131,7 +131,7 @@ export function NurseTodoPage() {
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           {beds.length === 0 ? (
             <p className="col-span-full py-8 text-center text-sm text-slate-500">
-              目前無符合篩選條件的 STAT 醫囑
+              {kindFilter.size > 0 ? '目前無符合類型篩選的 STAT 醫囑' : '本班目前沒有 STAT 醫囑'}
             </p>
           ) : null}
           {beds.map(([bedLabel, items]) => {

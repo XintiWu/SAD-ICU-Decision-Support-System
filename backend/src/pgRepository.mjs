@@ -605,18 +605,23 @@ export async function listHandoffSnapshots({ shiftId } = {}) {
   return result.rows.map(formatHandoffSnapshotListItem)
 }
 
-export async function getHandoffSnapshot({ allocationRunId } = {}) {
+export async function getHandoffSnapshot({ snapshotId, allocationRunId } = {}) {
+  const lookupId = snapshotId ?? allocationRunId
+  if (!lookupId) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'snapshotId 為必填', { field: 'snapshotId' })
+  }
   const row = await query(
     `
     select hs.*, s.shift_key, s.starts_at, s.ends_at, n.short_name as created_by_name
     from handoff_snapshots hs
     join shifts s on s.id = hs.shift_id
     left join nurses n on n.id = hs.created_by
-    where hs.allocation_run_id = $1
+    where hs.id = $1 or hs.allocation_run_id = $1
+    limit 1
     `,
-    [allocationRunId],
+    [lookupId],
   )
-  if (!row.rows[0]) throw new ApiError(404, 'SNAPSHOT_NOT_FOUND', '找不到交班快照', { allocationRunId })
+  if (!row.rows[0]) throw new ApiError(404, 'SNAPSHOT_NOT_FOUND', '找不到交班快照', { snapshotId: lookupId })
   const snapshot = row.rows[0]
   return {
     ...formatHandoffSnapshotListItem(snapshot),
@@ -1088,15 +1093,28 @@ function buildNurseBlocks(run) {
   }))
 }
 
+function allocationSignatureFromBlocks(value) {
+  const blocks = parseNurseBlocks(value)
+  const pairs = []
+  for (const block of blocks) {
+    for (const bed of block.beds) {
+      pairs.push(`${bed.admissionId}:${block.nurseId}`)
+    }
+  }
+  pairs.sort()
+  return pairs.join('|')
+}
+
 function formatHandoffSnapshotListItem(row) {
   return {
-    id: row.allocation_run_id,
+    id: row.id,
     allocationRunId: row.allocation_run_id,
     shiftId: row.shift_id,
     shiftKey: row.shift_key,
     shiftLabel: shiftLabel(row),
     createdAt: row.created_at,
     createdBy: row.created_by_name ?? '小組長',
+    allocationSignature: allocationSignatureFromBlocks(row.nurse_blocks),
     summary: {
       patientCount: row.patient_count,
       nurseCount: row.nurse_count,

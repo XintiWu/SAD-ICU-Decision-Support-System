@@ -115,6 +115,7 @@ export type HandoffSnapshotListItem = {
   shiftLabel: string
   createdAt: string
   createdBy: string
+  allocationSignature: string
   summary: {
     patientCount: number
     nurseCount: number

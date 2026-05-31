@@ -1,5 +1,5 @@
-import { useEffect, useState } from 'react'
-import { Link, useSearchParams } from 'react-router-dom'
+import { useEffect, useMemo, useState } from 'react'
+import { Link } from 'react-router-dom'
 import { apiGet, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
 import { useShift } from '../context/ShiftContext'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
@@ -10,29 +10,27 @@ export function HandoverSnapshotsPage() {
   const [items, setItems] = useState<HandoffSnapshotListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
-  const [searchParams, setSearchParams] = useSearchParams()
-  const selectedId = searchParams.get('id') ?? null
+  const [selectedSnapshotId, setSelectedSnapshotId] = useState<string | null>(null)
   const [selected, setSelected] = useState<HandoffSnapshotDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(false)
-
-  useEffect(() => {
-    setSearchParams({}, { replace: true })
-  }, [shiftId, setSearchParams])
 
   useEffect(() => {
     let alive = true
     setLoading(true)
     setItems([])
+    setSelectedSnapshotId(null)
     setSelected(null)
     apiGet<HandoffSnapshotListItem[]>(`/handoff-snapshots?shiftId=${shiftId}`)
       .then((data) => {
         if (!alive) return
         setItems(data)
+        setSelectedSnapshotId(data[0]?.id ?? null)
         setError(null)
       })
       .catch((err) => {
         if (!alive) return
         setItems([])
+        setSelectedSnapshotId(null)
         setError(err instanceof Error ? err.message : '讀取交班快照失敗')
       })
       .finally(() => {
@@ -43,7 +41,10 @@ export function HandoverSnapshotsPage() {
     }
   }, [shiftId])
 
-  const activeId = selectedId ?? items[0]?.id ?? null
+  const activeId =
+    selectedSnapshotId && items.some((item) => item.id === selectedSnapshotId)
+      ? selectedSnapshotId
+      : (items[0]?.id ?? null)
 
   useEffect(() => {
     if (!activeId) {
@@ -52,6 +53,7 @@ export function HandoverSnapshotsPage() {
     }
     let alive = true
     setDetailLoading(true)
+    setSelected(null)
     apiGet<HandoffSnapshotDetail>(`/handoff-snapshots/${activeId}`)
       .then((data) => {
         if (!alive) return
@@ -68,6 +70,16 @@ export function HandoverSnapshotsPage() {
       alive = false
     }
   }, [activeId])
+
+  const selectedIndex = items.findIndex((item) => item.id === activeId)
+  const duplicateSnapshotLabels = useMemo(() => {
+    if (!selected || items.length < 2) return []
+    const signature =
+      selected.allocationSignature ?? allocationSignatureFromNurseBlocks(selected.nurseBlocks)
+    return items
+      .filter((item) => item.id !== activeId && item.allocationSignature === signature)
+      .map((item) => formatSnapshotDateTime(item.createdAt))
+  }, [activeId, items, selected])
 
   if (error) {
     return (
@@ -129,19 +141,30 @@ export function HandoverSnapshotsPage() {
             </div>
           ) : (
             <ul className="mt-2 grid max-h-[70vh] gap-1 overflow-y-auto pr-1">
-              {items.map((item) => {
+              {items.map((item, index) => {
                 const active = item.id === activeId
+                const versionLabel = index === 0 ? '最新' : `#${index + 1}`
                 return (
                   <li key={item.id}>
                     <button
                       type="button"
-                      onClick={() => setSearchParams({ id: item.id })}
+                      onClick={() => setSelectedSnapshotId(item.id)}
                       className={[
                         'w-full rounded-xl px-3 py-2.5 text-left transition',
-                        active ? 'bg-black text-white' : 'bg-surface text-slate-800 hover:bg-black/5',
+                        active ? 'bg-black text-white ring-2 ring-[#1d4ed8]' : 'bg-surface text-slate-800 hover:bg-black/5',
                       ].join(' ')}
                     >
-                      <div className="text-xs font-semibold opacity-80">{item.shiftLabel}</div>
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="text-xs font-semibold opacity-80">{item.shiftLabel}</div>
+                        <span
+                          className={[
+                            'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-bold',
+                            active ? 'bg-white/15 text-white' : 'bg-white text-slate-700 ring-1 ring-black/10',
+                          ].join(' ')}
+                        >
+                          {versionLabel}
+                        </span>
+                      </div>
                       <div className="mt-0.5 text-sm font-extrabold">{formatSnapshotDateTime(item.createdAt)}</div>
                       <div
                         className={[
@@ -167,7 +190,12 @@ export function HandoverSnapshotsPage() {
               讀取快照內容…
             </div>
           ) : selected ? (
-            <SnapshotDetail snapshot={selected} />
+            <SnapshotDetail
+              snapshot={selected}
+              snapshotIndex={selectedIndex}
+              snapshotTotal={items.length}
+              duplicateSnapshotLabels={duplicateSnapshotLabels}
+            />
           ) : (
             <EmptyDetail />
           )}
@@ -200,20 +228,52 @@ function EmptyDetail() {
   )
 }
 
-function SnapshotDetail({ snapshot }: { snapshot: HandoffSnapshotDetail }) {
+function SnapshotDetail({
+  snapshot,
+  snapshotIndex,
+  snapshotTotal,
+  duplicateSnapshotLabels,
+}: {
+  snapshot: HandoffSnapshotDetail
+  snapshotIndex: number
+  snapshotTotal: number
+  duplicateSnapshotLabels: string[]
+}) {
   const chargeNurseId = useChargeNurseId(snapshot.shiftId)
+  const versionNo = snapshotIndex >= 0 ? snapshotIndex + 1 : null
 
   return (
     <div className="grid gap-4">
+      {duplicateSnapshotLabels.length > 0 ? (
+        <div className="rounded-2xl bg-[#eff6ff] px-4 py-3 text-sm text-[#1e3a8a] ring-1 ring-[#bfdbfe]">
+          <span className="font-semibold">分床配置與其他封存相同</span>
+          <span className="mt-1 block text-xs leading-relaxed text-[#1e40af]">
+            床位分配內容一致，但封存時間不同。相同配置的其它快照：
+            {duplicateSnapshotLabels.join('、')}。請以左側<strong className="font-bold">封存時間</strong>
+            或<strong className="font-bold">版本標籤</strong>區分紀錄。
+          </span>
+        </div>
+      ) : null}
+
       <div className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
         <div>
-          <div className="text-xs font-semibold text-slate-600">{snapshot.shiftLabel}</div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="text-xs font-semibold text-slate-600">{snapshot.shiftLabel}</div>
+            {versionNo != null ? (
+              <span className="rounded-full bg-[#1d4ed8] px-2.5 py-0.5 text-[10px] font-bold text-white">
+                第 {versionNo} / {snapshotTotal} 筆{snapshotIndex === 0 ? ' · 最新' : ''}
+              </span>
+            ) : null}
+          </div>
           <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900">
-            {formatSnapshotDateTime(snapshot.createdAt)}
+            封存於 {formatSnapshotDateTime(snapshot.createdAt)}
           </h2>
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
             <span className="rounded-full bg-surface px-2.5 py-1 font-semibold ring-1 ring-black/10">
               記錄人 {formatNurseDisplay(snapshot.createdBy, { role: 'charge_nurse' })}
+            </span>
+            <span className="rounded-full bg-surface px-2.5 py-1 font-mono text-[10px] font-semibold text-slate-500 ring-1 ring-black/10">
+              快照 {snapshot.id.slice(0, 8)}
             </span>
           </div>
         </div>
@@ -227,7 +287,7 @@ function SnapshotDetail({ snapshot }: { snapshot: HandoffSnapshotDetail }) {
             hint="STAT"
             warn={snapshot.summary.statTotal > 0}
           />
-          <Kpi label="負荷指標" value={`${snapshot.summary.maxLoad}`} hint={`平均 ${snapshot.summary.avgLoad}`} />
+          <Kpi label="平均負荷指標" value={`${snapshot.summary.avgLoad}`} />
         </div>
       </div>
 
@@ -319,4 +379,12 @@ function TonePill({ tone, score }: { tone: 'high' | 'mid' | 'low'; score: number
         ? 'bg-[#fff7ed] text-[#9a5b1a] ring-[#f1d7b8]'
         : 'bg-[#eaf7ee] text-[#1e6c3a] ring-[#b7e0c5]'
   return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-extrabold ring-1 ${cls}`}>{score}</span>
+}
+
+function allocationSignatureFromNurseBlocks(blocks: HandoffSnapshotDetail['nurseBlocks']) {
+  const pairs = blocks.flatMap((block) =>
+    block.beds.map((bed) => `${bed.admissionId}:${block.nurseId}`),
+  )
+  pairs.sort()
+  return pairs.join('|')
 }

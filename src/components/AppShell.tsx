@@ -37,7 +37,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <TopNavLink to="/leader/allocation">指派分床配對</TopNavLink>
             <TopNavLink to="/leader/allocation-result">查看分床結果</TopNavLink>
             <TopNavLink to="/leader/war-room">戰情室</TopNavLink>
-            <TopNavLink to="/leader/handover-snapshots">交班快照</TopNavLink>
+            <TopNavLink to="/leader/handover-snapshots">交班紀錄</TopNavLink>
           </nav>
 
           <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
