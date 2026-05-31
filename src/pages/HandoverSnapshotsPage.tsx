@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { apiGet, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
+import { apiGet, type ApiNurse, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
+import { formatNurseDisplay } from '../lib/nurseLabel'
 
 export function HandoverSnapshotsPage() {
   const [items, setItems] = useState<HandoffSnapshotListItem[]>([])
@@ -184,6 +185,23 @@ function EmptyDetail() {
 }
 
 function SnapshotDetail({ snapshot }: { snapshot: HandoffSnapshotDetail }) {
+  const [chargeNurseId, setChargeNurseId] = useState<string | null>(null)
+
+  useEffect(() => {
+    let alive = true
+    apiGet<ApiNurse[]>(`/nurses?shiftId=${snapshot.shiftId}`)
+      .then((rows) => {
+        if (!alive) return
+        setChargeNurseId(rows.find((n) => n.role === 'charge_nurse')?.id ?? null)
+      })
+      .catch(() => {
+        if (alive) setChargeNurseId(null)
+      })
+    return () => {
+      alive = false
+    }
+  }, [snapshot.shiftId])
+
   return (
     <div className="grid gap-4">
       <div className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
@@ -218,7 +236,9 @@ function SnapshotDetail({ snapshot }: { snapshot: HandoffSnapshotDetail }) {
           {snapshot.nurseBlocks.map((block) => (
             <article key={block.nurseId} className="rounded-2xl bg-surface p-4 ring-1 ring-black/10">
               <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-extrabold text-slate-900">護理師 {block.nurseName}</h3>
+                <h3 className="text-sm font-extrabold text-slate-900">
+                  護理師 {formatNurseDisplay(block.nurseName, { nurseId: block.nurseId, chargeNurseId })}
+                </h3>
                 <LoadPill load={block.load} />
               </div>
               <ul className="mt-3 grid gap-2">

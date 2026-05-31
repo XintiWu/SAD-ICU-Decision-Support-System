@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { apiGet, type HandoffData } from '../api/client'
+import { apiGet, type BurdenAssessment, type HandoffData } from '../api/client'
+import { burdenSummaryText } from '../lib/burdenDisplay'
+import { formatNurseByShortName, formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/ShiftContext'
 
 type OverviewMeta = {
-  onDutyCharge: { shortName: string }
+  onDutyCharge: { id?: string; shortName: string }
 }
 
 export function AllocationResultPage() {
@@ -13,6 +15,7 @@ export function AllocationResultPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [chargeName, setChargeName] = useState<string | null>(null)
+  const [burdens, setBurdens] = useState<BurdenAssessment[]>([])
   const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   useEffect(() => {
@@ -24,11 +27,13 @@ export function AllocationResultPage() {
       Promise.all([
         apiGet<HandoffData>(`/handoff-sheets?shiftId=${shiftId}`),
         apiGet<OverviewMeta>(`/nurse/overview?shiftId=${shiftId}`),
+        apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`),
       ])
-        .then(([handoff, overview]) => {
+        .then(([handoff, overview, burdenRows]) => {
           if (!alive) return
           setRows(handoff.rows)
           setChargeName(overview.onDutyCharge?.shortName ?? null)
+          setBurdens(burdenRows)
           setUpdatedAt(new Date().toISOString())
           setError(null)
         })
@@ -50,11 +55,20 @@ export function AllocationResultPage() {
     }
   }, [shiftId])
 
+  const burdenByAdmission = useMemo(
+    () => new Map(burdens.map((b) => [b.admissionId, b])),
+    [burdens],
+  )
+
   const stats = useMemo(() => {
     const changed = rows.filter((row) => row.currentNurse !== row.nextNurse).length
     const high = rows.filter((row) => row.burdenScore >= 22).length
     return { changed, high, total: rows.length }
   }, [rows])
+
+  const chargeLabel = chargeName
+    ? formatNurseDisplay(chargeName, { role: 'charge_nurse' })
+    : '—'
 
   if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入交班表...</div>
   if (error) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
@@ -72,7 +86,7 @@ export function AllocationResultPage() {
           </span>
           <span className="hidden sm:inline text-slate-300">|</span>
           <span>
-            <span className="font-semibold text-slate-800">小組長</span> {chargeName ?? '—'}
+            <span className="font-semibold text-slate-800">小組長</span> {chargeLabel}
           </span>
         </div>
       </div>
@@ -82,17 +96,18 @@ export function AllocationResultPage() {
         <Kpi label="護理師異動" value={stats.changed} tone={stats.changed ? 'mid' : 'ok'} />
       </div>
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/10">
-        <table className="min-w-[1180px] w-full table-fixed text-left text-sm">
+        <table className="min-w-[1320px] w-full table-fixed text-left text-sm">
           <colgroup>
-            <col style={{ width: '7%' }} />
-            <col style={{ width: '12%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '5%' }} />
             <col style={{ width: '6%' }} />
-            <col style={{ width: '11%' }} />
             <col style={{ width: '10%' }} />
             <col style={{ width: '9%' }} />
-            <col style={{ width: '20%' }} />
+            <col style={{ width: '4%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '9%' }} />
+            <col style={{ width: '5%' }} />
+            <col style={{ width: '18%' }} />
+            <col style={{ width: '15%' }} />
             <col style={{ width: '10%' }} />
           </colgroup>
           <thead className="bg-[#fafaf8] text-xs text-slate-600">
@@ -105,27 +120,36 @@ export function AllocationResultPage() {
               <Th>住院日期</Th>
               <Th>本班護理師</Th>
               <Th>麻煩度</Th>
+              <Th>麻煩度細項</Th>
               <Th>交班診斷</Th>
               <Th>下班護理師</Th>
             </tr>
           </thead>
           <tbody className="bg-[#fafaf8]">
-            {rows.map((row) => (
-              <tr key={row.admissionId} className="border-t border-black/10">
-                <Td strong>{row.bedLabel}</Td>
-                <Td>{row.attendingPhysician}</Td>
-                <Td strong>{row.patientName}</Td>
-                <Td strong>{row.sex}</Td>
-                <Td strong>{row.age}</Td>
-                <Td>{formatDate(row.admittedAt)}</Td>
-                <Td strong>{row.currentNurse}</Td>
-                <td className="px-4 py-3 whitespace-nowrap">
-                  <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${burdenPill(row.burdenScore)}`}>{row.burdenScore}</span>
-                </td>
-                <Td>{row.handoffDiagnosis}</Td>
-                <Td strong>{row.nextNurse}</Td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const burdenDetail = burdenSummaryText(burdenByAdmission.get(row.admissionId))
+              return (
+                <tr key={row.admissionId} className="border-t border-black/10">
+                  <Td strong>{row.bedLabel}</Td>
+                  <Td>{row.attendingPhysician}</Td>
+                  <Td strong>{row.patientName}</Td>
+                  <Td strong>{row.sex}</Td>
+                  <Td strong>{row.age}</Td>
+                  <Td>{formatDate(row.admittedAt)}</Td>
+                  <Td strong>{formatNurseByShortName(row.currentNurse, chargeName)}</Td>
+                  <td className="px-4 py-3 whitespace-nowrap">
+                    <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${burdenPill(row.burdenScore)}`}>{row.burdenScore}</span>
+                  </td>
+                  <td className="px-4 py-3 text-xs text-slate-700">
+                    <span className="line-clamp-2" title={burdenDetail}>
+                      {burdenDetail}
+                    </span>
+                  </td>
+                  <Td>{row.handoffDiagnosis}</Td>
+                  <Td strong>{formatNurseByShortName(row.nextNurse, chargeName)}</Td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>

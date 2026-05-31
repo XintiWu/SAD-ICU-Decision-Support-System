@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, type WarRoomData } from '../api/client'
+import { formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/ShiftContext'
 
 export function WarRoomPage() {
-  const { shiftId } = useShift()
+  const { shiftId, selectedShift } = useShift()
   const [data, setData] = useState<WarRoomData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -40,9 +41,10 @@ export function WarRoomPage() {
 
   const nurses: NurseCardModel[] = useMemo(() => {
     const toneRank: Record<NurseCardModel['tone'], number> = { high: 2, mid: 1, low: 0 }
+    const chargeNurseId = selectedShift?.chargeNurse?.id ?? null
 
     return (data?.nurses ?? [])
-      .map(toNurseCard)
+      .map((row) => toNurseCard(row, chargeNurseId))
       .sort((a, b) => {
         const aUrgentOpen = a.tasks.some((t) => !!t.urgent && !t.done)
         const bUrgentOpen = b.tasks.some((t) => !!t.urgent && !t.done)
@@ -56,7 +58,7 @@ export function WarRoomPage() {
 
         return a.name.localeCompare(b.name, 'zh-Hant')
       })
-  }, [data])
+  }, [data, selectedShift?.chargeNurse?.id])
 
   if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入戰情室...</div>
   if (error) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
@@ -121,14 +123,15 @@ type NurseCardModel = {
   tasks: { text: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]
 }
 
-function toNurseCard(row: WarRoomData['nurses'][number]): NurseCardModel {
+function toNurseCard(row: WarRoomData['nurses'][number], chargeNurseId: string | null): NurseCardModel {
   const assignments = row.patients.map((patient) => ({
     bed: bedNo(patient.bedLabel),
     patient: patient.patientName,
   }))
   const maxScore = row.patients.reduce((max, patient) => Math.max(max, patient.score), 0)
+  const displayName = formatNurseDisplay(row.shortName, { nurseId: row.nurseId, chargeNurseId })
   return {
-    name: `護理師 ${row.shortName}`,
+    name: `護理師 ${displayName}`,
     remaining: row.remaining,
     tone: maxScore >= 22 || row.remaining >= 16 ? 'high' : maxScore >= 14 || row.remaining >= 9 ? 'mid' : 'low',
     assignments,

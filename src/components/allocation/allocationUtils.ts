@@ -19,6 +19,9 @@ export type PatientDragDetail = EnrichedBed & {
   age: number
   admittedAt: string
   attendingPhysician: string
+  burdenLines?: import('../../lib/burdenDisplay').BurdenDetailLine[]
+  objectiveTotal?: number
+  subjectiveTotal?: number
 }
 
 export type NurseLoadRow = {

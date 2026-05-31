@@ -212,9 +212,16 @@ async function handleRequest(req, res) {
   const allocationGetMatch = url.pathname.match(/^\/api\/v1\/allocation-runs\/([^/]+)$/)
   if (allocationGetMatch) {
     assertMethod(req, 'GET')
+    const allocationRunId = decodeURIComponent(allocationGetMatch[1])
+    if (allocationRunId === 'current') {
+      sendJson(res, {
+        data: await getLatestAllocationRun({ shiftId: nullable(url.searchParams.get('shiftId')) }),
+      })
+      return
+    }
     sendJson(res, {
       data: await getAllocationRun({
-        allocationRunId: decodeURIComponent(allocationGetMatch[1]),
+        allocationRunId,
       }),
     })
     return

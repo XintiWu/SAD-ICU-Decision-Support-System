@@ -2,6 +2,7 @@ import type { AllocationStats, NurseLoadRow } from './allocationUtils'
 import { nurseLoadTone } from './allocationUtils'
 import type { CatalogEntry } from './allocationApiState'
 import { invertBoard } from './allocationApiState'
+import { formatNurseDisplay } from '../../lib/nurseLabel'
 
 export function computeBoardLoads(
   catalog: Map<string, CatalogEntry>,
@@ -77,6 +78,14 @@ export function buildBoardLoadRows(
     .sort((a, b) => b.load - a.load)
 }
 
-export function nurseNamesFromRows(nurses: Array<{ id: string; shortName: string }>) {
-  return Object.fromEntries(nurses.map((n) => [n.id, n.shortName]))
+export function nurseNamesFromRows(
+  nurses: Array<{ id: string; shortName: string; role?: string }>,
+  chargeNurseId?: string | null,
+) {
+  return Object.fromEntries(
+    nurses.map((n) => [
+      n.id,
+      formatNurseDisplay(n.shortName, { nurseId: n.id, chargeNurseId, role: n.role }),
+    ]),
+  )
 }

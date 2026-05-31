@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, type ApiAdmission, type BurdenAssessment } from '../api/client'
+import { formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/ShiftContext'
 import { useUser } from '../context/UserContext'
 
@@ -61,7 +62,12 @@ export function NurseOverviewPage() {
         <div className="text-sm font-semibold text-slate-900">整體班別總覽</div>
         <div className="mt-5 grid gap-3 lg:grid-cols-2">
           <Kpi title="我當班病患" value={`${overview.myPatients.length}`} hint={`本班共有 ${overview.allPatients.length} 位病人`} />
-          <Kpi title="當班小組長" value={overview.onDutyCharge.shortName} hint="負責統籌與支援調度" tone="mid" />
+          <Kpi
+            title="當班小組長"
+            value={formatNurseDisplay(overview.onDutyCharge.shortName, { role: 'charge_nurse' })}
+            hint="負責統籌與支援調度"
+            tone="mid"
+          />
         </div>
       </section>
 

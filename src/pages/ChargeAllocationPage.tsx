@@ -19,6 +19,7 @@ import {
   type AllocationRun,
   type ApiAdmission,
   type ApiNurse,
+  type BurdenAssessment,
 } from '../api/client'
 import { AllocationDragPatientPanel } from '../components/allocation/AllocationDragPatientPanel'
 import { AllocationNurseLane } from '../components/allocation/AllocationNurseLane'
@@ -32,6 +33,7 @@ import {
   buildPatientCatalog,
   emptyBoardState,
   invertBoard,
+  mergeBurdenIntoCatalog,
   runToBoardState,
   type BoardState,
   type CatalogEntry,
@@ -79,9 +81,12 @@ export function ChargeAllocationPage() {
   const [saving, setSaving] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [burdenAssessments, setBurdenAssessments] = useState<BurdenAssessment[]>([])
 
   const nurseIds = useMemo(() => nurses.map((n) => n.id), [nurses])
-  const nurseNames = useMemo(() => nurseNamesFromRows(nurses), [nurses])
+  const chargeNurseId =
+    selectedShift?.chargeNurse?.id ?? nurses.find((n) => n.role === 'charge_nurse')?.id ?? null
+  const nurseNames = useMemo(() => nurseNamesFromRows(nurses, chargeNurseId), [nurses, chargeNurseId])
   const readonly = runStatus === 'confirmed'
   const totalBeds = admissions.length
 
@@ -135,17 +140,20 @@ export function ChargeAllocationPage() {
     setLoading(true)
     setError(null)
     try {
-      const [nurseRows, admissionRows, latestRun] = await Promise.all([
+      const [nurseRows, admissionRows, latestRun, burdenRows] = await Promise.all([
         apiGet<ApiNurse[]>(`/nurses?shiftId=${shiftId}`),
         apiGet<ApiAdmission[]>(`/admissions?shiftId=${shiftId}&status=active`),
         apiGet<AllocationRun | null>(`/allocation-runs/current?shiftId=${shiftId}`),
+        apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`),
       ])
 
       const allocatable = nurseRows.filter((n) => n.role === 'nurse' || n.role === 'charge_nurse')
       const ids = allocatable.map((n) => n.id)
       const nextCatalog = buildPatientCatalog(admissionRows)
+      mergeBurdenIntoCatalog(nextCatalog, burdenRows)
       setNurses(allocatable)
       setAdmissions(admissionRows)
+      setBurdenAssessments(burdenRows)
 
       if (latestRun?.allocationRunId) {
         applyRunToCatalog(nextCatalog, latestRun)
@@ -201,6 +209,7 @@ export function ChargeAllocationPage() {
       )
       const nextCatalog = buildPatientCatalog(admissions)
       applyRunToCatalog(nextCatalog, run)
+      mergeBurdenIntoCatalog(nextCatalog, burdenAssessments)
       setCatalog(new Map(nextCatalog))
       setRunStatus(run.status)
       setError(null)
@@ -297,6 +306,7 @@ export function ChargeAllocationPage() {
       const board = runToBoardState(run, nurseIds)
       const nextCatalog = buildPatientCatalog(admissions)
       applyRunToCatalog(nextCatalog, run)
+      mergeBurdenIntoCatalog(nextCatalog, burdenAssessments)
       setCatalog(new Map(nextCatalog))
       setUnassigned(board.unassigned)
       setByNurse(board.byNurse)

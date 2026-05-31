@@ -11,12 +11,22 @@ type Props = {
   className?: string
 }
 
+function hasBurdenSection(patient: PatientDragDetail) {
+  return (
+    (patient.burdenLines?.length ?? 0) > 0 ||
+    patient.objectiveTotal != null ||
+    patient.subjectiveTotal != null
+  )
+}
+
 export function AllocationPatientHoverDetail({ patient, className = '' }: Props) {
+  const showBurden = hasBurdenSection(patient)
+
   return (
     <div
       role="tooltip"
       className={[
-        'pointer-events-none absolute left-0 top-full z-50 mt-2 w-[min(320px,calc(100vw-2rem))] rounded-xl bg-white p-3.5 text-[13px] text-slate-700 shadow-lg ring-1 ring-black/10',
+        'pointer-events-none absolute left-0 top-full z-50 mt-2 w-[min(340px,calc(100vw-2rem))] rounded-xl bg-white p-3.5 text-[13px] text-slate-700 shadow-lg ring-1 ring-black/10',
         className,
       ]
         .filter(Boolean)
@@ -54,6 +64,29 @@ export function AllocationPatientHoverDetail({ patient, className = '' }: Props)
               {b}
             </span>
           ))}
+        </div>
+      ) : null}
+
+      {showBurden ? (
+        <div className="mt-2.5 border-t border-black/5 pt-2.5">
+          <div className="text-sm font-bold text-slate-900">麻煩度細項</div>
+          {patient.objectiveTotal != null || patient.subjectiveTotal != null ? (
+            <div className="mt-1 text-sm font-semibold text-slate-800">
+              客觀 {patient.objectiveTotal ?? 0} · 主觀 {patient.subjectiveTotal ?? 0}
+            </div>
+          ) : null}
+          {patient.burdenLines?.length ? (
+            <ul className="mt-2 grid gap-y-2">
+              {patient.burdenLines.map((line) => (
+                <li key={line.label} className="flex items-baseline justify-between gap-3">
+                  <span className="text-xs text-slate-400">{line.label}</span>
+                  <span className="text-sm font-semibold text-slate-800">
+                    {line.points != null ? line.points : line.value}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          ) : null}
         </div>
       ) : null}
     </div>

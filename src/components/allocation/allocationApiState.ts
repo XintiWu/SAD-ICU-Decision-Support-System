@@ -1,6 +1,7 @@
-import type { AllocationPatient, AllocationRun, ApiAdmission } from '../../api/client'
+import type { AllocationPatient, AllocationRun, ApiAdmission, BurdenAssessment } from '../../api/client'
 import type { EnrichedBed, PatientDragDetail } from './allocationUtils'
 import { formatBedShort } from './allocationUtils'
+import { buildBurdenDetailLines, scoreToTone } from '../../lib/burdenDisplay'
 
 export type CatalogEntry = PatientDragDetail
 
@@ -28,6 +29,9 @@ export function mergeRunPatients(catalog: Map<string, CatalogEntry>, patients: A
       age: prev?.age ?? 0,
       admittedAt: prev?.admittedAt ?? '—',
       attendingPhysician: prev?.attendingPhysician ?? '—',
+      burdenLines: prev?.burdenLines,
+      objectiveTotal: prev?.objectiveTotal,
+      subjectiveTotal: prev?.subjectiveTotal,
     })
   }
 }
@@ -112,4 +116,19 @@ export function boardStateToItems(
 export function applyRunToCatalog(catalog: Map<string, CatalogEntry>, run: AllocationRun) {
   for (const row of run.byNurse) mergeRunPatients(catalog, row.patients)
   mergeRunPatients(catalog, run.unassigned)
+}
+
+export function mergeBurdenIntoCatalog(catalog: Map<string, CatalogEntry>, assessments: BurdenAssessment[]) {
+  for (const assessment of assessments) {
+    const prev = catalog.get(assessment.admissionId)
+    if (!prev) continue
+    catalog.set(assessment.admissionId, {
+      ...prev,
+      score: assessment.score.totalScore,
+      tone: scoreToTone(assessment.score.totalScore),
+      burdenLines: buildBurdenDetailLines(assessment),
+      objectiveTotal: assessment.score.objectiveTotal,
+      subjectiveTotal: assessment.score.subjectiveTotal,
+    })
+  }
 }
