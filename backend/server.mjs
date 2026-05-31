@@ -4,6 +4,7 @@ import {
   confirmAllocationRun,
   getAllocationRun,
   getCurrentShift,
+  listShifts,
   getCurrentUser,
   getHandoffSheet,
   getNurseOverview,
@@ -85,6 +86,12 @@ async function handleRequest(req, res) {
     assertMethod(req, 'GET')
     const userId = getUserId(req, url)
     sendJson(res, { data: await getCurrentUser(userId) })
+    return
+  }
+
+  if (url.pathname === '/api/v1/shifts') {
+    assertMethod(req, 'GET')
+    sendJson(res, { data: await listShifts({ unitName: url.searchParams.get('unitName') ?? 'ICU' }) })
     return
   }
 
