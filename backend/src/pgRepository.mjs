@@ -305,21 +305,31 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
 
     const loads = new Map(nurses.map((n) => [n.id, 0]))
     const sortOrders = new Map(nurses.map((n) => [n.id, 0]))
+    const assignedBeds = new Map(nurses.map((n) => [n.id, []]))
+    const MAX_BED_GAP = 2
 
     for (const admission of admissions.sort((a, b) => b.score - a.score)) {
       const seniorityKey = (n) => (n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年'))
+      const patientBedNo = bedNo(admission.bedLabel)
 
       const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
       const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
 
       const isHighBurden = admission.score >= avgScore
+      const hasNearbyBed = (n) => {
+        const beds = assignedBeds.get(n.id)
+        return beds.length === 0 || beds.some((b) => Math.abs(b - patientBedNo) <= MAX_BED_GAP)
+      }
       const selected = [...nearMin].sort((a, b) => {
         const ra = SENIORITY_RANK[seniorityKey(a)] ?? 2
         const rb = SENIORITY_RANK[seniorityKey(b)] ?? 2
-        return isHighBurden ? ra - rb : rb - ra
+        const bySeniority = isHighBurden ? ra - rb : rb - ra
+        if (bySeniority !== 0) return bySeniority
+        return (hasNearbyBed(a) ? 0 : 1) - (hasNearbyBed(b) ? 0 : 1)
       })[0]
 
       if (!selected) continue
+      assignedBeds.get(selected.id).push(patientBedNo)
       const sortOrder = (sortOrders.get(selected.id) ?? 0) + 1
       await client.query(
         `insert into allocation_items (allocation_run_id, admission_id, nurse_id, score, sort_order) values ($1,$2,$3,$4,$5)`,
