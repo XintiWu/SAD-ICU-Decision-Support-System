@@ -6,7 +6,6 @@ import { BurdenFormPage } from './pages/BurdenFormPage'
 import { ChargeAllocationPage } from './pages/ChargeAllocationPage'
 import { WarRoomPage } from './pages/WarRoomPage'
 import { AllocationResultPage } from './pages/AllocationResultPage'
-import { OrdersImportPage } from './pages/OrdersImportPage'
 import { HandoverSnapshotsPage } from './pages/HandoverSnapshotsPage'
 import { ShiftProvider } from './context/ShiftContext'
 import { UserProvider } from './context/UserContext'
@@ -19,10 +18,10 @@ function App() {
         <Routes>
           <Route path="/" element={<Navigate to="/nurse/overview" replace />} />
           <Route path="/nurse/overview" element={<NurseOverviewPage />} />
-          <Route path="/nurse/todo" element={<NurseTodoPage />} />
+          <Route path="/nurse/todo" element={<Navigate to="/nurse/stat" replace />} />
           <Route path="/nurse/stat" element={<NurseTodoPage />} />
           <Route path="/nurse/burden-form" element={<BurdenFormPage />} />
-          <Route path="/orders/import" element={<OrdersImportPage />} />
+          <Route path="/orders/import" element={<Navigate to="/nurse/overview" replace />} />
           <Route path="/leader/allocation" element={<ChargeAllocationPage />} />
           <Route path="/leader/allocation-result" element={<AllocationResultPage />} />
           <Route path="/leader/war-room" element={<WarRoomPage />} />

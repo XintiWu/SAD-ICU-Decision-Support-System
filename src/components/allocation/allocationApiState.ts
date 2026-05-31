@@ -132,3 +132,18 @@ export function mergeBurdenIntoCatalog(catalog: Map<string, CatalogEntry>, asses
     })
   }
 }
+
+export function mergeStatIntoCatalog(
+  catalog: Map<string, CatalogEntry>,
+  statOrders: Array<{ admissionId: string }>,
+) {
+  const admissionIds = new Set(statOrders.map((o) => o.admissionId))
+  for (const admissionId of admissionIds) {
+    const prev = catalog.get(admissionId)
+    if (!prev) continue
+    const badges = prev.badges.includes('STAT')
+      ? prev.badges
+      : ['STAT', ...prev.badges.filter((b) => b !== 'STAT')]
+    catalog.set(admissionId, { ...prev, badges })
+  }
+}

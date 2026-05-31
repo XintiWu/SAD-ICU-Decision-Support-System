@@ -150,7 +150,13 @@ function nurseRef(nurseId) {
 
 function shiftLabel(shift) {
   const name = shift.shiftKey === 'day' ? '白班' : shift.shiftKey === 'evening' ? '小夜班' : '大夜班'
-  return `${name} ${hhmm(shift.startsAt)}-${hhmm(shift.endsAt)}`
+  const date = new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Taipei',
+  }).format(new Date(shift.startsAt))
+  return `${date} ${name} ${hhmm(shift.startsAt)}-${hhmm(shift.endsAt)}`
 }
 
 function hhmm(iso) {

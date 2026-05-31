@@ -93,6 +93,19 @@ export type ApiTask = {
   source: string
 }
 
+export type ApiStatOrder = {
+  id: string
+  admissionId: string
+  bedLabel: string
+  diagnosis: string
+  title: string
+  kind: '給藥' | '檢查' | '監測' | '治療' | '其他'
+  orderedBy: string
+  orderedAt: string
+  reason?: string
+  status: 'pending' | 'done' | 'cancelled'
+}
+
 export type HandoffSnapshotListItem = {
   id: string
   allocationRunId: string
@@ -105,9 +118,6 @@ export type HandoffSnapshotListItem = {
     patientCount: number
     nurseCount: number
     statTotal: number
-    taskTotal: number
-    taskOpen: number
-    taskUrgentOpen: number
     avgLoad: number
     maxLoad: number
   }
@@ -130,7 +140,6 @@ export type HandoffSnapshotDetail = HandoffSnapshotListItem & {
       tone: 'high' | 'mid' | 'low'
     }>
   }>
-  tasks: ApiTask[]
 }
 
 export type AllocationPatient = {
@@ -184,11 +193,15 @@ export type WarRoomData = {
 }
 
 export type HandoffData = {
+  snapshotId: string | null
+  allocationRunId: string | null
+  createdAt: string | null
   rows: Array<ApiAdmission & {
     currentNurse: string
     nextNurse: string
     burdenScore: number
     handoffDiagnosis: string
+    burdenDetail: string
   }>
 }
 
@@ -219,12 +232,32 @@ async function apiRequest<T>(path: string, options: ApiRequestOptions = {}): Pro
   if (options.body !== undefined) headers['content-type'] = 'application/json'
   if (options.userId) headers['X-User-Id'] = options.userId
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    method: options.method ?? 'GET',
-    headers: Object.keys(headers).length ? headers : undefined,
-    body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
-  })
-  const payload = await response.json()
+  let response: Response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      method: options.method ?? 'GET',
+      headers: Object.keys(headers).length ? headers : undefined,
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined,
+    })
+  } catch {
+    throw new Error('無法連線後端 API，請確認 backend 是否已啟動（port 8787）')
+  }
+
+  const raw = await response.text()
+  if (!raw.trim()) {
+    if (response.status === 502 || response.status === 503 || response.status === 504) {
+      throw new Error('後端 API 未回應，請在 frontend-v2/backend 執行：node server.mjs')
+    }
+    throw new Error(`API 回傳空白內容（HTTP ${response.status}）`)
+  }
+
+  let payload: { data?: T; error?: { message?: string } }
+  try {
+    payload = JSON.parse(raw) as typeof payload
+  } catch {
+    throw new Error(`API 回傳非 JSON 格式（HTTP ${response.status}）`)
+  }
+
   if (!response.ok || payload.error) {
     throw new Error(payload.error?.message ?? `API request failed: ${response.status}`)
   }

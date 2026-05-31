@@ -1,10 +1,12 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, type WarRoomData } from '../api/client'
+import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/ShiftContext'
 
 export function WarRoomPage() {
-  const { shiftId, selectedShift } = useShift()
+  const { shiftId } = useShift()
+  const chargeNurseId = useChargeNurseId()
   const [data, setData] = useState<WarRoomData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -41,7 +43,6 @@ export function WarRoomPage() {
 
   const nurses: NurseCardModel[] = useMemo(() => {
     const toneRank: Record<NurseCardModel['tone'], number> = { high: 2, mid: 1, low: 0 }
-    const chargeNurseId = selectedShift?.chargeNurse?.id ?? null
 
     return (data?.nurses ?? [])
       .map((row) => toNurseCard(row, chargeNurseId))
@@ -58,7 +59,7 @@ export function WarRoomPage() {
 
         return a.name.localeCompare(b.name, 'zh-Hant')
       })
-  }, [data, selectedShift?.chargeNurse?.id])
+  }, [data, chargeNurseId])
 
   if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入戰情室...</div>
   if (error) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>

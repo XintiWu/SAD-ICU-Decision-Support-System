@@ -1,7 +1,8 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
-import { apiGet, type BurdenAssessment, type HandoffData } from '../api/client'
-import { burdenSummaryText } from '../lib/burdenDisplay'
+import { Link } from 'react-router-dom'
+import { apiGet, type HandoffData } from '../api/client'
 import { formatNurseByShortName, formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/ShiftContext'
 
@@ -11,54 +12,40 @@ type OverviewMeta = {
 
 export function AllocationResultPage() {
   const { shiftId, selectedShift } = useShift()
-  const [rows, setRows] = useState<HandoffData['rows']>([])
+  const [handoff, setHandoff] = useState<HandoffData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [chargeName, setChargeName] = useState<string | null>(null)
-  const [burdens, setBurdens] = useState<BurdenAssessment[]>([])
-  const [updatedAt, setUpdatedAt] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
     setLoading(true)
-    setRows([])
+    setHandoff(null)
 
-    const load = () => {
-      Promise.all([
-        apiGet<HandoffData>(`/handoff-sheets?shiftId=${shiftId}`),
-        apiGet<OverviewMeta>(`/nurse/overview?shiftId=${shiftId}`),
-        apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`),
-      ])
-        .then(([handoff, overview, burdenRows]) => {
-          if (!alive) return
-          setRows(handoff.rows)
-          setChargeName(overview.onDutyCharge?.shortName ?? null)
-          setBurdens(burdenRows)
-          setUpdatedAt(new Date().toISOString())
-          setError(null)
-        })
-        .catch((err: Error) => {
-          if (!alive) return
-          setError(err.message)
-        })
-        .finally(() => {
-          if (alive) setLoading(false)
-        })
-    }
-
-    load()
-    const timer = window.setInterval(load, 5000)
+    Promise.all([
+      apiGet<HandoffData>(`/handoff-sheets?shiftId=${shiftId}`),
+      apiGet<OverviewMeta>(`/nurse/overview?shiftId=${shiftId}`),
+    ])
+      .then(([handoffData, overview]) => {
+        if (!alive) return
+        setHandoff(handoffData)
+        setChargeName(overview.onDutyCharge?.shortName ?? null)
+        setError(null)
+      })
+      .catch((err: Error) => {
+        if (!alive) return
+        setError(err.message)
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
 
     return () => {
       alive = false
-      window.clearInterval(timer)
     }
   }, [shiftId])
 
-  const burdenByAdmission = useMemo(
-    () => new Map(burdens.map((b) => [b.admissionId, b])),
-    [burdens],
-  )
+  const rows = handoff?.rows ?? []
 
   const stats = useMemo(() => {
     const changed = rows.filter((row) => row.currentNurse !== row.nextNurse).length
@@ -69,9 +56,31 @@ export function AllocationResultPage() {
   const chargeLabel = chargeName
     ? formatNurseDisplay(chargeName, { role: 'charge_nurse' })
     : '—'
-
   if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入交班表...</div>
   if (error) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
+
+  if (!handoff?.snapshotId) {
+    return (
+      <div className="grid gap-4">
+        <div className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
+          <div className="text-lg font-extrabold tracking-tight text-slate-900">交班分床結果</div>
+          {selectedShift ? (
+            <div className="mt-1 text-sm font-medium text-slate-600">{selectedShift.label}</div>
+          ) : null}
+        </div>
+        <div className="rounded-2xl bg-surface p-8 text-center ring-1 ring-black/10">
+          <div className="text-sm font-semibold text-slate-900">此班別尚無已封存的交班快照</div>
+          <p className="mt-2 text-sm text-slate-600">
+            請至{' '}
+            <Link to="/leader/allocation" className="font-semibold text-[#1e4ea7] underline underline-offset-2">
+              指派分床配對
+            </Link>{' '}
+            完成確認分床後，系統會自動寫入交班紀錄。
+          </p>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className="grid gap-4">
@@ -82,13 +91,15 @@ export function AllocationResultPage() {
         ) : null}
         <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1.5 text-sm text-slate-600">
           <span>
-            <span className="font-semibold text-slate-800">分床結果時間</span> {updatedAt ? formatDateTime(updatedAt) : '—'}
+            <span className="font-semibold text-slate-800">封存時間</span>{' '}
+            {handoff.createdAt ? formatDateTime(handoff.createdAt) : '—'}
           </span>
           <span className="hidden sm:inline text-slate-300">|</span>
           <span>
             <span className="font-semibold text-slate-800">小組長</span> {chargeLabel}
           </span>
         </div>
+        <p className="mt-2 text-xs text-slate-500">以下內容為確認分床當下封存的交班資料，不會隨後續修改而變動。</p>
       </div>
       <div className="grid gap-2 sm:grid-cols-3">
         <Kpi label="交班床數" value={stats.total} />
@@ -96,60 +107,40 @@ export function AllocationResultPage() {
         <Kpi label="護理師異動" value={stats.changed} tone={stats.changed ? 'mid' : 'ok'} />
       </div>
       <div className="overflow-x-auto rounded-2xl bg-white ring-1 ring-black/10">
-        <table className="min-w-[1320px] w-full table-fixed text-left text-sm">
-          <colgroup>
-            <col style={{ width: '6%' }} />
-            <col style={{ width: '10%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '4%' }} />
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '9%' }} />
-            <col style={{ width: '5%' }} />
-            <col style={{ width: '18%' }} />
-            <col style={{ width: '15%' }} />
-            <col style={{ width: '10%' }} />
-          </colgroup>
+        <table className="w-full min-w-[1180px] text-left text-sm">
           <thead className="bg-[#fafaf8] text-xs text-slate-600">
             <tr className="border-b border-black/10">
-              <Th>床位</Th>
-              <Th>主治醫師</Th>
-              <Th>病人姓名</Th>
-              <Th>性別</Th>
-              <Th>年齡</Th>
-              <Th>住院日期</Th>
-              <Th>本班護理師</Th>
-              <Th>麻煩度</Th>
-              <Th>麻煩度細項</Th>
-              <Th>交班診斷</Th>
-              <Th>下班護理師</Th>
+              <Th className="w-[4.5rem]">床位</Th>
+              <Th className="w-[5.5rem]">主治醫師</Th>
+              <Th className="w-[5rem]">病人姓名</Th>
+              <Th className="w-[2.5rem]">性別</Th>
+              <Th className="w-[2.5rem]">年齡</Th>
+              <Th className="w-[6rem]">住院日期</Th>
+              <Th className="w-[5rem]">本班護理師</Th>
+              <Th className="w-[4.5rem]">麻煩度</Th>
+              <Th className="min-w-[18rem]">麻煩度細項</Th>
+              <Th className="min-w-[16rem]">交班診斷</Th>
+              <Th className="w-[5rem]">下班護理師</Th>
             </tr>
           </thead>
           <tbody className="bg-[#fafaf8]">
-            {rows.map((row) => {
-              const burdenDetail = burdenSummaryText(burdenByAdmission.get(row.admissionId))
-              return (
-                <tr key={row.admissionId} className="border-t border-black/10">
-                  <Td strong>{row.bedLabel}</Td>
-                  <Td>{row.attendingPhysician}</Td>
-                  <Td strong>{row.patientName}</Td>
-                  <Td strong>{row.sex}</Td>
-                  <Td strong>{row.age}</Td>
-                  <Td>{formatDate(row.admittedAt)}</Td>
-                  <Td strong>{formatNurseByShortName(row.currentNurse, chargeName)}</Td>
-                  <td className="px-4 py-3 whitespace-nowrap">
-                    <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${burdenPill(row.burdenScore)}`}>{row.burdenScore}</span>
-                  </td>
-                  <td className="px-4 py-3 text-xs text-slate-700">
-                    <span className="line-clamp-2" title={burdenDetail}>
-                      {burdenDetail}
-                    </span>
-                  </td>
-                  <Td>{row.handoffDiagnosis}</Td>
-                  <Td strong>{formatNurseByShortName(row.nextNurse, chargeName)}</Td>
-                </tr>
-              )
-            })}
+            {rows.map((row) => (
+              <tr key={row.admissionId} className="border-t border-black/10">
+                <Td strong>{row.bedLabel}</Td>
+                <Td>{row.attendingPhysician}</Td>
+                <Td strong>{row.patientName}</Td>
+                <Td strong>{row.sex}</Td>
+                <Td strong>{row.age}</Td>
+                <Td>{formatDate(row.admittedAt)}</Td>
+                <Td strong>{formatNurseByShortName(row.currentNurse, chargeName)}</Td>
+                <td className="px-4 py-3 align-top whitespace-nowrap">
+                  <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${burdenPill(row.burdenScore)}`}>{row.burdenScore}</span>
+                </td>
+                <TdLong text={row.burdenDetail}>{row.burdenDetail}</TdLong>
+                <TdLong text={row.handoffDiagnosis}>{row.handoffDiagnosis}</TdLong>
+                <Td strong>{formatNurseByShortName(row.nextNurse, chargeName)}</Td>
+              </tr>
+            ))}
           </tbody>
         </table>
       </div>
@@ -167,17 +158,73 @@ function Kpi({ label, value, tone = 'ok' }: { label: string; value: number; tone
   )
 }
 
-function Th({ children }: { children: ReactNode }) {
-  return <th className="px-4 py-3 font-semibold whitespace-nowrap">{children}</th>
+function Th({ children, className = '' }: { children: ReactNode; className?: string }) {
+  return <th className={`px-4 py-3 font-semibold whitespace-nowrap ${className}`}>{children}</th>
 }
 
 function Td({ children, strong }: { children: ReactNode; strong?: boolean }) {
   return (
-    <td className={`px-4 py-3 whitespace-nowrap ${strong ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
-      <span className="block truncate" title={String(children)}>
-        {children}
-      </span>
+    <td className={`px-4 py-3 align-top whitespace-nowrap ${strong ? 'font-semibold text-slate-900' : 'text-slate-700'}`}>
+      {children}
     </td>
+  )
+}
+
+function TdLong({ text, children }: { text: string; children: ReactNode }) {
+  return (
+    <td className="px-4 py-3 align-top text-xs text-slate-700">
+      <OverflowHoverText text={text}>{children}</OverflowHoverText>
+    </td>
+  )
+}
+
+function OverflowHoverText({ text, children }: { text: string; children: ReactNode }) {
+  const anchorRef = useRef<HTMLDivElement>(null)
+  const [open, setOpen] = useState(false)
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const showTip = text.trim().length > 36
+
+  function handleEnter() {
+    if (!showTip) return
+    const rect = anchorRef.current?.getBoundingClientRect()
+    if (!rect) return
+    setPos({ left: rect.left, top: rect.bottom + 6 })
+    setOpen(true)
+  }
+
+  function handleLeave() {
+    setOpen(false)
+  }
+
+  return (
+    <>
+      <div
+        ref={anchorRef}
+        className={[
+          'whitespace-normal break-words leading-relaxed',
+          showTip ? 'cursor-help' : '',
+        ].join(' ')}
+        onMouseEnter={handleEnter}
+        onMouseLeave={handleLeave}
+        onFocus={handleEnter}
+        onBlur={handleLeave}
+        tabIndex={showTip ? 0 : undefined}
+      >
+        {children}
+      </div>
+      {open && pos && showTip
+        ? createPortal(
+            <div
+              className="pointer-events-none fixed z-[100] max-w-md rounded-xl bg-slate-900 px-3 py-2.5 text-xs leading-relaxed text-white shadow-xl ring-1 ring-black/20"
+              style={{ left: pos.left, top: pos.top }}
+              role="tooltip"
+            >
+              {text}
+            </div>,
+            document.body,
+          )
+        : null}
+    </>
   )
 }
 

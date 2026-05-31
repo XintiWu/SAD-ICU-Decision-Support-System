@@ -1,14 +1,13 @@
 import { readFile } from 'node:fs/promises'
 import { resolve } from 'node:path'
 import pg from 'pg'
-import { currentAssignments, ids } from '../src/step1Data.mjs'
+import { ids } from '../src/step1Data.mjs'
 import {
   burdenAssessments,
   objectiveFactorDefinitions,
   subjectiveFactorDefinitions,
   tasks,
 } from '../src/step2Data.mjs'
-import { allocationRuns } from '../src/step3Data.mjs'
 
 const { Client } = pg
 
@@ -29,9 +28,12 @@ async function main() {
     'backend/db/migrations/001_core_schema.sql',
     'backend/db/migrations/002_burden_tasks_schema.sql',
     'backend/db/migrations/003_allocation_schema.sql',
+    'backend/db/migrations/004_stat_orders_schema.sql',
+    'backend/db/migrations/005_handoff_schema.sql',
     'backend/db/seeds/001_demo_core_data.sql',
     'backend/db/seeds/002_demo_burden_tasks_data.sql',
     'backend/db/seeds/003_demo_allocation_data.sql',
+    'backend/db/seeds/004_demo_stat_orders_data.sql',
   ]) {
     const sql = await readFile(resolve(file), 'utf8')
     await app.query(sql)
@@ -39,6 +41,13 @@ async function main() {
   await seedCompleteDemoData(app)
   await app.end()
   console.log(`Database ready: ${appUrl}`)
+
+  const { confirmAllocationRun } = await import('../src/pgRepository.mjs')
+  await confirmAllocationRun({
+    allocationRunId: '00000000-0000-0000-0000-000000000901',
+    userId: '00000000-0000-0000-0000-000000000110',
+  })
+  console.log('Demo handoff snapshot ready for allocation run 901')
 }
 
 function quoteIdent(value) {
@@ -114,31 +123,6 @@ async function seedCompleteDemoData(client) {
       ],
     )
   }
-
-  const run = allocationRuns[0]
-  await client.query('delete from allocation_items where allocation_run_id = $1', [run.id])
-  let itemNo = 1
-  for (const assignment of currentAssignments) {
-    for (const admissionId of assignment.admissionIds) {
-      const score = await scoreForAdmission(client, admissionId)
-      await client.query(
-        `
-        insert into allocation_items (
-          id, allocation_run_id, admission_id, nurse_id, score, sort_order, is_manual_override
-        ) values ($1,$2,$3,$4,$5,$6,false)
-        `,
-        [
-          `00000000-0000-0000-0000-${String(920 + itemNo).padStart(12, '0')}`,
-          run.id,
-          admissionId,
-          assignment.nurseId,
-          score,
-          itemNo,
-        ],
-      )
-      itemNo += 1
-    }
-  }
 }
 
 async function upsertBurdenValue(client, assessmentId, factorId, numberValue, booleanValue, levelValue, points) {
@@ -184,11 +168,6 @@ function rassPoints(value) {
   if (abs <= 1) return 0
   if (abs <= 3) return 1
   return 2
-}
-
-async function scoreForAdmission(client, admissionId) {
-  const result = await client.query('select total_score from burden_assessments where admission_id = $1', [admissionId])
-  return Number(result.rows[0]?.total_score ?? 0)
 }
 
 main().catch((error) => {

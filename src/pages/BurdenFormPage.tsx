@@ -3,9 +3,13 @@ import { useCallback, useEffect, useMemo, useState } from 'react'
 import {
   apiGet,
   apiPatch,
+  type ApiNurse,
   type BurdenAssessment,
   type SubjectivePayload,
 } from '../api/client'
+import { EmptyAssignedPatientsNotice } from '../components/EmptyAssignedPatientsNotice'
+import { useChargeNurseId } from '../hooks/useChargeNurseId'
+import { formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/ShiftContext'
 import { useUser } from '../context/UserContext'
 import {
@@ -43,13 +47,16 @@ function buildScoresMap(rows: BurdenFormRow[]): Partial<Record<string, BedScore>
 export function BurdenFormPage() {
   const { shiftId, shifts } = useShift()
   const { userId, user, loading: userLoading, error: userError } = useUser()
+  const chargeNurseId = useChargeNurseId()
   const nurseShortName = user?.shortName ?? '—'
+  const nurseDisplayName = formatNurseDisplay(nurseShortName, { nurseId: userId, chargeNurseId })
 
   const [tab, setTab] = useState<'客觀' | '主觀'>('主觀')
   const [subjectiveMode, setSubjectiveMode] = useState<'上一班' | '本班'>('上一班')
   const [rows, setRows] = useState<BurdenFormRow[]>([])
   const [previousRows, setPreviousRows] = useState<BurdenFormRow[]>([])
   const [previousLabel, setPreviousLabel] = useState<string | null>(null)
+  const [onRoster, setOnRoster] = useState<boolean | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [submitting, setSubmitting] = useState(false)
@@ -68,14 +75,19 @@ export function BurdenFormPage() {
     setRows([])
     setPreviousRows([])
     setPreviousLabel(null)
+    setOnRoster(null)
 
     async function load() {
       try {
-        const current = await apiGet<BurdenAssessment[]>(
-          `/burden-assessments?shiftId=${shiftId}&scope=mine`,
-          { userId },
-        )
+        const [current, nurses] = await Promise.all([
+          apiGet<BurdenAssessment[]>(
+            `/burden-assessments?shiftId=${shiftId}&scope=mine`,
+            { userId },
+          ),
+          apiGet<ApiNurse[]>(`/nurses?shiftId=${shiftId}`),
+        ])
         if (!alive) return
+        setOnRoster(nurses.some((n) => n.id === userId))
         const currentRows = current.map(assessmentToRow)
         setRows(currentRows)
 
@@ -203,7 +215,7 @@ export function BurdenFormPage() {
         <div className="flex w-full flex-wrap items-start justify-between gap-3 sm:w-auto sm:justify-end">
           <div className="min-w-0 text-right text-xs text-slate-600">
             <div className="truncate">客觀＝由醫囑/用藥自動計算；主觀＝護理師自評（下班前必完成）</div>
-            <div className="mt-1 truncate">目前僅顯示：{nurseShortName} 分配到的病患</div>
+            <div className="mt-1 truncate">目前僅顯示：{nurseDisplayName} 分配到的病患</div>
           </div>
           {tab === '客觀' ? (
             <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500 ring-1 ring-black/5">
@@ -233,22 +245,14 @@ export function BurdenFormPage() {
       ) : null}
 
       {rows.length === 0 ? (
-        <div className="mt-6 space-y-3">
+        <div className="mt-6">
           <Notice text="目前沒有分配到的病患評估資料" />
-          <div className="rounded-xl bg-surface px-4 py-3 text-xs leading-relaxed text-slate-600 ring-1 ring-black/5">
-            <p>
-              此頁只顯示<strong className="font-semibold text-slate-800">分床後分配給 {nurseShortName}</strong>
-              的病患（不是整班全部病人）。
-            </p>
-            {selectedShift ? (
-              <p className="mt-2">
-                目前班別：<span className="font-semibold text-slate-800">{selectedShift.label}</span>
-              </p>
-            ) : null}
-            <p className="mt-2">
-              請確認右上角<strong className="font-semibold text-slate-800">班別</strong>
-              正確：只有分床分配給 {nurseShortName} 的病患才會出現。
-            </p>
+          <div className="mt-3">
+            <EmptyAssignedPatientsNotice
+              nurseName={nurseDisplayName}
+              shiftLabel={selectedShift?.label}
+              onRoster={onRoster}
+            />
           </div>
         </div>
       ) : tab === '客觀' ? (

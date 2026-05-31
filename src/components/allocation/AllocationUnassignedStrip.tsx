@@ -65,18 +65,18 @@ export function AllocationUnassignedStrip({
         <SortableContext items={items} strategy={horizontalListSortingStrategy}>
           <div
             className={[
-              'flex min-h-[36px] items-center gap-2 rounded-lg border border-dashed px-2 py-1.5',
+              'flex min-h-[36px] items-start gap-2 rounded-lg border border-dashed px-2 py-2',
               items.length === 0
                 ? 'justify-center border-[#fecdd3] bg-[#fffafa]'
                 : 'border-[#fecdd3] bg-[#fffafa]',
               isOver ? 'border-[#f87171] bg-[#fff1f2]' : '',
             ].join(' ')}
           >
-            <span className="shrink-0 text-xs font-bold leading-none text-[#b3341f]">
+            <span className="shrink-0 self-start pt-1.5 text-xs font-bold leading-none text-[#b3341f]">
               未分配病患：{items.length === 0 ? '：無' : ''}
             </span>
             {items.length > 0 ? (
-              <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
+              <div className="flex min-w-0 flex-1 flex-wrap content-start items-start gap-1.5">
                 {items.map((pid) => {
                   const bed = catalogCtx?.getBed(pid)
                   if (!bed) return null

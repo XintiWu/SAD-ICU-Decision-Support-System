@@ -1,36 +1,43 @@
 import { useEffect, useMemo, useState } from 'react'
-import { apiGet, type ApiAdmission, type BurdenAssessment } from '../api/client'
+import { apiGet, type ApiAdmission, type ApiNurse, type BurdenAssessment } from '../api/client'
+import { EmptyAssignedPatientsNotice } from '../components/EmptyAssignedPatientsNotice'
+import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/ShiftContext'
 import { useUser } from '../context/UserContext'
 
 type OverviewData = {
-  onDutyCharge: { shortName: string }
+  onDutyCharge: { id?: string; shortName: string }
   myPatients: ApiAdmission[]
   allPatients: ApiAdmission[]
 }
 
 export function NurseOverviewPage() {
-  const { shiftId } = useShift()
-  const { userId } = useUser()
+  const { shiftId, selectedShift } = useShift()
+  const { userId, user } = useUser()
+  const chargeNurseId = useChargeNurseId()
   const [overview, setOverview] = useState<OverviewData | null>(null)
   const [burdens, setBurdens] = useState<BurdenAssessment[]>([])
+  const [onRoster, setOnRoster] = useState<boolean | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
     let alive = true
     setOverview(null)
     setBurdens([])
+    setOnRoster(null)
 
     const load = () => {
       Promise.all([
         apiGet<OverviewData>(`/nurse/overview?shiftId=${shiftId}`, { userId }),
         apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`, { userId }),
+        apiGet<ApiNurse[]>(`/nurses?shiftId=${shiftId}`),
       ])
-        .then(([overviewData, burdenData]) => {
+        .then(([overviewData, burdenData, nurses]) => {
           if (!alive) return
           setOverview(overviewData)
           setBurdens(burdenData)
+          setOnRoster(nurses.some((n) => n.id === userId))
           setError(null)
         })
         .catch((err) => {
@@ -56,6 +63,11 @@ export function NurseOverviewPage() {
   if (error) return <Notice tone="bad" text={error} />
   if (!overview) return <Notice text="讀取中..." />
 
+  const nurseDisplayName = formatNurseDisplay(user?.shortName ?? '您', {
+    nurseId: userId,
+    chargeNurseId: chargeNurseId ?? overview.onDutyCharge?.id,
+  })
+
   return (
     <div className="grid gap-6">
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
@@ -64,7 +76,11 @@ export function NurseOverviewPage() {
           <Kpi title="我當班病患" value={`${overview.myPatients.length}`} hint={`本班共有 ${overview.allPatients.length} 位病人`} />
           <Kpi
             title="當班小組長"
-            value={formatNurseDisplay(overview.onDutyCharge.shortName, { role: 'charge_nurse' })}
+            value={formatNurseDisplay(overview.onDutyCharge.shortName, {
+              nurseId: overview.onDutyCharge.id,
+              chargeNurseId,
+              role: 'charge_nurse',
+            })}
             hint="負責統籌與支援調度"
             tone="mid"
           />
@@ -73,8 +89,20 @@ export function NurseOverviewPage() {
 
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
         <div className="text-sm font-semibold text-slate-900">我的病患</div>
+        <p className="mt-1 text-xs text-slate-600">
+          顯示<strong className="font-semibold text-slate-800">分床後分配給 {nurseDisplayName}</strong>的床位
+        </p>
         <div className="mt-4">
-          <PatientsTable rows={overview.myPatients} burdenByAdmission={burdenByAdmission} />
+          {overview.myPatients.length === 0 ? (
+            <EmptyAssignedPatientsNotice
+              nurseName={nurseDisplayName}
+              shiftLabel={selectedShift?.label}
+              onRoster={onRoster}
+              allPatientCount={overview.allPatients.length}
+            />
+          ) : (
+            <PatientsTable rows={overview.myPatients} burdenByAdmission={burdenByAdmission} />
+          )}
         </div>
       </section>
 

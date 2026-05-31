@@ -1,12 +1,20 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
-import { shiftStatusLabel, useShift } from '../context/ShiftContext'
+import { useChargeNurseId } from '../hooks/useChargeNurseId'
+import { formatShiftOption } from '../lib/shiftLabel'
+import { formatNurseDisplay } from '../lib/nurseLabel'
+import { useShift } from '../context/ShiftContext'
 import { useUser } from '../context/UserContext'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { shifts, shiftId, selectedShift, setShiftId, loading, error } = useShift()
   const { user, loading: userLoading } = useUser()
-  const nurse = user?.shortName ?? (userLoading ? '…' : '—')
+  const chargeNurseId = useChargeNurseId()
+  const rawName = user?.shortName ?? (userLoading ? '…' : '—')
+  const nurse =
+    user && rawName !== '…' && rawName !== '—'
+      ? formatNurseDisplay(rawName, { nurseId: user.id, chargeNurseId })
+      : rawName
 
   return (
     <div className="min-h-dvh bg-canvas text-slate-800">
@@ -71,15 +79,6 @@ export function AppShell({ children }: { children: ReactNode }) {
       <main className="mx-auto w-full px-4 py-5 md:px-8">{children}</main>
     </div>
   )
-}
-
-function formatShiftOption(shift: { label: string; startsAt: string; status: string }) {
-  const date = new Date(shift.startsAt).toLocaleDateString('zh-TW', {
-    month: '2-digit',
-    day: '2-digit',
-    timeZone: 'Asia/Taipei',
-  })
-  return `${date} ${shift.label}（${shiftStatusLabel(shift.status)}）`
 }
 
 function TopNavLink({ to, children }: { to: string; children: ReactNode }) {

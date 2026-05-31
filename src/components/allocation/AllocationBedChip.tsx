@@ -78,7 +78,9 @@ export function AllocationBedChip({ bed, dragging, overlay, fill }: Props) {
             ))}
         </div>
         <div className="text-[12px] font-bold leading-none text-slate-900">{bed.bedShort}</div>
-        <div className="text-[10px] font-medium leading-snug text-slate-600 break-words">{primaryDiagnosis(bed.diagnosis)}</div>
+        <div className="line-clamp-2 text-[10px] font-medium leading-snug text-slate-600 break-words">
+          {primaryDiagnosis(bed.diagnosis)}
+        </div>
       </div>
     </div>
   )
@@ -86,7 +88,7 @@ export function AllocationBedChip({ bed, dragging, overlay, fill }: Props) {
   if (overlay) return chip
 
   return (
-    <AllocationPatientHoverHost patient={bed} disabled={isDragging || dragging}>
+    <AllocationPatientHoverHost patientId={bed.id} disabled={isDragging || dragging}>
       {chip}
     </AllocationPatientHoverHost>
   )

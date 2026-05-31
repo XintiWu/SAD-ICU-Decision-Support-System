@@ -29,6 +29,7 @@ export const listAdmissions = pg.listAdmissions
 export const listBurdenAssessments = pg.listBurdenAssessments
 export const listHandoffSnapshots = pg.listHandoffSnapshots
 export const listNurses = pg.listNurses
+export const listStatOrders = pg.listStatOrders
 export const listTasks = pg.listTasks
 export const getLatestAllocationRun = pg.getLatestAllocationRun
 export const suggestAllocationRun = pg.suggestAllocationRun

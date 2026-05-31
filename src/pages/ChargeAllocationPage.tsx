@@ -19,8 +19,10 @@ import {
   type AllocationRun,
   type ApiAdmission,
   type ApiNurse,
+  type ApiStatOrder,
   type BurdenAssessment,
 } from '../api/client'
+import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { AllocationDragPatientPanel } from '../components/allocation/AllocationDragPatientPanel'
 import { AllocationNurseLane } from '../components/allocation/AllocationNurseLane'
 import { AllocationUnassignedStrip } from '../components/allocation/AllocationUnassignedStrip'
@@ -34,6 +36,7 @@ import {
   emptyBoardState,
   invertBoard,
   mergeBurdenIntoCatalog,
+  mergeStatIntoCatalog,
   runToBoardState,
   type BoardState,
   type CatalogEntry,
@@ -82,10 +85,12 @@ export function ChargeAllocationPage() {
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [burdenAssessments, setBurdenAssessments] = useState<BurdenAssessment[]>([])
+  const [statOrders, setStatOrders] = useState<ApiStatOrder[]>([])
 
   const nurseIds = useMemo(() => nurses.map((n) => n.id), [nurses])
+  const chargeNurseIdFromShift = useChargeNurseId()
   const chargeNurseId =
-    selectedShift?.chargeNurse?.id ?? nurses.find((n) => n.role === 'charge_nurse')?.id ?? null
+    chargeNurseIdFromShift ?? nurses.find((n) => n.role === 'charge_nurse')?.id ?? null
   const nurseNames = useMemo(() => nurseNamesFromRows(nurses, chargeNurseId), [nurses, chargeNurseId])
   const readonly = runStatus === 'confirmed'
   const totalBeds = admissions.length
@@ -140,20 +145,23 @@ export function ChargeAllocationPage() {
     setLoading(true)
     setError(null)
     try {
-      const [nurseRows, admissionRows, latestRun, burdenRows] = await Promise.all([
+      const [nurseRows, admissionRows, latestRun, burdenRows, statRows] = await Promise.all([
         apiGet<ApiNurse[]>(`/nurses?shiftId=${shiftId}`),
         apiGet<ApiAdmission[]>(`/admissions?shiftId=${shiftId}&status=active`),
         apiGet<AllocationRun | null>(`/allocation-runs/current?shiftId=${shiftId}`),
         apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`),
+        apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${shiftId}`).catch(() => []),
       ])
 
       const allocatable = nurseRows.filter((n) => n.role === 'nurse' || n.role === 'charge_nurse')
       const ids = allocatable.map((n) => n.id)
       const nextCatalog = buildPatientCatalog(admissionRows)
       mergeBurdenIntoCatalog(nextCatalog, burdenRows)
+      mergeStatIntoCatalog(nextCatalog, statRows)
       setNurses(allocatable)
       setAdmissions(admissionRows)
       setBurdenAssessments(burdenRows)
+      setStatOrders(statRows)
 
       if (latestRun?.allocationRunId) {
         applyRunToCatalog(nextCatalog, latestRun)
@@ -210,6 +218,7 @@ export function ChargeAllocationPage() {
       const nextCatalog = buildPatientCatalog(admissions)
       applyRunToCatalog(nextCatalog, run)
       mergeBurdenIntoCatalog(nextCatalog, burdenAssessments)
+      mergeStatIntoCatalog(nextCatalog, statOrders)
       setCatalog(new Map(nextCatalog))
       setRunStatus(run.status)
       setError(null)
@@ -307,6 +316,7 @@ export function ChargeAllocationPage() {
       const nextCatalog = buildPatientCatalog(admissions)
       applyRunToCatalog(nextCatalog, run)
       mergeBurdenIntoCatalog(nextCatalog, burdenAssessments)
+      mergeStatIntoCatalog(nextCatalog, statOrders)
       setCatalog(new Map(nextCatalog))
       setUnassigned(board.unassigned)
       setByNurse(board.byNurse)

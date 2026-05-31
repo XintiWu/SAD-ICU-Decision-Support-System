@@ -54,6 +54,34 @@ export async function listShifts({ unitName = 'ICU' } = {}) {
   return result.rows.map(formatShift)
 }
 
+export async function listStatOrders({ shiftId } = {}) {
+  const result = await query(
+    `
+    select so.id, so.admission_id, so.title, so.kind,
+           so.ordered_by, so.ordered_at_display, so.reason, so.status,
+           b.label as bed_label, a.diagnosis
+    from stat_orders so
+    join admissions a on a.id = so.admission_id
+    join beds b on b.id = a.bed_id
+    where so.shift_id = $1 and so.status = 'pending'
+    order by so.ordered_at_display asc
+    `,
+    [shiftId],
+  )
+  return result.rows.map((r) => ({
+    id: r.id,
+    admissionId: r.admission_id,
+    bedLabel: r.bed_label,
+    diagnosis: r.diagnosis,
+    title: r.title,
+    kind: r.kind,
+    orderedBy: r.ordered_by,
+    orderedAt: r.ordered_at_display,
+    reason: r.reason ?? undefined,
+    status: r.status,
+  }))
+}
+
 async function resolveOnDutyCharge(shift) {
   if (shift.charge_nurse_id && shift.charge_short_name) {
     return { id: shift.charge_nurse_id, shortName: shift.charge_short_name }
@@ -406,10 +434,18 @@ export async function updateAllocationItems({ allocationRunId, items } = {}) {
   return getAllocationRun({ allocationRunId })
 }
 
-export async function confirmAllocationRun({ allocationRunId } = {}) {
+export async function confirmAllocationRun({ allocationRunId, userId } = {}) {
   const run = await getAllocationRun({ allocationRunId })
-  if (run.unassigned.length > 0) throw new ApiError(409, 'ALLOCATION_INCOMPLETE', '仍有病患尚未分配', { unassigned: run.unassigned.map((item) => item.admissionId) })
-  await query(`update allocation_runs set status = 'confirmed', confirmed_at = now() where id = $1`, [allocationRunId])
+  if (run.unassigned.length > 0) {
+    throw new ApiError(409, 'ALLOCATION_INCOMPLETE', '仍有病患尚未分配', { unassigned: run.unassigned.map((item) => item.admissionId) })
+  }
+  await withTransaction(async (client) => {
+    await client.query(
+      `update allocation_runs set status = 'confirmed', confirmed_at = now(), created_by = coalesce($2::uuid, created_by) where id = $1`,
+      [allocationRunId, userId ?? null],
+    )
+    await persistHandoffSnapshot(client, { allocationRunId, userId, run })
+  })
   return getAllocationRun({ allocationRunId })
 }
 
@@ -442,69 +478,69 @@ export async function getWarRoom({ shiftId } = {}) {
 }
 
 export async function getHandoffSheet({ shiftId } = {}) {
-  const allocation = await latestAllocation(shiftId)
-  const rows = []
-  for (const nurseRow of allocation.byNurse) {
-    for (const patient of nurseRow.patients) {
-      const admission = (await listAdmissions({ shiftId, status: 'active' })).find((item) => item.admissionId === patient.admissionId)
-      if (!admission) continue
-      rows.push({ ...admission, currentNurse: nurseRow.shortName, nextNurse: nurseRow.shortName, burdenScore: patient.score, handoffDiagnosis: admission.diagnosis })
-    }
+  const snapshot = await query(
+    `
+    select id, allocation_run_id, created_at
+    from handoff_snapshots
+    where shift_id = $1
+    order by created_at desc
+    limit 1
+    `,
+    [shiftId],
+  )
+  if (!snapshot.rows[0]) {
+    return { snapshotId: null, allocationRunId: null, createdAt: null, rows: [] }
   }
-  return { rows: rows.sort((a, b) => bedNo(a.bedLabel) - bedNo(b.bedLabel)) }
+  const rowResult = await query(
+    `select * from handoff_rows where snapshot_id = $1 order by sort_order`,
+    [snapshot.rows[0].id],
+  )
+  return {
+    snapshotId: snapshot.rows[0].id,
+    allocationRunId: snapshot.rows[0].allocation_run_id,
+    createdAt: snapshot.rows[0].created_at,
+    rows: rowResult.rows.map(formatHandoffRowFromDb),
+  }
 }
 
 export async function listHandoffSnapshots() {
   const result = await query(
     `
-    select ar.id, ar.shift_id, ar.confirmed_at, ar.created_by, s.shift_key, s.starts_at, s.ends_at,
-      n.short_name as created_by_name
-    from allocation_runs ar
-    join shifts s on s.id = ar.shift_id
-    left join nurses n on n.id = ar.created_by
-    where ar.status = 'confirmed' and ar.confirmed_at is not null
-    order by ar.confirmed_at desc
+    select hs.*, s.shift_key, s.starts_at, s.ends_at, n.short_name as created_by_name
+    from handoff_snapshots hs
+    join shifts s on s.id = hs.shift_id
+    left join nurses n on n.id = hs.created_by
+    order by hs.created_at desc
     `,
   )
-  return Promise.all(result.rows.map((row) => buildHandoffSnapshotSummary(row)))
+  return result.rows.map(formatHandoffSnapshotListItem)
 }
 
 export async function getHandoffSnapshot({ allocationRunId } = {}) {
   const row = await query(
     `
-    select ar.id, ar.shift_id, ar.confirmed_at, ar.created_by, s.shift_key, s.starts_at, s.ends_at,
-      n.short_name as created_by_name
-    from allocation_runs ar
-    join shifts s on s.id = ar.shift_id
-    left join nurses n on n.id = ar.created_by
-    where ar.id = $1 and ar.status = 'confirmed'
+    select hs.*, s.shift_key, s.starts_at, s.ends_at, n.short_name as created_by_name
+    from handoff_snapshots hs
+    join shifts s on s.id = hs.shift_id
+    left join nurses n on n.id = hs.created_by
+    where hs.allocation_run_id = $1
     `,
     [allocationRunId],
   )
   if (!row.rows[0]) throw new ApiError(404, 'SNAPSHOT_NOT_FOUND', '找不到交班快照', { allocationRunId })
-  const summary = await buildHandoffSnapshotSummary(row.rows[0])
-  const allocation = await getAllocationRun({ allocationRunId })
-  const tasksResult = await listTasks({ shiftId: row.rows[0].shift_id, assignee: 'all' })
-  const nurseBlocks = allocation.byNurse.map((nurseRow) => ({
-    nurseId: nurseRow.nurseId,
-    nurseName: nurseRow.shortName,
-    load: nurseRow.load,
-    beds: nurseRow.patients.map((patient) => ({
-      admissionId: patient.admissionId,
-      bedLabel: patient.bedLabel,
-      label: `${patient.bedLabel} — ${patient.diagnosis}`,
-      score: patient.score,
-      tone: patient.tone,
-    })),
-  }))
+  const snapshot = row.rows[0]
   return {
-    ...summary,
+    ...formatHandoffSnapshotListItem(snapshot),
     allocation: {
-      unassignedCount: allocation.unassigned.length,
-      stats: allocation.stats,
+      unassignedCount: snapshot.unassigned_count,
+      stats: {
+        totalBeds: snapshot.total_beds,
+        totalNurses: snapshot.total_nurses,
+        averageLoad: Number(snapshot.avg_load),
+        maxLoad: snapshot.max_load,
+      },
     },
-    nurseBlocks,
-    tasks: tasksResult.data,
+    nurseBlocks: parseNurseBlocks(snapshot.nurse_blocks),
   }
 }
 
@@ -539,7 +575,13 @@ function formatShift(row) {
 
 function shiftLabel(row) {
   const name = row.shift_key === 'day' ? '白班' : row.shift_key === 'evening' ? '小夜班' : '大夜班'
-  return `${name} ${hhmm(row.starts_at)}-${hhmm(row.ends_at)}`
+  const date = new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Taipei',
+  }).format(new Date(row.starts_at))
+  return `${date} ${name} ${hhmm(row.starts_at)}-${hhmm(row.ends_at)}`
 }
 
 function hhmm(value) {
@@ -790,31 +832,192 @@ async function ensureBurdenAssessmentsForShift(shiftId) {
   }
 }
 
-async function buildHandoffSnapshotSummary(row) {
-  const allocation = await getAllocationRun({ allocationRunId: row.id })
-  const tasksResult = await listTasks({ shiftId: row.shift_id, assignee: 'all' })
-  const urgentOpen = tasksResult.data.filter((task) => task.urgent && !task.done).length
-  const openTasks = tasksResult.data.filter((task) => !task.done).length
-  const patientCount = allocation.byNurse.reduce((sum, nurse) => sum + nurse.patients.length, 0)
+async function persistHandoffSnapshot(client, { allocationRunId, userId, run } = {}) {
+  const existing = await client.query('select id from handoff_snapshots where allocation_run_id = $1', [allocationRunId])
+  if (existing.rows[0]) return existing.rows[0].id
+
+  const shiftId = run.shiftId
+  const admissions = await listAdmissions({ shiftId, status: 'active' })
+  const burdens = await listBurdenAssessments({ shiftId, scope: 'all' })
+  const statOrders = await listStatOrders({ shiftId })
+  const burdenByAdmission = new Map(burdens.map((item) => [item.admissionId, item]))
+  const nurseBlocks = buildNurseBlocks(run)
+  const patientCount = run.byNurse.reduce((sum, nurse) => sum + nurse.patients.length, 0)
+
+  const snapshotResult = await client.query(
+    `
+    insert into handoff_snapshots (
+      allocation_run_id, shift_id, created_by,
+      patient_count, nurse_count, stat_total,
+      avg_load, max_load, unassigned_count,
+      total_beds, total_nurses, nurse_blocks
+    ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12::jsonb)
+    returning id
+    `,
+    [
+      allocationRunId,
+      shiftId,
+      userId ?? null,
+      patientCount,
+      run.byNurse.length,
+      statOrders.length,
+      run.stats.averageLoad,
+      run.stats.maxLoad,
+      run.unassigned.length,
+      run.stats.totalBeds,
+      run.stats.totalNurses,
+      JSON.stringify(nurseBlocks),
+    ],
+  )
+  const snapshotId = snapshotResult.rows[0].id
+
+  let sortOrder = 0
+  for (const nurseRow of run.byNurse) {
+    for (const patient of nurseRow.patients) {
+      const admission = admissions.find((item) => item.admissionId === patient.admissionId)
+      if (!admission) continue
+      sortOrder += 1
+      const burden = burdenByAdmission.get(patient.admissionId)
+      await client.query(
+        `
+        insert into handoff_rows (
+          snapshot_id, admission_id, sort_order,
+          bed_label, patient_name, diagnosis, sex, age, admitted_at, attending_physician,
+          current_nurse, next_nurse, burden_score, handoff_diagnosis, burden_detail
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+        `,
+        [
+          snapshotId,
+          admission.admissionId,
+          sortOrder,
+          admission.bedLabel,
+          admission.patientName,
+          admission.diagnosis,
+          admission.sex,
+          admission.age,
+          admission.admittedAt,
+          admission.attendingPhysician,
+          nurseRow.shortName,
+          nurseRow.shortName,
+          patient.score,
+          admission.diagnosis,
+          burdenDetailText(burden),
+        ],
+      )
+    }
+  }
+
+  return snapshotId
+}
+
+function buildNurseBlocks(run) {
+  return run.byNurse.map((nurseRow) => ({
+    nurseId: nurseRow.nurseId,
+    nurseName: nurseRow.shortName,
+    load: nurseRow.load,
+    beds: nurseRow.patients.map((patient) => ({
+      admissionId: patient.admissionId,
+      bedLabel: patient.bedLabel,
+      label: `${patient.bedLabel} — ${patient.diagnosis}`,
+      score: patient.score,
+      tone: patient.tone,
+    })),
+  }))
+}
+
+function formatHandoffSnapshotListItem(row) {
   return {
-    id: row.id,
-    allocationRunId: row.id,
+    id: row.allocation_run_id,
+    allocationRunId: row.allocation_run_id,
     shiftId: row.shift_id,
     shiftKey: row.shift_key,
     shiftLabel: shiftLabel(row),
-    createdAt: row.confirmed_at,
+    createdAt: row.created_at,
     createdBy: row.created_by_name ?? '小組長',
     summary: {
-      patientCount,
-      nurseCount: allocation.byNurse.length,
-      statTotal: urgentOpen,
-      taskTotal: tasksResult.meta.counts.total,
-      taskOpen: openTasks,
-      taskUrgentOpen: urgentOpen,
-      avgLoad: allocation.stats.averageLoad,
-      maxLoad: allocation.stats.maxLoad,
+      patientCount: row.patient_count,
+      nurseCount: row.nurse_count,
+      statTotal: row.stat_total,
+      avgLoad: Number(row.avg_load),
+      maxLoad: row.max_load,
     },
   }
+}
+
+function formatHandoffRowFromDb(row) {
+  return {
+    admissionId: row.admission_id,
+    bedLabel: row.bed_label,
+    patientName: row.patient_name,
+    diagnosis: row.diagnosis,
+    sex: row.sex,
+    age: Number(row.age),
+    admittedAt: row.admitted_at,
+    attendingPhysician: row.attending_physician,
+    currentNurse: row.current_nurse,
+    nextNurse: row.next_nurse,
+    burdenScore: Number(row.burden_score),
+    handoffDiagnosis: row.handoff_diagnosis,
+    burdenDetail: row.burden_detail,
+  }
+}
+
+function parseNurseBlocks(value) {
+  if (Array.isArray(value)) return value
+  if (typeof value === 'string') {
+    try {
+      return JSON.parse(value)
+    } catch {
+      return []
+    }
+  }
+  return []
+}
+
+const SUBJECTIVE_DETAIL_LABELS = {
+  rassScore: 'RASS',
+  agitatedFallRisk: '下床風險',
+  agitatedTubeRemovalRisk: '拔管風險',
+  drainageTube: '引流管',
+  tubeFeeding: '管灌',
+  dressingChangeFrequency: '換藥頻繁',
+  vitalMonitoringFrequency: '監測頻繁',
+}
+
+function burdenDetailText(assessment) {
+  if (!assessment) return '—'
+  const lines = []
+  const objectiveLabels = new Map(objectiveFactorDefinitions.map((factor) => [factor.code, factor.label]))
+  for (const [key, raw] of Object.entries(assessment.objective ?? {})) {
+    const points = Number(raw ?? 0)
+    if (points <= 0) continue
+    lines.push(`${objectiveLabels.get(key) ?? key} ${points}`)
+  }
+  const subjective = assessment.subjective
+  if (subjective) {
+    if (subjective.rassScore != null) lines.push(`${SUBJECTIVE_DETAIL_LABELS.rassScore} ${subjective.rassScore}`)
+    if (subjective.agitatedFallRisk) lines.push(`${SUBJECTIVE_DETAIL_LABELS.agitatedFallRisk} 是`)
+    if (subjective.agitatedTubeRemovalRisk) lines.push(`${SUBJECTIVE_DETAIL_LABELS.agitatedTubeRemovalRisk} 是`)
+    if (subjective.drainageTube) lines.push(`${SUBJECTIVE_DETAIL_LABELS.drainageTube} 是`)
+    if (subjective.tubeFeeding) lines.push(`${SUBJECTIVE_DETAIL_LABELS.tubeFeeding} 是`)
+    if (Number(subjective.dressingChangeFrequency) > 0) {
+      lines.push(`${SUBJECTIVE_DETAIL_LABELS.dressingChangeFrequency} ${levelDetailLabel(subjective.dressingChangeFrequency)}`)
+    }
+    if (Number(subjective.vitalMonitoringFrequency) > 0) {
+      lines.push(`${SUBJECTIVE_DETAIL_LABELS.vitalMonitoringFrequency} ${levelDetailLabel(subjective.vitalMonitoringFrequency)}`)
+    }
+  }
+  if (lines.length === 0) {
+    return `客觀 ${assessment.score.objectiveTotal} · 主觀 ${assessment.score.subjectiveTotal}`
+  }
+  return lines.slice(0, 5).join(' · ')
+}
+
+function levelDetailLabel(value) {
+  const level = Number(value)
+  if (level >= 2) return '高'
+  if (level >= 1) return '中'
+  return '低'
 }
 
 function bedNo(label) {

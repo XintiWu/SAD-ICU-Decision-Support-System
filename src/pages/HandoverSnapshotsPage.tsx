@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import { apiGet, type ApiNurse, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
+import { apiGet, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
+import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
 
 export function HandoverSnapshotsPage() {
@@ -80,7 +81,7 @@ export function HandoverSnapshotsPage() {
               <div className="text-[11px] font-semibold tracking-wide text-slate-600">HANDOVER ARCHIVE</div>
               <h1 className="mt-1 text-lg font-extrabold tracking-tight text-slate-900">交班快照紀錄</h1>
               <p className="mt-1 text-sm text-slate-600">
-                資料來自已確認的分床紀錄（allocation_runs）。若要新增快照，請至{' '}
+                確認分床時會自動封存交班快照（handoff_snapshots / handoff_rows）。若要新增快照，請至{' '}
                 <Link to="/leader/allocation" className="font-semibold text-slate-900 underline underline-offset-2">
                   指派分床配對
                 </Link>{' '}
@@ -131,9 +132,7 @@ export function HandoverSnapshotsPage() {
                           active ? 'text-white/85' : 'text-slate-600',
                         ].join(' ')}
                       >
-                        <span>未完成 {item.summary.taskOpen}</span>
-                        <span>·</span>
-                        <span>急件 {item.summary.taskUrgentOpen}</span>
+                        <span>STAT {item.summary.statTotal}</span>
                         <span>·</span>
                         <span>最高負荷 {item.summary.maxLoad}</span>
                       </div>
@@ -185,22 +184,7 @@ function EmptyDetail() {
 }
 
 function SnapshotDetail({ snapshot }: { snapshot: HandoffSnapshotDetail }) {
-  const [chargeNurseId, setChargeNurseId] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    apiGet<ApiNurse[]>(`/nurses?shiftId=${snapshot.shiftId}`)
-      .then((rows) => {
-        if (!alive) return
-        setChargeNurseId(rows.find((n) => n.role === 'charge_nurse')?.id ?? null)
-      })
-      .catch(() => {
-        if (alive) setChargeNurseId(null)
-      })
-    return () => {
-      alive = false
-    }
-  }, [snapshot.shiftId])
+  const chargeNurseId = useChargeNurseId(snapshot.shiftId)
 
   return (
     <div className="grid gap-4">
@@ -212,7 +196,7 @@ function SnapshotDetail({ snapshot }: { snapshot: HandoffSnapshotDetail }) {
           </h2>
           <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
             <span className="rounded-full bg-surface px-2.5 py-1 font-semibold ring-1 ring-black/10">
-              記錄人 {snapshot.createdBy}
+              記錄人 {formatNurseDisplay(snapshot.createdBy, { role: 'charge_nurse' })}
             </span>
           </div>
         </div>
@@ -234,20 +218,22 @@ function SnapshotDetail({ snapshot }: { snapshot: HandoffSnapshotDetail }) {
         <SectionTitle title="分床分配（封存當下）" subtitle={`${snapshot.nurseBlocks.length} 位護理師有分配床位`} />
         <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
           {snapshot.nurseBlocks.map((block) => (
-            <article key={block.nurseId} className="rounded-2xl bg-surface p-4 ring-1 ring-black/10">
-              <div className="flex items-center justify-between gap-2">
-                <h3 className="text-sm font-extrabold text-slate-900">
+            <article key={block.nurseId} className="min-w-0 overflow-hidden rounded-2xl bg-surface p-4 ring-1 ring-black/10">
+              <div className="flex min-w-0 items-center gap-2">
+                <h3 className="min-w-0 flex-1 truncate text-sm font-extrabold text-slate-900">
                   護理師 {formatNurseDisplay(block.nurseName, { nurseId: block.nurseId, chargeNurseId })}
                 </h3>
                 <LoadPill load={block.load} />
               </div>
-              <ul className="mt-3 grid gap-2">
+              <ul className="mt-3 grid min-w-0 gap-2">
                 {block.beds.map((bed) => (
                   <li
                     key={bed.admissionId}
-                    className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/5"
+                    className="flex min-w-0 items-center gap-2 overflow-hidden rounded-xl bg-white px-3 py-2 ring-1 ring-black/5"
                   >
-                    <span className="min-w-0 truncate text-xs font-semibold text-slate-800">{bed.label}</span>
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800" title={bed.label}>
+                      {bed.label}
+                    </span>
                     <TonePill tone={bed.tone} score={bed.score} />
                   </li>
                 ))}
@@ -303,7 +289,9 @@ function LoadPill({ load }: { load: number }) {
       : tone === 'mid'
         ? 'bg-[#fff7ed] text-[#9a5b1a] ring-[#f1d7b8]'
         : 'bg-[#eaf7ee] text-[#1e6c3a] ring-[#b7e0c5]'
-  return <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ring-1 ${cls}`}>負荷 {load}</span>
+  return (
+    <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-extrabold ring-1 ${cls}`}>負荷 {load}</span>
+  )
 }
 
 function TonePill({ tone, score }: { tone: 'high' | 'mid' | 'low'; score: number }) {
