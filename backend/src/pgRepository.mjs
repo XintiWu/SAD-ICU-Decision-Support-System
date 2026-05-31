@@ -32,6 +32,20 @@ export async function getCurrentShift(unitName = 'ICU') {
   return formatShift(shift)
 }
 
+export async function listShifts({ unitName = 'ICU' } = {}) {
+  const result = await query(
+    `
+    select s.*, n.short_name as charge_short_name
+    from shifts s
+    left join nurses n on n.id = s.charge_nurse_id
+    where s.unit_name = $1
+    order by s.starts_at desc
+    `,
+    [unitName],
+  )
+  return result.rows.map(formatShift)
+}
+
 export async function listNurses({ shiftId } = {}) {
   const params = []
   let join = ''
