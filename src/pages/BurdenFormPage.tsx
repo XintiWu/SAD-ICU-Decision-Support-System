@@ -1,71 +1,59 @@
 import type { ReactNode } from 'react'
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import { INITIAL_BY_NURSE, NURSES, type NurseId } from '../data/allocationMock'
 import {
-  formatBurdenHistoryTime,
-  getLatestBurdenHistory,
-  saveBurdenHistory,
-  type BurdenBedScore,
-} from '../state/burdenFormHistoryStore'
+  apiGet,
+  apiPatch,
+  type BurdenAssessment,
+  type SubjectivePayload,
+} from '../api/client'
+import { useShift } from '../context/ShiftContext'
+import { useUser } from '../context/UserContext'
 import {
-  getHandoverSnapshot,
-  listHandoverSnapshots,
-} from '../state/handoverSnapshotStore'
-import {
-  getDemoPatients,
+  assessmentToRow,
+  getIncompleteFields,
   objectiveTotal,
-  setDemoPatients,
+  OBJECTIVE_LAYOUT,
   subjectiveTotal,
-  type BedId,
-  type ObjectiveFactorKey,
-  type Patient,
-  type SubjectiveLevel,
-  type SubjectiveFactors,
-} from '../state/demoStore'
+  type BurdenFormRow,
+} from '../lib/burdenFactors'
 
-const SUBJECTIVE_REQUIRED_KEY = 'RASS 鎮靜分數（原始數值）' as const satisfies keyof SubjectiveFactors
-const SUBJECTIVE_REQUIRED_LABEL = 'RASS 鎮靜分數'
+type BedScore = { total: number; subjective: number; objective: number }
 
-function buildScoresMap(rows: Patient[]): Partial<Record<BedId, BurdenBedScore>> {
-  const scores: Partial<Record<BedId, BurdenBedScore>> = {}
-  for (const p of rows) {
-    const s = p.subjective ?? defaultSubjective()
-    const subjective = subjectiveTotal(s)
-    const objective = objectiveTotal(p.objective)
-    scores[p.bedId] = { total: subjective + objective, subjective, objective }
-  }
-  return scores
+type SubjectiveLevel = SubjectivePayload['dressingChangeFrequency']
+
+function findPreviousShift(shifts: { id: string; startsAt: string; label: string }[], currentShiftId: string) {
+  const sorted = [...shifts].sort(
+    (a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime(),
+  )
+  const idx = sorted.findIndex((s) => s.id === currentShiftId)
+  if (idx <= 0) return null
+  return sorted[idx - 1]
 }
 
-function getIncompleteFields(p: Patient): string[] {
-  const s = p.subjective
-  if (!s) return [SUBJECTIVE_REQUIRED_LABEL]
-  return s[SUBJECTIVE_REQUIRED_KEY] == null ? [SUBJECTIVE_REQUIRED_LABEL] : []
-}
-
-function getPreviousScores(): Partial<Record<BedId, BurdenBedScore>> | null {
-  const latest = getLatestBurdenHistory()
-  if (latest && Object.keys(latest.scores).length > 0) return latest.scores
-  const items = listHandoverSnapshots()
-  if (items.length === 0) return null
-  const snap = getHandoverSnapshot(items[0].id)
-  if (!snap) return null
-  const scores: Partial<Record<BedId, BurdenBedScore>> = {}
-  for (const p of snap.patients) {
-    const s = p.subjective ? subjectiveTotal(p.subjective) : 0
-    const o = objectiveTotal(p.objective)
-    scores[p.bedId] = { total: s + o, subjective: s, objective: o }
+function buildScoresMap(rows: BurdenFormRow[]): Partial<Record<string, BedScore>> {
+  const scores: Partial<Record<string, BedScore>> = {}
+  for (const row of rows) {
+    const subjective = row.subjective ? subjectiveTotal(row.subjective) : 0
+    const objective = objectiveTotal(row.objective)
+    scores[row.admissionId] = { total: subjective + objective, subjective, objective }
   }
   return scores
 }
 
 export function BurdenFormPage() {
-  const currentNurseId: NurseId = 'n1'
+  const { shiftId, shifts } = useShift()
+  const { userId, user, loading: userLoading, error: userError } = useUser()
+  const nurseShortName = user?.shortName ?? '—'
+
   const [tab, setTab] = useState<'客觀' | '主觀'>('主觀')
   const [subjectiveMode, setSubjectiveMode] = useState<'上一班' | '本班'>('上一班')
-  const [allRows, setAllRows] = useState<Patient[]>(() => getDemoPatients())
+  const [rows, setRows] = useState<BurdenFormRow[]>([])
+  const [previousRows, setPreviousRows] = useState<BurdenFormRow[]>([])
+  const [previousLabel, setPreviousLabel] = useState<string | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
+  const [submitting, setSubmitting] = useState(false)
   const [toast, setToast] = useState<{ message: string; tone: 'ok' } | null>(null)
-  const [historyVersion, setHistoryVersion] = useState(0)
 
   useEffect(() => {
     if (!toast) return
@@ -73,114 +61,118 @@ export function BurdenFormPage() {
     return () => window.clearTimeout(t)
   }, [toast])
 
-  const objectiveLayout = useMemo(() => {
-    const row = (key: ObjectiveFactorKey, label: string, hint?: string) => ({ key, label, hint })
-    return [
-      {
-        no: 1,
-        title: '是否需住在負壓隔離病房',
-        compactTitle: '負壓隔離病房',
-        rows: [row('負壓隔離病房', '負壓隔離病房')],
-      },
-      {
-        no: 2,
-        title: '高呼吸器需求',
-        hint: 'PEEP > 10 或 FiO₂ 約 ≥ 50% 即算',
-        compactTitle: '高呼吸器需求',
-        rows: [row('高呼吸器需求', '高呼吸器需求')],
-      },
-      {
-        no: 3,
-        title: '藥物計數',
-        compactTitle: '藥物計數',
-        rows: [row('藥物種類數', '藥物種類數'), row('藥物使用頻率', '藥物使用頻率')],
-      },
-      {
-        no: 4,
-        title: '特殊檢查項目',
-        compactTitle: '特殊檢查',
-        rows: [
-          row('CRRT（持續型 A）', 'CRRT', '持續型 A'),
-          row('IABP（持續型 B）', 'IABP', '持續型 B'),
-          row('ECMO（持續型 B）', 'ECMO', '持續型 B'),
-          row('PRONE（持續型B）', 'PRONE', '持續型 B'),
-          row('低溫治療（持續性 B）', '低溫治療', '持續型 B'),
-          row('大量輸血（單次 C）', '大量輸血', '單次 C'),
-          row('跟Plasma（單次C）', 'Plasma', '單次 C'),
-        ],
-      },
-    ] as const
-  }, [])
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    setError(null)
+    setRows([])
+    setPreviousRows([])
+    setPreviousLabel(null)
 
-  const assignedBedIds = useMemo(() => {
-    const ids = INITIAL_BY_NURSE[currentNurseId] ?? []
-    return new Set(
-      ids.map((pid) => {
-        const n = Number(pid.slice(1))
-        return (`bed${n}` as BedId) satisfies BedId
-      }),
-    )
-  }, [currentNurseId])
+    async function load() {
+      try {
+        const current = await apiGet<BurdenAssessment[]>(
+          `/burden-assessments?shiftId=${shiftId}&scope=mine`,
+          { userId },
+        )
+        if (!alive) return
+        const currentRows = current.map(assessmentToRow)
+        setRows(currentRows)
 
-  const rows = useMemo(
-    () => allRows.filter((r) => assignedBedIds.has(r.bedId)),
-    [allRows, assignedBedIds],
-  )
+        const prevShift = findPreviousShift(shifts, shiftId)
+        if (prevShift) {
+          const prev = await apiGet<BurdenAssessment[]>(
+            `/burden-assessments?shiftId=${prevShift.id}&scope=mine`,
+            { userId },
+          )
+          if (!alive) return
+          const admissionIds = new Set(currentRows.map((r) => r.admissionId))
+          setPreviousRows(prev.filter((a) => admissionIds.has(a.admissionId)).map(assessmentToRow))
+          setPreviousLabel(prevShift.label)
+        }
+      } catch (err) {
+        if (!alive) return
+        setError(err instanceof Error ? err.message : '讀取麻煩度評估失敗')
+      } finally {
+        if (alive) setLoading(false)
+      }
+    }
 
-  const incompleteByBed = useMemo(() => {
-    const map = new Map<BedId, string[]>()
-    for (const r of rows) {
-      const fields = getIncompleteFields(r)
-      if (fields.length > 0) map.set(r.bedId, fields)
+    void load()
+    return () => {
+      alive = false
+    }
+  }, [shiftId, userId, shifts])
+
+  const incompleteByAdmission = useMemo(() => {
+    const map = new Map<string, string[]>()
+    for (const row of rows) {
+      const fields = getIncompleteFields(row.subjective)
+      if (fields.length > 0) map.set(row.admissionId, fields)
     }
     return map
   }, [rows])
 
-  const missingCount = incompleteByBed.size
+  const missingCount = incompleteByAdmission.size
 
   const incompleteBedLabels = useMemo(
     () =>
       rows
-        .filter((r) => incompleteByBed.has(r.bedId))
+        .filter((r) => incompleteByAdmission.has(r.admissionId))
         .map((r) => r.bedLabel)
         .join('、'),
-    [rows, incompleteByBed],
+    [rows, incompleteByAdmission],
   )
 
-  const previousScores = useMemo(() => getPreviousScores(), [historyVersion])
-  const previousLabel = useMemo(() => {
-    const latest = getLatestBurdenHistory()
-    if (latest) return `${latest.label}（${formatBurdenHistoryTime(latest.savedAt)}）`
-    const items = listHandoverSnapshots()
-    if (items.length > 0) return '上次交班快照'
-    return null
-  }, [historyVersion])
+  const previousScores = useMemo(() => buildScoresMap(previousRows), [previousRows])
 
-  const previousSnapshot = useMemo(() => {
-    const items = listHandoverSnapshots()
-    if (items.length === 0) return null
-    return getHandoverSnapshot(items[0].id)
-  }, [])
-
-  const previousSnapshotRows = useMemo(() => {
-    if (!previousSnapshot) return []
-    return previousSnapshot.patients.filter((p) => assignedBedIds.has(p.bedId))
-  }, [previousSnapshot, assignedBedIds])
-
-  const persistRows = useCallback((label: string) => {
-    setDemoPatients(allRows)
-    saveBurdenHistory(buildScoresMap(rows), label)
-    setHistoryVersion((v) => v + 1)
-  }, [allRows, rows])
-
-  const handleSubmit = useCallback(() => {
+  const handleSubmit = useCallback(async () => {
     if (missingCount > 0) {
       setTab('主觀')
       return
     }
-    persistRows('已送出')
-    setToast({ message: '已送出本班主觀評估', tone: 'ok' })
-  }, [missingCount, persistRows])
+    setSubmitting(true)
+    setError(null)
+    try {
+      await Promise.all(
+        rows.map((row) =>
+          apiPatch(
+            `/burden-assessments/${row.assessmentId}`,
+            { subjective: row.subjective, status: 'submitted' },
+            { userId },
+          ),
+        ),
+      )
+      setToast({ message: '已送出本班主觀評估', tone: 'ok' })
+      const refreshed = await apiGet<BurdenAssessment[]>(
+        `/burden-assessments?shiftId=${shiftId}&scope=mine`,
+        { userId },
+      )
+      setRows(refreshed.map(assessmentToRow))
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '送出失敗')
+    } finally {
+      setSubmitting(false)
+    }
+  }, [missingCount, rows, shiftId, userId])
+
+  const selectedShift = useMemo(() => shifts.find((s) => s.id === shiftId) ?? null, [shifts, shiftId])
+
+  if (userLoading || loading) {
+    return (
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
+        <Notice text="讀取中..." />
+      </div>
+    )
+  }
+
+  if (userError || error) {
+    return (
+      <div className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
+        <Notice tone="bad" text={userError ?? error ?? '讀取失敗'} />
+      </div>
+    )
+  }
 
   return (
     <div className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
@@ -211,7 +203,7 @@ export function BurdenFormPage() {
         <div className="flex w-full flex-wrap items-start justify-between gap-3 sm:w-auto sm:justify-end">
           <div className="min-w-0 text-right text-xs text-slate-600">
             <div className="truncate">客觀＝由醫囑/用藥自動計算；主觀＝護理師自評（下班前必完成）</div>
-            <div className="mt-1 truncate">目前僅顯示：{NURSES[currentNurseId].shortName} 分配到的病患</div>
+            <div className="mt-1 truncate">目前僅顯示：{nurseShortName} 分配到的病患</div>
           </div>
           {tab === '客觀' ? (
             <span className="rounded-xl bg-slate-100 px-4 py-2 text-sm font-semibold text-slate-500 ring-1 ring-black/5">
@@ -240,19 +232,40 @@ export function BurdenFormPage() {
         </div>
       ) : null}
 
-      {tab === '客觀' ? (
+      {rows.length === 0 ? (
+        <div className="mt-6 space-y-3">
+          <Notice text="目前沒有分配到的病患評估資料" />
+          <div className="rounded-xl bg-surface px-4 py-3 text-xs leading-relaxed text-slate-600 ring-1 ring-black/5">
+            <p>
+              此頁只顯示<strong className="font-semibold text-slate-800">分床後分配給 {nurseShortName}</strong>
+              的病患（不是整班全部病人）。
+            </p>
+            {selectedShift ? (
+              <p className="mt-2">
+                目前班別：<span className="font-semibold text-slate-800">{selectedShift.label}</span>
+              </p>
+            ) : null}
+            <p className="mt-2">
+              Demo 登入為陳O媚，僅在 <strong className="font-semibold text-slate-800">5/19 白班</strong>、
+              <strong className="font-semibold text-slate-800">5/8 白班</strong> 有排班與分床；選 5/20
+              或其他班別會是空的。請從右上角切換班別。
+            </p>
+          </div>
+        </div>
+      ) : tab === '客觀' ? (
         <div className="mt-6 grid gap-4">
           <div className="-mx-6 px-6">
             <div className="grid gap-3 lg:grid-cols-2">
-              {rows.map((p) => {
-                const total = objectiveTotal(p.objective)
+              {rows.map((row) => {
+                const total = objectiveTotal(row.objective)
 
                 return (
-                  <div key={p.bedId} className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
+                  <div key={row.admissionId} className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <div className="text-sm font-extrabold tracking-tight text-slate-900">
-                          {p.bedLabel} <span className="font-semibold text-slate-700">— {p.diagnosis}</span>
+                          {row.bedLabel}{' '}
+                          <span className="font-semibold text-slate-700">— {row.diagnosis}</span>
                         </div>
                         <div className="mt-1 text-xs text-slate-500">
                           系統自動計算 · 僅供檢視，無法編輯或儲存
@@ -268,7 +281,7 @@ export function BurdenFormPage() {
 
                     <div className="mt-4 rounded-2xl bg-slate-50/80 p-3">
                       <div className="grid gap-2 md:grid-cols-2">
-                        {objectiveLayout.flatMap((sec) => [
+                        {OBJECTIVE_LAYOUT.flatMap((sec) => [
                           <div
                             key={`h-${sec.no}`}
                             className="md:col-span-2 flex flex-wrap items-baseline justify-between gap-2 pt-1"
@@ -276,7 +289,7 @@ export function BurdenFormPage() {
                             <div className="text-xs font-extrabold text-slate-800">
                               {sec.no}. {sec.compactTitle}
                             </div>
-                            {'hint' in sec && sec.hint ? (
+                            {sec.hint ? (
                               <div className="text-[11px] font-medium text-slate-500">{sec.hint}</div>
                             ) : null}
                           </div>,
@@ -288,13 +301,13 @@ export function BurdenFormPage() {
                               <div className="min-w-0">
                                 <div className="flex flex-wrap items-center gap-2">
                                   <div className="truncate text-xs font-medium text-slate-600">{r.label}</div>
-                                  {r.hint ? (
+                                  {'hint' in r && r.hint ? (
                                     <span className="text-[10px] font-medium text-slate-400">{r.hint}</span>
                                   ) : null}
                                 </div>
                               </div>
                               <span className="shrink-0 text-sm font-bold tabular-nums text-slate-800">
-                                {p.objective[r.key]}
+                                {row.objective[r.key] ?? 0}
                               </span>
                             </div>
                           )),
@@ -310,25 +323,25 @@ export function BurdenFormPage() {
       ) : subjectiveMode === '上一班' ? (
         <div className="mt-6 grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_360px] lg:items-start">
           <div className="grid gap-4">
-            {previousSnapshotRows.length === 0 ? (
+            {previousRows.length === 0 ? (
               <div className="rounded-2xl bg-surface p-5 text-sm font-semibold text-slate-600 ring-1 ring-black/10">
-                找不到上一班資料（尚未建立交班快照）
+                找不到上一班資料
               </div>
             ) : (
-              previousSnapshotRows
-                .slice(0, Math.ceil(previousSnapshotRows.length / 2))
-                .map((p) => <SubjectivePatientReadonlyCard key={p.bedId} patient={p} />)
+              previousRows
+                .slice(0, Math.ceil(previousRows.length / 2))
+                .map((row) => <SubjectivePatientReadonlyCard key={row.admissionId} row={row} />)
             )}
           </div>
           <div className="grid gap-4">
-            {previousSnapshotRows.length > 0
-              ? previousSnapshotRows
-                  .slice(Math.ceil(previousSnapshotRows.length / 2))
-                  .map((p) => <SubjectivePatientReadonlyCard key={p.bedId} patient={p} />)
+            {previousRows.length > 0
+              ? previousRows
+                  .slice(Math.ceil(previousRows.length / 2))
+                  .map((row) => <SubjectivePatientReadonlyCard key={row.admissionId} row={row} />)
               : null}
           </div>
           <div className="lg:sticky lg:top-6">
-            <SubjectiveSummarySingle rows={previousSnapshotRows} />
+            <SubjectiveSummarySingle rows={previousRows} />
           </div>
         </div>
       ) : (
@@ -336,16 +349,16 @@ export function BurdenFormPage() {
           <div className="grid gap-4">
             {rows
               .slice(0, Math.ceil(rows.length / 2))
-              .map((p) => (
+              .map((row) => (
                 <SubjectivePatientCard
-                  key={p.bedId}
-                  patient={p}
-                  incompleteFields={incompleteByBed.get(p.bedId)}
+                  key={row.admissionId}
+                  row={row}
+                  incompleteFields={incompleteByAdmission.get(row.admissionId)}
                   onChange={(patch) => {
-                    setAllRows((prev) =>
+                    setRows((prev) =>
                       prev.map((x) =>
-                        x.bedId === p.bedId
-                          ? { ...x, subjective: { ...(x.subjective ?? defaultSubjective()), ...patch } }
+                        x.admissionId === row.admissionId
+                          ? { ...x, subjective: { ...x.subjective, ...patch } }
                           : x,
                       ),
                     )
@@ -356,16 +369,16 @@ export function BurdenFormPage() {
           <div className="grid gap-4">
             {rows
               .slice(Math.ceil(rows.length / 2))
-              .map((p) => (
+              .map((row) => (
                 <SubjectivePatientCard
-                  key={p.bedId}
-                  patient={p}
-                  incompleteFields={incompleteByBed.get(p.bedId)}
+                  key={row.admissionId}
+                  row={row}
+                  incompleteFields={incompleteByAdmission.get(row.admissionId)}
                   onChange={(patch) => {
-                    setAllRows((prev) =>
+                    setRows((prev) =>
                       prev.map((x) =>
-                        x.bedId === p.bedId
-                          ? { ...x, subjective: { ...(x.subjective ?? defaultSubjective()), ...patch } }
+                        x.admissionId === row.admissionId
+                          ? { ...x, subjective: { ...x.subjective, ...patch } }
                           : x,
                       ),
                     )
@@ -383,7 +396,7 @@ export function BurdenFormPage() {
         </div>
       )}
 
-      {tab === '主觀' && subjectiveMode === '本班' ? (
+      {tab === '主觀' && subjectiveMode === '本班' && rows.length > 0 ? (
         <div className="mt-4 flex flex-wrap items-center justify-end gap-3">
           <div className="flex items-center gap-3">
             {missingCount > 0 ? (
@@ -395,10 +408,11 @@ export function BurdenFormPage() {
             )}
             <button
               type="button"
-              onClick={handleSubmit}
-              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90 active:scale-[0.98]"
+              disabled={submitting}
+              onClick={() => void handleSubmit()}
+              className="rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90 active:scale-[0.98] disabled:cursor-not-allowed disabled:opacity-60"
             >
-              送出
+              {submitting ? '送出中…' : '送出'}
             </button>
           </div>
         </div>
@@ -415,16 +429,16 @@ export function BurdenFormPage() {
   )
 }
 
-function defaultSubjective() {
-  return {
-    'RASS 鎮靜分數（原始數值）': null,
-    '躁動且有下床風險': false,
-    '躁動且有拔管風險': false,
-    引流管: false,
-    '需人工管灌': false,
-    '換藥頻繁程度': 0,
-    '生理狀態監測頻繁程度': 0,
-  } satisfies SubjectiveFactors
+function Notice({ text, tone }: { text: string; tone?: 'bad' }) {
+  const cls =
+    tone === 'bad'
+      ? 'bg-[#ffe8e1] text-[#b3341f] ring-[#f2b3a6]'
+      : 'bg-surface text-slate-600 ring-black/10'
+  return (
+    <div className={`rounded-xl px-4 py-3 text-sm font-semibold ring-1 ${cls}`} role="status">
+      {text}
+    </div>
+  )
 }
 
 function statusPill(total: number) {
@@ -433,23 +447,23 @@ function statusPill(total: number) {
   return { label: '低', cls: 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]' }
 }
 
-function SubjectivePatientReadonlyCard({ patient }: { patient: Patient }) {
-  const s = patient.subjective ?? defaultSubjective()
-  const sTotal = patient.subjective ? subjectiveTotal(s) : 0
-  const oTotal = objectiveTotal(patient.objective)
+function SubjectivePatientReadonlyCard({ row }: { row: BurdenFormRow }) {
+  const s = row.subjective
+  const sTotal = row.subjective ? subjectiveTotal(s) : 0
+  const oTotal = objectiveTotal(row.objective)
   const total = sTotal + oTotal
   const status = statusPill(total)
 
   const yesNo = (v: boolean) => (v ? '是' : '否')
   const level = (v: SubjectiveLevel) => (v === 2 ? '高' : v === 1 ? '中' : '低')
-  const rass = s['RASS 鎮靜分數（原始數值）']
+  const rass = s.rassScore
 
   return (
     <section className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-extrabold tracking-tight text-slate-900">
-            {patient.bedLabel} <span className="font-semibold text-slate-700">— {patient.diagnosis}</span>
+            {row.bedLabel} <span className="font-semibold text-slate-700">— {row.diagnosis}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="rounded-full bg-surface px-3 py-1 font-semibold ring-1 ring-black/10">
@@ -471,12 +485,12 @@ function SubjectivePatientReadonlyCard({ patient }: { patient: Patient }) {
 
       <div className="mt-4 grid gap-2 rounded-2xl bg-surface p-3 ring-1 ring-black/5">
         <ReadonlyRow label="RASS 鎮靜分數（原始數值）" value={rass == null ? '—' : String(rass)} />
-        <ReadonlyRow label="躁動且有下床風險" value={yesNo(s['躁動且有下床風險'])} />
-        <ReadonlyRow label="躁動且有拔管風險" value={yesNo(s['躁動且有拔管風險'])} />
-        <ReadonlyRow label="引流管" value={yesNo(s['引流管'])} />
-        <ReadonlyRow label="需人工管灌" value={yesNo(s['需人工管灌'])} />
-        <ReadonlyRow label="換藥頻繁程度" value={level(s['換藥頻繁程度'])} />
-        <ReadonlyRow label="生理狀態監測頻繁程度" value={level(s['生理狀態監測頻繁程度'])} />
+        <ReadonlyRow label="躁動且有下床風險" value={yesNo(s.agitatedFallRisk)} />
+        <ReadonlyRow label="躁動且有拔管風險" value={yesNo(s.agitatedTubeRemovalRisk)} />
+        <ReadonlyRow label="引流管" value={yesNo(s.drainageTube)} />
+        <ReadonlyRow label="需人工管灌" value={yesNo(s.tubeFeeding)} />
+        <ReadonlyRow label="換藥頻繁程度" value={level(s.dressingChangeFrequency)} />
+        <ReadonlyRow label="生理狀態監測頻繁程度" value={level(s.vitalMonitoringFrequency)} />
       </div>
     </section>
   )
@@ -491,7 +505,7 @@ function ReadonlyRow({ label, value }: { label: string; value: string }) {
   )
 }
 
-function SubjectiveSummarySingle({ rows }: { rows: Patient[] }) {
+function SubjectiveSummarySingle({ rows }: { rows: BurdenFormRow[] }) {
   return (
     <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/10">
       <div className="bg-surface px-4 py-3">
@@ -499,16 +513,16 @@ function SubjectiveSummarySingle({ rows }: { rows: Patient[] }) {
         <div className="mt-1 text-[10px] font-medium text-slate-500">上班查看用，不需填寫</div>
       </div>
       <div className="divide-y divide-black/10">
-        {rows.map((p) => {
-          const s = p.subjective ? subjectiveTotal(p.subjective) : 0
-          const o = objectiveTotal(p.objective)
+        {rows.map((row) => {
+          const s = row.subjective ? subjectiveTotal(row.subjective) : 0
+          const o = objectiveTotal(row.objective)
           const total = s + o
           const status = statusPill(total)
           return (
-            <div key={p.bedId} className="flex items-start justify-between gap-3 px-4 py-3">
+            <div key={row.admissionId} className="flex items-start justify-between gap-3 px-4 py-3">
               <div className="min-w-0">
-                <div className="truncate text-sm font-semibold text-slate-900">{p.bedLabel}</div>
-                <div className="mt-0.5 truncate text-xs text-slate-600">{p.diagnosis}</div>
+                <div className="truncate text-sm font-semibold text-slate-900">{row.bedLabel}</div>
+                <div className="mt-0.5 truncate text-xs text-slate-600">{row.diagnosis}</div>
               </div>
               <div className="shrink-0 text-right">
                 <div className="text-xs font-extrabold tabular-nums text-slate-900">{total}</div>
@@ -534,17 +548,17 @@ function SubjectiveSummarySingle({ rows }: { rows: Patient[] }) {
 }
 
 function SubjectivePatientCard({
-  patient,
+  row,
   incompleteFields,
   onChange,
 }: {
-  patient: Patient
+  row: BurdenFormRow
   incompleteFields?: string[]
-  onChange: (patch: Partial<SubjectiveFactors>) => void
+  onChange: (patch: Partial<SubjectivePayload>) => void
 }) {
-  const s = patient.subjective ?? defaultSubjective()
+  const s = row.subjective
   const sTotal = subjectiveTotal(s)
-  const oTotal = objectiveTotal(patient.objective)
+  const oTotal = objectiveTotal(row.objective)
   const total = sTotal + oTotal
   const status = statusPill(total)
   const showIncomplete = incompleteFields && incompleteFields.length > 0
@@ -565,7 +579,7 @@ function SubjectivePatientCard({
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0">
           <div className="text-sm font-extrabold tracking-tight text-slate-900">
-            {patient.bedLabel} <span className="font-semibold text-slate-700">— {patient.diagnosis}</span>
+            {row.bedLabel} <span className="font-semibold text-slate-700">— {row.diagnosis}</span>
           </div>
           <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-slate-600">
             <span className="rounded-full bg-surface px-3 py-1 font-semibold ring-1 ring-black/10">
@@ -585,71 +599,57 @@ function SubjectivePatientCard({
       <div className="mt-4 grid gap-2">
         <SubjectiveRow label="RASS 鎮靜分數（原始數值）">
           <RassInput
-            value={s['RASS 鎮靜分數（原始數值）']}
-            onChange={(v) => {
-              onChange({ 'RASS 鎮靜分數（原始數值）': v })
-            }}
-            ariaLabel={`${patient.bedLabel} RASS 鎮靜分數（原始數值）`}
+            value={s.rassScore}
+            onChange={(v) => onChange({ rassScore: v })}
+            ariaLabel={`${row.bedLabel} RASS 鎮靜分數（原始數值）`}
           />
         </SubjectiveRow>
 
         <SubjectiveRow label="躁動且有下床風險">
           <YesNoPicker
-            value={s['躁動且有下床風險']}
-            onChange={(v) => {
-              onChange({ '躁動且有下床風險': v })
-            }}
-            ariaLabel={`${patient.bedLabel} 躁動且有下床風險`}
+            value={s.agitatedFallRisk}
+            onChange={(v) => onChange({ agitatedFallRisk: v })}
+            ariaLabel={`${row.bedLabel} 躁動且有下床風險`}
           />
         </SubjectiveRow>
 
         <SubjectiveRow label="躁動且有拔管風險">
           <YesNoPicker
-            value={s['躁動且有拔管風險']}
-            onChange={(v) => {
-              onChange({ '躁動且有拔管風險': v })
-            }}
-            ariaLabel={`${patient.bedLabel} 躁動且有拔管風險`}
+            value={s.agitatedTubeRemovalRisk}
+            onChange={(v) => onChange({ agitatedTubeRemovalRisk: v })}
+            ariaLabel={`${row.bedLabel} 躁動且有拔管風險`}
           />
         </SubjectiveRow>
 
         <SubjectiveRow label="引流管">
           <YesNoPicker
-            value={s['引流管']}
-            onChange={(v) => {
-              onChange({ 引流管: v })
-            }}
-            ariaLabel={`${patient.bedLabel} 引流管`}
+            value={s.drainageTube}
+            onChange={(v) => onChange({ drainageTube: v })}
+            ariaLabel={`${row.bedLabel} 引流管`}
           />
         </SubjectiveRow>
 
         <SubjectiveRow label="需人工管灌">
           <YesNoPicker
-            value={s['需人工管灌']}
-            onChange={(v) => {
-              onChange({ '需人工管灌': v })
-            }}
-            ariaLabel={`${patient.bedLabel} 需人工管灌`}
+            value={s.tubeFeeding}
+            onChange={(v) => onChange({ tubeFeeding: v })}
+            ariaLabel={`${row.bedLabel} 需人工管灌`}
           />
         </SubjectiveRow>
 
         <SubjectiveRow label="換藥頻繁程度">
           <LevelPicker
-            value={s['換藥頻繁程度']}
-            onChange={(lvl) => {
-              onChange({ '換藥頻繁程度': lvl })
-            }}
-            ariaLabel={`${patient.bedLabel} 換藥頻繁程度`}
+            value={s.dressingChangeFrequency}
+            onChange={(lvl) => onChange({ dressingChangeFrequency: lvl })}
+            ariaLabel={`${row.bedLabel} 換藥頻繁程度`}
           />
         </SubjectiveRow>
 
         <SubjectiveRow label="生理狀態監測頻繁程度">
           <LevelPicker
-            value={s['生理狀態監測頻繁程度']}
-            onChange={(lvl) => {
-              onChange({ '生理狀態監測頻繁程度': lvl })
-            }}
-            ariaLabel={`${patient.bedLabel} 生理狀態監測頻繁程度`}
+            value={s.vitalMonitoringFrequency}
+            onChange={(lvl) => onChange({ vitalMonitoringFrequency: lvl })}
+            ariaLabel={`${row.bedLabel} 生理狀態監測頻繁程度`}
           />
         </SubjectiveRow>
       </div>
@@ -675,39 +675,38 @@ function SubjectiveSummary({
   previousScores,
   previousLabel,
 }: {
-  rows: Patient[]
-  previousScores: Partial<Record<BedId, BurdenBedScore>> | null
+  rows: BurdenFormRow[]
+  previousScores: Partial<Record<string, BedScore>>
   previousLabel: string | null
 }) {
   return (
     <section className="overflow-hidden rounded-2xl bg-white ring-1 ring-black/10">
       <div className="bg-surface px-4 py-3">
         <div className="text-xs font-semibold text-slate-600">本班病患分數摘要</div>
-        {previousLabel && previousScores ? (
-          <div className="mt-1 text-[10px] font-medium text-slate-500">
-            對照：{previousLabel}
-          </div>
+        {previousLabel && Object.keys(previousScores).length > 0 ? (
+          <div className="mt-1 text-[10px] font-medium text-slate-500">對照：{previousLabel}</div>
         ) : (
           <div className="mt-1 text-[10px] font-medium text-slate-400">尚無歷史紀錄可對照</div>
         )}
       </div>
       <div className="divide-y divide-black/10">
-        {rows.map((p) => {
-          const s = p.subjective ?? defaultSubjective()
-          const sTotal = subjectiveTotal(s)
-          const oTotal = objectiveTotal(p.objective)
+        {rows.map((row) => {
+          const sTotal = subjectiveTotal(row.subjective)
+          const oTotal = objectiveTotal(row.objective)
           const total = sTotal + oTotal
           const status = statusPill(total)
-          const prev = previousScores?.[p.bedId]
+          const prev = previousScores[row.admissionId]
           const prevStatus = prev ? statusPill(prev.total) : null
           return (
-            <div key={p.bedId} className="px-4 py-3">
+            <div key={row.admissionId} className="px-4 py-3">
               <div className="flex items-baseline justify-between gap-3">
                 <div className="min-w-0">
-                  <div className="truncate text-sm font-semibold text-slate-900">{p.bedLabel}</div>
-                  <div className="mt-0.5 truncate text-xs text-slate-600">{p.diagnosis}</div>
+                  <div className="truncate text-sm font-semibold text-slate-900">{row.bedLabel}</div>
+                  <div className="mt-0.5 truncate text-xs text-slate-600">{row.diagnosis}</div>
                 </div>
-                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>
+                <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ${status.cls}`}>
+                  {status.label}
+                </span>
               </div>
 
               <div className="mt-3 overflow-hidden rounded-xl ring-1 ring-black/10">
@@ -721,12 +720,20 @@ function SubjectiveSummary({
 
                 <div className="grid grid-cols-[64px_1fr_1fr_1fr_56px] items-center px-3 py-2 text-xs">
                   <div className="font-semibold text-slate-700">前一次</div>
-                  <div className="text-center font-semibold tabular-nums text-slate-800">{prev ? prev.subjective : '—'}</div>
-                  <div className="text-center font-semibold tabular-nums text-slate-800">{prev ? prev.objective : '—'}</div>
+                  <div className="text-center font-semibold tabular-nums text-slate-800">
+                    {prev ? prev.subjective : '—'}
+                  </div>
+                  <div className="text-center font-semibold tabular-nums text-slate-800">
+                    {prev ? prev.objective : '—'}
+                  </div>
                   <div className="text-center font-semibold tabular-nums text-slate-800">{prev ? prev.total : '—'}</div>
                   <div className="text-center">
                     {prevStatus ? (
-                      <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${prevStatus.cls}`}>{prevStatus.label}</span>
+                      <span
+                        className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${prevStatus.cls}`}
+                      >
+                        {prevStatus.label}
+                      </span>
                     ) : (
                       <span className="text-slate-400">—</span>
                     )}
@@ -739,7 +746,9 @@ function SubjectiveSummary({
                   <div className="text-center font-extrabold tabular-nums text-slate-900">{oTotal}</div>
                   <div className="text-center font-extrabold tabular-nums text-slate-900">{total}</div>
                   <div className="text-center">
-                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.cls}`}>{status.label}</span>
+                    <span className={`inline-flex rounded-full px-2 py-0.5 text-[11px] font-semibold ${status.cls}`}>
+                      {status.label}
+                    </span>
                   </div>
                 </div>
 
@@ -787,20 +796,10 @@ function YesNoPicker({
 }) {
   return (
     <div className="inline-flex flex-wrap items-center gap-2">
-      <BinaryButton
-        variant="yes"
-        active={value === true}
-        onClick={() => onChange(true)}
-        ariaLabel={`${ariaLabel} 是`}
-      >
+      <BinaryButton variant="yes" active={value === true} onClick={() => onChange(true)} ariaLabel={`${ariaLabel} 是`}>
         是
       </BinaryButton>
-      <BinaryButton
-        variant="no"
-        active={value === false}
-        onClick={() => onChange(false)}
-        ariaLabel={`${ariaLabel} 否`}
-      >
+      <BinaryButton variant="no" active={value === false} onClick={() => onChange(false)} ariaLabel={`${ariaLabel} 否`}>
         否
       </BinaryButton>
     </div>
@@ -849,28 +848,13 @@ function LevelPicker({
 }) {
   return (
     <div className="inline-flex flex-wrap items-center gap-2">
-      <SquareToneButton
-        tone="low"
-        active={value === 0}
-        onClick={() => onChange(0)}
-        ariaLabel={`${ariaLabel} 低`}
-      >
+      <SquareToneButton tone="low" active={value === 0} onClick={() => onChange(0)} ariaLabel={`${ariaLabel} 低`}>
         低
       </SquareToneButton>
-      <SquareToneButton
-        tone="mid"
-        active={value === 1}
-        onClick={() => onChange(1)}
-        ariaLabel={`${ariaLabel} 中`}
-      >
+      <SquareToneButton tone="mid" active={value === 1} onClick={() => onChange(1)} ariaLabel={`${ariaLabel} 中`}>
         中
       </SquareToneButton>
-      <SquareToneButton
-        tone="high"
-        active={value === 2}
-        onClick={() => onChange(2)}
-        ariaLabel={`${ariaLabel} 高`}
-      >
+      <SquareToneButton tone="high" active={value === 2} onClick={() => onChange(2)} ariaLabel={`${ariaLabel} 高`}>
         高
       </SquareToneButton>
     </div>
@@ -942,9 +926,6 @@ function BinaryButton({
   ariaLabel: string
 }) {
   const base =
-    // 讓「是/否」兩顆（含 gap-2 的間距）總寬 ≒ 「低/中/高」三顆總寬：
-    // 低中高：3 * 48px + 2 * 8px = 160px
-    // 是/否：2 * 76px + 1 * 8px = 160px
     'inline-flex h-9 min-w-[4.75rem] items-center justify-center rounded-xl px-3 text-xs font-extrabold tracking-wide transition ring-1 focus:outline-none focus-visible:ring-2 active:scale-[0.98] active:brightness-95'
   const focus = 'focus-visible:ring-black/25'
   const on =
@@ -992,4 +973,3 @@ function SegTab({
     </button>
   )
 }
-

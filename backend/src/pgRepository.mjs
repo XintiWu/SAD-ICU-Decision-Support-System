@@ -15,8 +15,9 @@ export class ApiError extends Error {
 export async function getCurrentUser(userId = ids.currentNurse) {
   const result = await query(
     `
-    select u.id, u.name, u.role
+    select u.id, u.name, u.role, n.display_name, n.short_name
     from users u
+    left join nurses n on n.id = u.id
     where u.id = $1
     `,
     [userId],
@@ -24,7 +25,14 @@ export async function getCurrentUser(userId = ids.currentNurse) {
   const user = result.rows[0]
   if (!user) throw new ApiError(404, 'USER_NOT_FOUND', '找不到使用者', { userId })
   const shift = await currentShiftRow()
-  return { id: user.id, name: user.name, role: user.role, currentShiftId: shift.id }
+  return {
+    id: user.id,
+    name: user.name,
+    displayName: user.display_name ?? user.name,
+    shortName: user.short_name ?? user.name,
+    role: user.role,
+    currentShiftId: shift.id,
+  }
 }
 
 export async function getCurrentShift(unitName = 'ICU') {
@@ -44,6 +52,26 @@ export async function listShifts({ unitName = 'ICU' } = {}) {
     [unitName],
   )
   return result.rows.map(formatShift)
+}
+
+async function resolveOnDutyCharge(shift) {
+  if (shift.charge_nurse_id && shift.charge_short_name) {
+    return { id: shift.charge_nurse_id, shortName: shift.charge_short_name }
+  }
+  const fallback = await query(
+    `
+    select n.id, n.short_name
+    from shift_nurses sn
+    join nurses n on n.id = sn.nurse_id
+    where sn.shift_id = $1 and sn.role = 'charge_nurse'
+    limit 1
+    `,
+    [shift.id],
+  )
+  if (fallback.rows[0]) {
+    return { id: fallback.rows[0].id, shortName: fallback.rows[0].short_name }
+  }
+  return { id: shift.charge_nurse_id ?? null, shortName: shift.charge_short_name ?? '—' }
 }
 
 export async function listNurses({ shiftId } = {}) {
@@ -116,7 +144,7 @@ export async function getNurseOverview({ shiftId, userId = ids.currentNurse } = 
   const assignedIds = new Set(assigned.rows.map((row) => row.admission_id))
   return {
     shift: { id: shift.id, label: shiftLabel(shift) },
-    onDutyCharge: { id: shift.charge_nurse_id, shortName: shift.charge_short_name },
+    onDutyCharge: await resolveOnDutyCharge(shift),
     myPatients: allPatients.filter((admission) => assignedIds.has(admission.admissionId)),
     allPatients,
   }
@@ -124,11 +152,19 @@ export async function getNurseOverview({ shiftId, userId = ids.currentNurse } = 
 
 export async function listBurdenAssessments({ shiftId, scope = 'all', userId = ids.currentNurse } = {}) {
   if (!shiftId) throw new ApiError(400, 'VALIDATION_ERROR', 'shiftId 為必填', { field: 'shiftId' })
+  await ensureBurdenAssessmentsForShift(shiftId)
   const params = [shiftId]
   let ownerWhere = ''
   if (scope === 'mine') {
     params.push(userId)
-    ownerWhere = 'and ba.submitted_by = $2'
+    ownerWhere = `
+      and ba.admission_id in (
+        select ai.admission_id
+        from allocation_items ai
+        join allocation_runs ar on ar.id = ai.allocation_run_id
+        where ar.shift_id = $1 and ai.nurse_id = $2
+      )
+    `
   }
   const result = await query(
     `
@@ -148,7 +184,13 @@ export async function updateBurdenAssessment({ assessmentId, patch, userId = ids
   const current = await query('select * from burden_assessments where id = $1', [assessmentId])
   const assessment = current.rows[0]
   if (!assessment) throw new ApiError(404, 'ASSESSMENT_NOT_FOUND', '找不到麻煩度評估', { assessmentId })
-  if (assessment.submitted_by && assessment.submitted_by !== userId) {
+  const user = await getCurrentUser(userId)
+  const owner = await admissionOwner(assessment.shift_id, assessment.admission_id)
+  const canEdit =
+    !owner ||
+    owner.nurseId === userId ||
+    ['charge_nurse', 'admin'].includes(user.role)
+  if (!canEdit) {
     throw new ApiError(403, 'FORBIDDEN', '只能更新自己負責的病患評估', { assessmentId })
   }
   const subjective = normalizeSubjective(patch.subjective ?? {})
@@ -180,7 +222,7 @@ export async function updateBurdenAssessment({ assessmentId, patch, userId = ids
   return (await listBurdenAssessments({ shiftId: assessment.shift_id, scope: 'all' })).find((item) => item.assessmentId === assessmentId)
 }
 
-export async function listTasks({ shiftId, assignee = 'me', status, kind, userId = ids.currentNurse } = {}) {
+export async function listTasks({ shiftId, assignee = 'me', status, kind, urgent, userId = ids.currentNurse } = {}) {
   if (!shiftId) throw new ApiError(400, 'VALIDATION_ERROR', 'shiftId 為必填', { field: 'shiftId' })
   const params = [shiftId]
   const where = ['t.shift_id = $1']
@@ -195,6 +237,9 @@ export async function listTasks({ shiftId, assignee = 'me', status, kind, userId
   if (kind) {
     params.push(kind)
     where.push(`t.kind = $${params.length}`)
+  }
+  if (urgent === true || urgent === 'true') {
+    where.push('t.urgent = true')
   }
   const rows = await query(taskSelectSql(where), params)
   const all = await query(taskSelectSql(['t.shift_id = $1', assignee === 'me' ? 't.assigned_nurse_id = $2' : 'true']), assignee === 'me' ? [shiftId, userId] : [shiftId])
@@ -399,6 +444,60 @@ export async function getHandoffSheet({ shiftId } = {}) {
   return { rows: rows.sort((a, b) => bedNo(a.bedLabel) - bedNo(b.bedLabel)) }
 }
 
+export async function listHandoffSnapshots() {
+  const result = await query(
+    `
+    select ar.id, ar.shift_id, ar.confirmed_at, ar.created_by, s.shift_key, s.starts_at, s.ends_at,
+      n.short_name as created_by_name
+    from allocation_runs ar
+    join shifts s on s.id = ar.shift_id
+    left join nurses n on n.id = ar.created_by
+    where ar.status = 'confirmed' and ar.confirmed_at is not null
+    order by ar.confirmed_at desc
+    `,
+  )
+  return Promise.all(result.rows.map((row) => buildHandoffSnapshotSummary(row)))
+}
+
+export async function getHandoffSnapshot({ allocationRunId } = {}) {
+  const row = await query(
+    `
+    select ar.id, ar.shift_id, ar.confirmed_at, ar.created_by, s.shift_key, s.starts_at, s.ends_at,
+      n.short_name as created_by_name
+    from allocation_runs ar
+    join shifts s on s.id = ar.shift_id
+    left join nurses n on n.id = ar.created_by
+    where ar.id = $1 and ar.status = 'confirmed'
+    `,
+    [allocationRunId],
+  )
+  if (!row.rows[0]) throw new ApiError(404, 'SNAPSHOT_NOT_FOUND', '找不到交班快照', { allocationRunId })
+  const summary = await buildHandoffSnapshotSummary(row.rows[0])
+  const allocation = await getAllocationRun({ allocationRunId })
+  const tasksResult = await listTasks({ shiftId: row.rows[0].shift_id, assignee: 'all' })
+  const nurseBlocks = allocation.byNurse.map((nurseRow) => ({
+    nurseId: nurseRow.nurseId,
+    nurseName: nurseRow.shortName,
+    load: nurseRow.load,
+    beds: nurseRow.patients.map((patient) => ({
+      admissionId: patient.admissionId,
+      bedLabel: patient.bedLabel,
+      label: `${patient.bedLabel} — ${patient.diagnosis}`,
+      score: patient.score,
+      tone: patient.tone,
+    })),
+  }))
+  return {
+    ...summary,
+    allocation: {
+      unassignedCount: allocation.unassigned.length,
+      stats: allocation.stats,
+    },
+    nurseBlocks,
+    tasks: tasksResult.data,
+  }
+}
+
 async function currentShiftRow(unitName = 'ICU') {
   const result = await query(
     `
@@ -518,7 +617,22 @@ function taskSelectSql(where) {
 }
 
 function formatTask(row) {
-  return { id: row.id, admissionId: row.admission_id, bedLabel: row.bed_label, title: row.title, kind: row.kind, urgent: row.urgent, status: row.status, done: row.status === 'done', completedAt: row.completed_at, points: taskPoints(row), source: row.source }
+  const bedOnly = row.bed_label?.includes(' - ') ? row.bed_label.split(' - ')[0] : row.bed_label
+  return {
+    id: row.id,
+    admissionId: row.admission_id,
+    bedLabel: bedOnly,
+    bedDetail: row.bed_label,
+    title: row.title,
+    kind: row.kind,
+    urgent: row.urgent,
+    status: row.status,
+    done: row.status === 'done',
+    completedAt: row.completed_at,
+    createdAt: row.created_at,
+    points: taskPoints(row),
+    source: row.source,
+  }
 }
 
 function taskPoints(task) {
@@ -598,6 +712,99 @@ async function admissionOwner(shiftId, admissionId) {
     [shiftId, admissionId],
   )
   return result.rows[0] ? { nurseId: result.rows[0].nurse_id } : null
+}
+
+async function ensureBurdenAssessmentsForShift(shiftId) {
+  const admissions = await listAdmissions({ shiftId, status: 'active' })
+  for (const admission of admissions) {
+    const exists = await query(
+      'select id from burden_assessments where shift_id = $1 and admission_id = $2',
+      [shiftId, admission.admissionId],
+    )
+    if (exists.rows[0]) continue
+
+    const template = await query(
+      `
+      select ba.*
+      from burden_assessments ba
+      where ba.admission_id = $1
+      order by ba.updated_at desc
+      limit 1
+      `,
+      [admission.admissionId],
+    )
+    const templateRow = template.rows[0]
+    const assessmentId = randomUUID()
+    const objectiveTotal = templateRow ? Number(templateRow.objective_total) : 0
+
+    await query(
+      `
+      insert into burden_assessments (
+        id, shift_id, admission_id, submitted_by, status,
+        objective_total, subjective_total, total_score
+      ) values ($1, $2, $3, null, 'draft', $4, 0, $4)
+      `,
+      [assessmentId, shiftId, admission.admissionId, objectiveTotal],
+    )
+
+    if (!templateRow) continue
+
+    const values = await query(
+      `
+      select bv.number_value, bv.boolean_value, bv.level_value, bv.points, bf.code, bf.value_type
+      from burden_values bv
+      join burden_factors bf on bf.id = bv.factor_id
+      where bv.assessment_id = $1 and bf.category = 'objective'
+      `,
+      [templateRow.id],
+    )
+    for (const value of values.rows) {
+      const factor = await query('select id from burden_factors where code = $1', [value.code])
+      if (!factor.rows[0]) continue
+      await query(
+        `
+        insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
+        values ($1, $2, $3, $4, $5, $6)
+        on conflict (assessment_id, factor_id) do nothing
+        `,
+        [
+          assessmentId,
+          factor.rows[0].id,
+          value.number_value,
+          value.boolean_value,
+          value.level_value,
+          value.points,
+        ],
+      )
+    }
+  }
+}
+
+async function buildHandoffSnapshotSummary(row) {
+  const allocation = await getAllocationRun({ allocationRunId: row.id })
+  const tasksResult = await listTasks({ shiftId: row.shift_id, assignee: 'all' })
+  const urgentOpen = tasksResult.data.filter((task) => task.urgent && !task.done).length
+  const openTasks = tasksResult.data.filter((task) => !task.done).length
+  const patientCount = allocation.byNurse.reduce((sum, nurse) => sum + nurse.patients.length, 0)
+  return {
+    id: row.id,
+    allocationRunId: row.id,
+    shiftId: row.shift_id,
+    shiftKey: row.shift_key,
+    shiftLabel: shiftLabel(row),
+    createdAt: row.confirmed_at,
+    createdBy: row.created_by_name ?? '小組長',
+    summary: {
+      patientCount,
+      nurseCount: allocation.byNurse.length,
+      statTotal: urgentOpen,
+      taskTotal: tasksResult.meta.counts.total,
+      taskOpen: openTasks,
+      taskUrgentOpen: urgentOpen,
+      avgLoad: allocation.stats.averageLoad,
+      maxLoad: allocation.stats.maxLoad,
+    },
+  }
 }
 
 function bedNo(label) {

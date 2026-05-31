@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query'
 import './index.css'
 import App from './App.tsx'
 import { ShiftProvider } from './context/ShiftContext.tsx'
+import { UserProvider } from './context/UserContext.tsx'
 
 const queryClient = new QueryClient()
 
@@ -13,7 +14,9 @@ createRoot(document.getElementById('root')!).render(
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
         <ShiftProvider>
-          <App />
+          <UserProvider>
+            <App />
+          </UserProvider>
         </ShiftProvider>
       </BrowserRouter>
     </QueryClientProvider>

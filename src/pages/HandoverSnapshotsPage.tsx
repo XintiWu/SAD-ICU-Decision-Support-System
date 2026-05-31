@@ -1,22 +1,73 @@
-import { useMemo, useState, useSyncExternalStore } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
-import {
-  deleteHandoverSnapshot,
-  formatSnapshotDateTime,
-  getHandoverSnapshot,
-  listHandoverSnapshots,
-  subscribeHandoverSnapshots,
-  type HandoverSnapshot,
-} from '../state/handoverSnapshotStore'
+import { apiGet, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
 
 export function HandoverSnapshotsPage() {
-  const items = useSyncExternalStore(subscribeHandoverSnapshots, listHandoverSnapshots, listHandoverSnapshots)
+  const [items, setItems] = useState<HandoffSnapshotListItem[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [searchParams, setSearchParams] = useSearchParams()
-  const selectedId = searchParams.get('id') ?? items[0]?.id ?? null
-  const selected = useMemo(
-    () => (selectedId ? getHandoverSnapshot(selectedId) : null),
-    [selectedId],
-  )
+  const selectedId = searchParams.get('id') ?? null
+  const [selected, setSelected] = useState<HandoffSnapshotDetail | null>(null)
+  const [detailLoading, setDetailLoading] = useState(false)
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    apiGet<HandoffSnapshotListItem[]>('/handoff-snapshots')
+      .then((data) => {
+        if (!alive) return
+        setItems(data)
+        setError(null)
+      })
+      .catch((err) => {
+        if (!alive) return
+        setItems([])
+        setError(err instanceof Error ? err.message : '讀取交班快照失敗')
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const activeId = selectedId ?? items[0]?.id ?? null
+
+  useEffect(() => {
+    if (!activeId) {
+      setSelected(null)
+      return
+    }
+    let alive = true
+    setDetailLoading(true)
+    apiGet<HandoffSnapshotDetail>(`/handoff-snapshots/${activeId}`)
+      .then((data) => {
+        if (!alive) return
+        setSelected(data)
+      })
+      .catch(() => {
+        if (!alive) return
+        setSelected(null)
+      })
+      .finally(() => {
+        if (alive) setDetailLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [activeId])
+
+  const listItems = useMemo(() => items, [items])
+
+  if (error) {
+    return (
+      <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">
+        {error}
+      </div>
+    )
+  }
 
   return (
     <div className="grid gap-4">
@@ -27,16 +78,16 @@ export function HandoverSnapshotsPage() {
             <div>
               <div className="text-[11px] font-semibold tracking-wide text-slate-600">HANDOVER ARCHIVE</div>
               <h1 className="mt-1 text-lg font-extrabold tracking-tight text-slate-900">交班快照紀錄</h1>
-              <p className="mt-1 whitespace-nowrap text-sm text-slate-600">
-                查閱已封存的交班紀錄（分床、病患麻煩度、任務狀態）。本頁僅供瀏覽，若要新增快照請至{' '}
+              <p className="mt-1 text-sm text-slate-600">
+                資料來自已確認的分床紀錄（allocation_runs）。若要新增快照，請至{' '}
                 <Link to="/leader/allocation" className="font-semibold text-slate-900 underline underline-offset-2">
                   指派分床配對
-                </Link>
-                {' '}儲存。
+                </Link>{' '}
+                確認分床。
               </p>
             </div>
             <p className="shrink-0 text-sm text-slate-600">
-              <span className="font-extrabold text-slate-900">{items.length}</span> 筆快照
+              <span className="font-extrabold text-slate-900">{listItems.length}</span> 筆快照
             </p>
           </div>
         </div>
@@ -47,18 +98,20 @@ export function HandoverSnapshotsPage() {
           <div className="flex items-center justify-between gap-2 px-2 py-1">
             <div className="text-xs font-semibold text-slate-600">歷史快照</div>
             <span className="rounded-full bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
-              {items.length} 筆
+              {listItems.length} 筆
             </span>
           </div>
 
-          {items.length === 0 ? (
+          {loading ? (
+            <div className="mt-3 rounded-xl bg-surface p-4 text-sm text-slate-600">載入中…</div>
+          ) : listItems.length === 0 ? (
             <div className="mt-3 rounded-xl bg-surface p-4 text-sm text-slate-600 ring-1 ring-black/5">
-              尚無快照。請至「指派分床配對」或「查看分床結果」完成交班後儲存。
+              尚無已確認的分床快照。請至「指派分床配對」完成確認。
             </div>
           ) : (
             <ul className="mt-2 grid max-h-[70vh] gap-1 overflow-y-auto pr-1">
-              {items.map((item) => {
-                const active = item.id === selectedId
+              {listItems.map((item) => {
+                const active = item.id === activeId
                 return (
                   <li key={item.id}>
                     <button
@@ -71,18 +124,18 @@ export function HandoverSnapshotsPage() {
                     >
                       <div className="text-xs font-semibold opacity-80">{item.shiftLabel}</div>
                       <div className="mt-0.5 text-sm font-extrabold">{formatSnapshotDateTime(item.createdAt)}</div>
-                      <div className={['mt-1 flex flex-wrap gap-1 text-[11px] font-semibold', active ? 'text-white/85' : 'text-slate-600'].join(' ')}>
+                      <div
+                        className={[
+                          'mt-1 flex flex-wrap gap-1 text-[11px] font-semibold',
+                          active ? 'text-white/85' : 'text-slate-600',
+                        ].join(' ')}
+                      >
                         <span>未完成 {item.summary.taskOpen}</span>
                         <span>·</span>
                         <span>急件 {item.summary.taskUrgentOpen}</span>
                         <span>·</span>
                         <span>最高負荷 {item.summary.maxLoad}</span>
                       </div>
-                      {item.note ? (
-                        <div className={['mt-1 truncate text-[11px]', active ? 'text-white/75' : 'text-slate-500'].join(' ')}>
-                          {item.note}
-                        </div>
-                      ) : null}
                     </button>
                   </li>
                 )
@@ -92,11 +145,31 @@ export function HandoverSnapshotsPage() {
         </aside>
 
         <section className="min-w-0">
-          {selected ? <SnapshotDetail snapshot={selected} onDeleted={() => setSearchParams({})} /> : <EmptyDetail />}
+          {detailLoading ? (
+            <div className="grid min-h-[320px] place-items-center rounded-2xl bg-white p-8 text-sm text-slate-600 ring-1 ring-black/10">
+              讀取快照內容…
+            </div>
+          ) : selected ? (
+            <SnapshotDetail snapshot={selected} />
+          ) : (
+            <EmptyDetail />
+          )}
         </section>
       </div>
     </div>
   )
+}
+
+function formatSnapshotDateTime(iso: string) {
+  const date = new Date(iso)
+  return date.toLocaleString('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    timeZone: 'Asia/Taipei',
+  })
 }
 
 function EmptyDetail() {
@@ -104,57 +177,26 @@ function EmptyDetail() {
     <div className="grid h-full min-h-[320px] place-items-center rounded-2xl bg-white p-8 text-center ring-1 ring-black/10">
       <div>
         <div className="text-sm font-semibold text-slate-900">選擇左側快照以查看內容</div>
-        <p className="mt-2 text-sm text-slate-600">或先儲存一筆交班快照。</p>
+        <p className="mt-2 text-sm text-slate-600">或先確認一筆分床。</p>
       </div>
     </div>
   )
 }
 
-function SnapshotDetail({ snapshot, onDeleted }: { snapshot: HandoverSnapshot; onDeleted: () => void }) {
-  const [confirmDelete, setConfirmDelete] = useState(false)
-
-  function handleDelete() {
-    if (!confirmDelete) {
-      setConfirmDelete(true)
-      return
-    }
-    deleteHandoverSnapshot(snapshot.id)
-    onDeleted()
-  }
-
+function SnapshotDetail({ snapshot }: { snapshot: HandoffSnapshotDetail }) {
   return (
     <div className="grid gap-4">
       <div className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <div>
-            <div className="text-xs font-semibold text-slate-600">{snapshot.shiftLabel}</div>
-            <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900">
-              {formatSnapshotDateTime(snapshot.createdAt)}
-            </h2>
-            <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
-              <span className="rounded-full bg-surface px-2.5 py-1 font-semibold ring-1 ring-black/10">
-                記錄人 {snapshot.createdBy}
-              </span>
-              {snapshot.note ? (
-                <span className="rounded-full bg-[#fff7ed] px-2.5 py-1 font-semibold text-[#9a5b1a] ring-1 ring-[#f1d7b8]">
-                  {snapshot.note}
-                </span>
-              ) : null}
-            </div>
+        <div>
+          <div className="text-xs font-semibold text-slate-600">{snapshot.shiftLabel}</div>
+          <h2 className="mt-1 text-xl font-extrabold tracking-tight text-slate-900">
+            {formatSnapshotDateTime(snapshot.createdAt)}
+          </h2>
+          <div className="mt-2 flex flex-wrap gap-2 text-xs text-slate-600">
+            <span className="rounded-full bg-surface px-2.5 py-1 font-semibold ring-1 ring-black/10">
+              記錄人 {snapshot.createdBy}
+            </span>
           </div>
-          <button
-            type="button"
-            onClick={handleDelete}
-            onBlur={() => setConfirmDelete(false)}
-            className={[
-              'rounded-xl px-3 py-2 text-xs font-semibold ring-1',
-              confirmDelete
-                ? 'bg-[#ffe8e1] text-[#b3341f] ring-[#f2b3a6]'
-                : 'bg-white text-slate-700 ring-black/10 hover:bg-slate-50',
-            ].join(' ')}
-          >
-            {confirmDelete ? '再次點擊確認刪除' : '刪除此快照'}
-          </button>
         </div>
 
         <div className="mt-4 grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
@@ -162,9 +204,9 @@ function SnapshotDetail({ snapshot, onDeleted }: { snapshot: HandoverSnapshot; o
           <Kpi label="病患人數" value={`${snapshot.summary.patientCount}`} />
           <Kpi
             label="突發性醫囑"
-            value={`${snapshot.summary.statTotal ?? 0}`}
+            value={`${snapshot.summary.statTotal}`}
             hint="STAT"
-            warn={(snapshot.summary.statTotal ?? 0) > 0}
+            warn={snapshot.summary.statTotal > 0}
           />
           <Kpi label="負荷指標" value={`${snapshot.summary.maxLoad}`} hint={`平均 ${snapshot.summary.avgLoad}`} />
         </div>
@@ -181,7 +223,10 @@ function SnapshotDetail({ snapshot, onDeleted }: { snapshot: HandoverSnapshot; o
               </div>
               <ul className="mt-3 grid gap-2">
                 {block.beds.map((bed) => (
-                  <li key={bed.patientId} className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/5">
+                  <li
+                    key={bed.admissionId}
+                    className="flex items-center justify-between gap-2 rounded-xl bg-white px-3 py-2 ring-1 ring-black/5"
+                  >
                     <span className="min-w-0 truncate text-xs font-semibold text-slate-800">{bed.label}</span>
                     <TonePill tone={bed.tone} score={bed.score} />
                   </li>
@@ -190,9 +235,9 @@ function SnapshotDetail({ snapshot, onDeleted }: { snapshot: HandoverSnapshot; o
             </article>
           ))}
         </div>
-        {snapshot.allocation.unassigned.length > 0 ? (
+        {snapshot.allocation.unassignedCount > 0 ? (
           <p className="mt-3 text-xs font-semibold text-[#b3341f]">
-            封存時有 {snapshot.allocation.unassigned.length} 床未分配
+            封存時有 {snapshot.allocation.unassignedCount} 床未分配
           </p>
         ) : null}
       </div>

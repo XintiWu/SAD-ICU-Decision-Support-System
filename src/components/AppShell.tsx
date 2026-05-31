@@ -1,11 +1,12 @@
 import type { ReactNode } from 'react'
 import { NavLink } from 'react-router-dom'
 import { shiftStatusLabel, useShift } from '../context/ShiftContext'
-import { getCurrentNurseLabel } from '../state/demoStore'
+import { useUser } from '../context/UserContext'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { shifts, shiftId, selectedShift, setShiftId, loading, error } = useShift()
-  const nurse = getCurrentNurseLabel()
+  const { user, loading: userLoading } = useUser()
+  const nurse = user?.shortName ?? (userLoading ? '…' : '—')
 
   return (
     <div className="min-h-dvh bg-canvas text-slate-800">

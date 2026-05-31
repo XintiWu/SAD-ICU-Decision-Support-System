@@ -1,17 +1,81 @@
-import { useMemo, useState } from 'react'
-import {
-  getDemoStatOrders,
-  statOrderWeight,
-  type StatOrder,
-  type StatOrderKind,
-} from '../state/demoStore'
+import { useEffect, useMemo, useState } from 'react'
+import { apiGet, type ApiTask } from '../api/client'
+import { useShift } from '../context/ShiftContext'
+
+type StatOrderKind = '檢查' | '治療' | '給藥' | '監測' | '其他'
+
+type StatOrder = {
+  id: string
+  bedLabel: string
+  title: string
+  kind: StatOrderKind
+  orderedBy: string
+  orderedAt: string
+  reason?: string
+  weight: number
+}
 
 const KINDS: StatOrderKind[] = ['檢查', '治療', '給藥', '監測', '其他']
 
+function mapTaskKind(kind: ApiTask['kind']): StatOrderKind {
+  if (kind === '給藥' || kind === '檢查' || kind === '監測') return kind
+  return '其他'
+}
+
+function taskToStatOrder(task: ApiTask): StatOrder {
+  return {
+    id: task.id,
+    bedLabel: task.bedLabel,
+    title: task.title,
+    kind: mapTaskKind(task.kind),
+    orderedBy: task.source === 'system' ? '系統' : '醫師',
+    orderedAt: formatTaskTime(task.createdAt),
+    reason: task.urgent ? 'STAT 立即性醫囑' : undefined,
+    weight: task.points,
+  }
+}
+
+function formatTaskTime(iso?: string | null) {
+  if (!iso) return '--:--'
+  const date = new Date(iso)
+  return date.toLocaleTimeString('zh-TW', {
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false,
+    timeZone: 'Asia/Taipei',
+  })
+}
+
 export function NurseTodoPage() {
+  const { shiftId } = useShift()
+  const [orders, setOrders] = useState<StatOrder[]>([])
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [kindFilter, setKindFilter] = useState<Set<StatOrderKind>>(new Set())
-  const [orders] = useState<StatOrder[]>(() => sortByOrderedAt(getDemoStatOrders()))
   const [expandedBeds, setExpandedBeds] = useState<Set<string>>(new Set())
+
+  useEffect(() => {
+    let alive = true
+    setLoading(true)
+    apiGet<ApiTask[]>(`/tasks?shiftId=${shiftId}&assignee=all&status=pending&urgent=true`)
+      .then((data) => {
+        if (!alive) return
+        const mapped = sortByOrderedAt(data.map(taskToStatOrder))
+        setOrders(mapped)
+        setError(null)
+      })
+      .catch((err) => {
+        if (!alive) return
+        setOrders([])
+        setError(err instanceof Error ? err.message : '讀取 STAT 醫囑失敗')
+      })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
+    return () => {
+      alive = false
+    }
+  }, [shiftId])
 
   const shown = useMemo(() => {
     if (kindFilter.size === 0) return orders
@@ -27,15 +91,29 @@ export function NurseTodoPage() {
 
   const patientStats = useMemo(() => buildPatientStats(orders), [orders])
   const patientCount = patientStats.length
-
   const oldestMinutes = useMemo(() => minutesSinceOldest(orders), [orders])
-
   const beds = useMemo(() => groupByBed(shown), [shown])
   const weightByBed = useMemo(() => {
     const map = new Map<string, number>()
     for (const { bedLabel, weight } of patientStats) map.set(bedLabel, weight)
     return map
   }, [patientStats])
+
+  if (error) {
+    return (
+      <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">
+        {error}
+      </div>
+    )
+  }
+
+  if (loading) {
+    return (
+      <div className="rounded-2xl bg-white p-8 text-center text-sm text-slate-600 ring-1 ring-black/10">
+        讀取 STAT 醫囑中…
+      </div>
+    )
+  }
 
   return (
     <div className="grid gap-6 lg:grid-cols-[1fr_320px]">
@@ -44,7 +122,7 @@ export function NurseTodoPage() {
           <div>
             <div className="text-sm font-semibold text-slate-900">突發立即性醫囑 STAT TODO</div>
             <div className="mt-1 text-xs text-slate-600">
-              醫師 bedside 開立之立即檢查/治療；僅供提醒，不需在此標記完成
+              資料來自後端 tasks（urgent=true）；僅供提醒，不需在此標記完成
             </div>
           </div>
           <div className="rounded-full bg-[#ffe8e1] px-3 py-1.5 text-xs font-semibold text-[#b3341f]">
@@ -84,20 +162,12 @@ export function NurseTodoPage() {
               />
             ))}
           </div>
-          {kindFilter.size > 0 ? (
-            <div className="mt-2.5 flex flex-wrap items-center gap-1.5 border-t border-black/5 pt-2.5">
-              <span className="text-[11px] font-medium text-slate-500">已選</span>
-              {[...kindFilter].map((k) => (
-                <KindPill key={k} kind={k} />
-              ))}
-            </div>
-          ) : null}
         </div>
 
         <div className="mt-5 grid gap-3 md:grid-cols-2">
           {beds.length === 0 ? (
             <p className="col-span-full py-8 text-center text-sm text-slate-500">
-              目前無符合篩選條件的 STAT 醫囑
+              本班目前沒有待處理的 STAT 醫囑
             </p>
           ) : null}
           {beds.map(([bedLabel, items]) => {
@@ -148,32 +218,13 @@ export function NurseTodoPage() {
                           <div className="mt-1 text-xs text-slate-600">
                             {o.orderedBy} · {o.orderedAt} 開立
                           </div>
-                          {o.reason ? (
-                            <div className="mt-1 text-xs text-[#9a3412]">{o.reason}</div>
-                          ) : null}
+                          {o.reason ? <div className="mt-1 text-xs text-[#9a3412]">{o.reason}</div> : null}
                         </div>
                         <KindPill kind={o.kind} />
                       </div>
                     </li>
                   ))}
                 </ul>
-
-                {items.length > 4 ? (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setExpandedBeds((prev) => {
-                        const next = new Set(prev)
-                        if (next.has(bedLabel)) next.delete(bedLabel)
-                        else next.add(bedLabel)
-                        return next
-                      })
-                    }
-                    className="mt-2 w-full rounded-xl bg-white px-3 py-2 text-xs font-semibold text-slate-700 ring-1 ring-black/10 hover:bg-black/5"
-                  >
-                    {isExpanded ? '收合' : '顯示全部'}
-                  </button>
-                ) : null}
               </div>
             )
           })}
@@ -185,12 +236,6 @@ export function NurseTodoPage() {
         <div className="mt-4 grid gap-2 text-sm">
           <SummaryRow label="有 STAT 病患" value={`${patientCount} 位`} highlight />
           <SummaryRow label="STAT 醫囑總數" value={`${orders.length} 筆`} />
-          {kindFilter.size > 0 ? (
-            <SummaryRow
-              label="篩選後顯示"
-              value={`${shown.length} 筆 · ${beds.length} 床`}
-            />
-          ) : null}
         </div>
         <div className="mt-4 border-t border-black/5 pt-4">
           <div className="text-[11px] font-semibold text-slate-500">類型分布</div>
@@ -205,14 +250,11 @@ export function NurseTodoPage() {
         {oldestMinutes != null ? (
           <div className="mt-4 rounded-2xl bg-[#fff1f0] p-4 ring-1 ring-[#fecaca]">
             <div className="text-xs font-semibold text-[#b3341f]">時間警示</div>
-            <div className="mt-1 text-sm text-[#7f1d1d]">
-              最早一筆 STAT 已開立約 {oldestMinutes} 分鐘
-            </div>
+            <div className="mt-1 text-sm text-[#7f1d1d]">最早一筆 STAT 已開立約 {oldestMinutes} 分鐘</div>
           </div>
         ) : null}
         <div className="mt-5 rounded-2xl bg-[#fff7ed] p-4 ring-1 ring-[#f1d7b8]">
           <div className="text-xs font-semibold text-[#9a5b1a]">各病患加權參考分數</div>
-          <div className="mt-1 text-[11px] text-[#9a5b1a]">依床號分別計算，供排班/負荷參考</div>
           <ul className="mt-3 grid gap-2">
             {patientStats.map(({ bedLabel, count, weight }) => (
               <li
@@ -233,21 +275,11 @@ export function NurseTodoPage() {
   )
 }
 
-function SummaryRow({
-  label,
-  value,
-  highlight,
-}: {
-  label: string
-  value: string
-  highlight?: boolean
-}) {
+function SummaryRow({ label, value, highlight }: { label: string; value: string; highlight?: boolean }) {
   return (
     <div className="flex items-center justify-between text-xs">
       <span className={highlight ? 'font-semibold text-slate-900' : 'text-slate-600'}>{label}</span>
-      <span className={highlight ? 'text-lg font-bold text-[#b3341f]' : 'font-semibold text-slate-800'}>
-        {value}
-      </span>
+      <span className={highlight ? 'text-lg font-bold text-[#b3341f]' : 'font-semibold text-slate-800'}>{value}</span>
     </div>
   )
 }
@@ -260,11 +292,7 @@ function KindPill({ kind }: { kind: StatOrderKind }) {
     監測: 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]',
     其他: 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10',
   }
-  return (
-    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${map[kind]}`}>
-      {kind}
-    </span>
-  )
+  return <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-semibold ${map[kind]}`}>{kind}</span>
 }
 
 function KindFilterPill({
@@ -277,36 +305,18 @@ function KindFilterPill({
   onClick: () => void
 }) {
   const map: Record<StatOrderKind, { on: string; off: string }> = {
-    檢查: {
-      on: 'bg-[#9a5b1a] text-white',
-      off: 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]',
-    },
-    治療: {
-      on: 'bg-[#b3341f] text-white',
-      off: 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f1c4b8]',
-    },
-    給藥: {
-      on: 'bg-[#1e4ea7] text-white',
-      off: 'bg-[#e6f0ff] text-[#1e4ea7] ring-1 ring-[#b7cff7]',
-    },
-    監測: {
-      on: 'bg-[#1e6c3a] text-white',
-      off: 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]',
-    },
-    其他: {
-      on: 'bg-[#334155] text-white',
-      off: 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10',
-    },
+    檢查: { on: 'bg-[#9a5b1a] text-white', off: 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]' },
+    治療: { on: 'bg-[#b3341f] text-white', off: 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f1c4b8]' },
+    給藥: { on: 'bg-[#1e4ea7] text-white', off: 'bg-[#e6f0ff] text-[#1e4ea7] ring-1 ring-[#b7cff7]' },
+    監測: { on: 'bg-[#1e6c3a] text-white', off: 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]' },
+    其他: { on: 'bg-[#334155] text-white', off: 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10' },
   }
   const cls = active ? map[kind].on : map[kind].off
   return (
     <button
       type="button"
       onClick={onClick}
-      className={[
-        'rounded-full px-3 py-1.5 text-xs font-semibold transition hover:brightness-95',
-        cls,
-      ].join(' ')}
+      className={['rounded-full px-3 py-1.5 text-xs font-semibold transition hover:brightness-95', cls].join(' ')}
     >
       {kind}
     </button>
@@ -318,7 +328,7 @@ function buildPatientStats(orders: StatOrder[]) {
   for (const o of orders) {
     const cur = map.get(o.bedLabel) ?? { count: 0, weight: 0 }
     cur.count += 1
-    cur.weight += statOrderWeight(o)
+    cur.weight += o.weight
     map.set(o.bedLabel, cur)
   }
   return [...map.entries()]

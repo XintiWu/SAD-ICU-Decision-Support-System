@@ -4,8 +4,20 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 /** 後端無法連線時的預設班別（與 seed / demo 一致） */
 export const CURRENT_SHIFT_ID = '00000000-0000-0000-0000-000000000201'
 
+/** demo 護理師（nurse），一般 API 預設使用者 */
+export const CURRENT_NURSE_USER_ID = '00000000-0000-0000-0000-000000000101'
+
 /** demo 小組長（charge_nurse），呼叫分床 API 時帶入 */
 export const CHARGE_USER_ID = '00000000-0000-0000-0000-000000000110'
+
+export type ApiUser = {
+  id: string
+  name: string
+  displayName: string
+  shortName: string
+  role: string
+  currentShiftId: string
+}
 
 export type ApiNurse = {
   id: string
@@ -69,14 +81,56 @@ export type ApiTask = {
   id: string
   admissionId: string
   bedLabel: string
+  bedDetail?: string
   title: string
   kind: '給藥' | '檢查' | '監測' | '家屬' | '紀錄'
   urgent: boolean
   status: 'pending' | 'done' | 'cancelled'
   done: boolean
   completedAt: string | null
+  createdAt?: string
   points: number
   source: string
+}
+
+export type HandoffSnapshotListItem = {
+  id: string
+  allocationRunId: string
+  shiftId: string
+  shiftKey: string
+  shiftLabel: string
+  createdAt: string
+  createdBy: string
+  summary: {
+    patientCount: number
+    nurseCount: number
+    statTotal: number
+    taskTotal: number
+    taskOpen: number
+    taskUrgentOpen: number
+    avgLoad: number
+    maxLoad: number
+  }
+}
+
+export type HandoffSnapshotDetail = HandoffSnapshotListItem & {
+  allocation: {
+    unassignedCount: number
+    stats: AllocationRun['stats']
+  }
+  nurseBlocks: Array<{
+    nurseId: string
+    nurseName: string
+    load: number
+    beds: Array<{
+      admissionId: string
+      bedLabel: string
+      label: string
+      score: number
+      tone: 'high' | 'mid' | 'low'
+    }>
+  }>
+  tasks: ApiTask[]
 }
 
 export type AllocationPatient = {

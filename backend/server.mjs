@@ -8,10 +8,12 @@ import {
   getCurrentUser,
   listShifts,
   getHandoffSheet,
+  getHandoffSnapshot,
   getNurseOverview,
   getWarRoom,
   listAdmissions,
   listBurdenAssessments,
+  listHandoffSnapshots,
   listNurses,
   listTasks,
   suggestAllocationRun,
@@ -73,6 +75,8 @@ async function handleRequest(req, res) {
           'POST /api/v1/allocation-runs/{allocationRunId}/confirm',
           'GET /api/v1/war-room?shiftId={shiftId}',
           'GET /api/v1/handoff-sheets?shiftId={shiftId}',
+          'GET /api/v1/handoff-snapshots',
+          'GET /api/v1/handoff-snapshots/{allocationRunId}',
         ],
       },
     })
@@ -164,6 +168,7 @@ async function handleRequest(req, res) {
       assignee: url.searchParams.get('assignee') ?? 'me',
       status: nullable(url.searchParams.get('status')),
       kind: nullable(url.searchParams.get('kind')),
+      urgent: nullable(url.searchParams.get('urgent')),
       userId: getUserId(req, url),
     })
     sendJson(res, result)
@@ -251,6 +256,21 @@ async function handleRequest(req, res) {
   if (url.pathname === '/api/v1/handoff-sheets') {
     assertMethod(req, 'GET')
     sendJson(res, { data: await getHandoffSheet({ shiftId: url.searchParams.get('shiftId') }) })
+    return
+  }
+
+  if (url.pathname === '/api/v1/handoff-snapshots') {
+    assertMethod(req, 'GET')
+    sendJson(res, { data: await listHandoffSnapshots() })
+    return
+  }
+
+  const handoffSnapshotMatch = url.pathname.match(/^\/api\/v1\/handoff-snapshots\/([^/]+)$/)
+  if (handoffSnapshotMatch) {
+    assertMethod(req, 'GET')
+    sendJson(res, {
+      data: await getHandoffSnapshot({ allocationRunId: decodeURIComponent(handoffSnapshotMatch[1]) }),
+    })
     return
   }
 
