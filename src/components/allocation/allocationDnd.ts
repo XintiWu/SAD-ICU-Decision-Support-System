@@ -4,39 +4,38 @@ import {
   type CollisionDetection,
   type UniqueIdentifier,
 } from '@dnd-kit/core'
-import type { NurseId, PatientId } from '../../data/allocationMock'
 
-export type AllocationContainers = Record<string, PatientId[]>
+export type AllocationContainers = Record<string, string[]>
 
 export const UNASSIGNED_DROP_ID = 'unassigned'
 
-export function isContainerDroppableId(id: UniqueIdentifier, nurseIds: NurseId[]): boolean {
+export function isContainerDroppableId(id: UniqueIdentifier, nurseIds: string[]): boolean {
   const s = String(id)
   if (s === UNASSIGNED_DROP_ID) return true
   if (s.startsWith('lane:')) return true
-  return nurseIds.includes(s as NurseId)
+  return nurseIds.includes(s)
 }
 
 export function buildContainers(
-  unassigned: PatientId[],
-  byNurse: Record<NurseId, PatientId[]>,
-  nurseIds: NurseId[],
+  unassigned: string[],
+  byNurse: Record<string, string[]>,
+  nurseIds: string[],
 ): AllocationContainers {
   const containers: AllocationContainers = { unassigned: [...unassigned] }
   for (const nid of nurseIds) containers[nid] = [...(byNurse[nid] ?? [])]
   return containers
 }
 
-export function normalizeOverId(overId: UniqueIdentifier, nurseIds: NurseId[]): string {
+export function normalizeOverId(overId: UniqueIdentifier, nurseIds: string[]): string {
   const id = String(overId)
   if (id === UNASSIGNED_DROP_ID) return 'unassigned'
   if (id.startsWith('lane:')) return id.slice(5)
-  if (nurseIds.includes(id as NurseId)) return id
+  if (nurseIds.includes(id)) return id
   return id
 }
 
 export function findContainerForPatient(
-  patientId: PatientId,
+  patientId: string,
   containers: AllocationContainers,
 ): string | null {
   for (const [key, list] of Object.entries(containers)) {
@@ -47,20 +46,20 @@ export function findContainerForPatient(
 
 export function resolveDropContainer(
   overId: UniqueIdentifier | undefined,
-  activeId: PatientId,
+  activeId: string,
   containers: AllocationContainers,
-  nurseIds: NurseId[],
+  nurseIds: string[],
 ): string | null {
   if (!overId) return null
   if (String(overId) === String(activeId)) return null
 
   const normalized = normalizeOverId(overId, nurseIds)
   if (normalized === 'unassigned') return 'unassigned'
-  if (nurseIds.includes(normalized as NurseId)) return normalized
-  return findContainerForPatient(normalized as PatientId, containers)
+  if (nurseIds.includes(normalized)) return normalized
+  return findContainerForPatient(normalized, containers)
 }
 
-export function createAllocationCollisionDetection(nurseIds: NurseId[]): CollisionDetection {
+export function createAllocationCollisionDetection(nurseIds: string[]): CollisionDetection {
   return (args) => {
     const activeId = String(args.active.id)
 
@@ -88,10 +87,10 @@ export function applyDragMove({
   containers,
   nurseIds,
 }: {
-  activeId: PatientId
+  activeId: string
   overId: UniqueIdentifier
   containers: AllocationContainers
-  nurseIds: NurseId[]
+  nurseIds: string[]
 }): AllocationContainers | null {
   const fromKey = findContainerForPatient(activeId, containers)
   const toKey = resolveDropContainer(overId, activeId, containers, nurseIds)
@@ -106,7 +105,7 @@ export function applyDragMove({
     const normalized = normalizeOverId(overId, nurseIds)
     if (normalized === toKey) return null
     const oldIndex = list.indexOf(activeId)
-    const newIndex = list.indexOf(normalized as PatientId)
+    const newIndex = list.indexOf(normalized)
     if (oldIndex === -1 || newIndex === -1 || oldIndex === newIndex) return null
     next[fromKey] = arrayMoveIds(list, oldIndex, newIndex)
     return next
@@ -117,7 +116,7 @@ export function applyDragMove({
   const normalized = normalizeOverId(overId, nurseIds)
   let insertIndex = toList.length
   if (normalized !== toKey) {
-    const idx = toList.indexOf(normalized as PatientId)
+    const idx = toList.indexOf(normalized)
     insertIndex = idx === -1 ? toList.length : idx
   }
   toList.splice(insertIndex, 0, activeId)
@@ -126,7 +125,7 @@ export function applyDragMove({
   return next
 }
 
-function arrayMoveIds<T>(list: T[], from: number, to: number): T[] {
+function arrayMoveIds(list: string[], from: number, to: number): string[] {
   const copy = [...list]
   const [item] = copy.splice(from, 1)
   copy.splice(to, 0, item)
@@ -135,9 +134,9 @@ function arrayMoveIds<T>(list: T[], from: number, to: number): T[] {
 
 export function containersToState(
   containers: AllocationContainers,
-  nurseIds: NurseId[],
-): { unassigned: PatientId[]; byNurse: Record<NurseId, PatientId[]> } {
-  const byNurse = {} as Record<NurseId, PatientId[]>
+  nurseIds: string[],
+): { unassigned: string[]; byNurse: Record<string, string[]> } {
+  const byNurse = {} as Record<string, string[]>
   for (const nid of nurseIds) byNurse[nid] = containers[nid] ?? []
   return { unassigned: containers.unassigned ?? [], byNurse }
 }

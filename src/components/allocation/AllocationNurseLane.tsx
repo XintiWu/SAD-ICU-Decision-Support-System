@@ -1,8 +1,7 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, rectSortingStrategy } from '@dnd-kit/sortable'
-import type { PatientId } from '../../data/allocationMock'
 import { AllocationBedChip } from './AllocationBedChip'
-import { enrichBed, LOAD_BAR_MAX, type NurseLoadTone } from './allocationUtils'
+import { LOAD_BAR_MAX, type NurseLoadTone, type PatientDragDetail } from './allocationUtils'
 
 const barClass: Record<NurseLoadTone, string> = {
   high: 'bg-[#e85d4a]',
@@ -13,11 +12,11 @@ const barClass: Record<NurseLoadTone, string> = {
 type Props = {
   id: string
   title: string
-  items: PatientId[]
+  items: PatientDragDetail[]
   load?: number
   bedCount?: number
   loadTone?: NurseLoadTone
-  activePatientId?: PatientId | null
+  activePatientId?: string | null
   onRegisterBody?: (laneId: string, el: HTMLDivElement | null) => void
 }
 
@@ -68,9 +67,9 @@ export function AllocationNurseLane({
         ref={(el) => onRegisterBody?.(id, el)}
         className={['min-h-[100px] p-2.5', isOver ? 'bg-surface' : ''].join(' ')}
       >
-        <SortableContext items={items} strategy={rectSortingStrategy}>
+        <SortableContext items={items.map((p) => p.id)} strategy={rectSortingStrategy}>
           {items.length === 0 ? (
-                <div
+            <div
               className={[
                 'flex min-h-[88px] items-center justify-center rounded-xl border border-dashed text-xs font-medium',
                 dragging
@@ -82,12 +81,12 @@ export function AllocationNurseLane({
             </div>
           ) : (
             <div className="grid grid-cols-3 gap-1.5">
-              {items.map((pid) => (
+              {items.map((patient) => (
                 <AllocationBedChip
-                  key={pid}
-                  bed={enrichBed(pid)}
+                  key={patient.id}
+                  bed={patient}
                   fill
-                  dragging={activePatientId === pid}
+                  dragging={activePatientId === patient.id}
                 />
               ))}
             </div>

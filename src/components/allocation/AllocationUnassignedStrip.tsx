@@ -1,13 +1,12 @@
 import { useDroppable } from '@dnd-kit/core'
 import { SortableContext, horizontalListSortingStrategy } from '@dnd-kit/sortable'
-import type { PatientId } from '../../data/allocationMock'
 import { UNASSIGNED_DROP_ID } from './allocationDnd'
 import { AllocationBedChip } from './AllocationBedChip'
-import { enrichBed } from './allocationUtils'
+import type { PatientDragDetail } from './allocationUtils'
 
 type Props = {
-  items: PatientId[]
-  activePatientId?: PatientId | null
+  items: PatientDragDetail[]
+  activePatientId?: string | null
   onSuggest?: () => void
 }
 
@@ -57,7 +56,7 @@ export function AllocationUnassignedStrip({
           isOver ? 'bg-[#fff1f2] ring-2 ring-inset ring-[#f87171]' : dragging ? 'bg-[#fffafa]' : '',
         ].join(' ')}
       >
-        <SortableContext items={items} strategy={horizontalListSortingStrategy}>
+        <SortableContext items={items.map((p) => p.id)} strategy={horizontalListSortingStrategy}>
           <div
             className={[
               'flex min-h-[36px] items-center gap-2 rounded-lg border border-dashed px-2 py-1.5',
@@ -72,11 +71,11 @@ export function AllocationUnassignedStrip({
             </span>
             {items.length > 0 ? (
               <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
-                {items.map((pid) => (
+                {items.map((patient) => (
                   <AllocationBedChip
-                    key={pid}
-                    bed={enrichBed(pid)}
-                    dragging={activePatientId === pid}
+                    key={patient.id}
+                    bed={patient}
+                    dragging={activePatientId === patient.id}
                   />
                 ))}
               </div>

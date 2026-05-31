@@ -1,16 +1,15 @@
 import { useCallback, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { AllocationPatientHoverDetail } from './AllocationPatientHoverDetail'
-import { getPatientDragDetail } from './allocationUtils'
-import type { PatientId } from '../../data/allocationMock'
+import type { PatientDragDetail } from './allocationUtils'
 
 type Props = {
-  patientId: PatientId
+  patient: PatientDragDetail
   children: ReactNode
   disabled?: boolean
 }
 
-export function AllocationPatientHoverHost({ patientId, children, disabled }: Props) {
+export function AllocationPatientHoverHost({ patient, children, disabled }: Props) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
@@ -21,8 +20,6 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
     const rect = el.getBoundingClientRect()
     setPos({ left: rect.left, top: rect.bottom + 8 })
   }, [])
-
-  const patient = getPatientDragDetail(patientId)
 
   function handleEnter() {
     if (disabled) return

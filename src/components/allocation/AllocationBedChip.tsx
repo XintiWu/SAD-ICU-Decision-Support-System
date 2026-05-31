@@ -2,7 +2,7 @@ import { useSortable } from '@dnd-kit/sortable'
 import { CSS } from '@dnd-kit/utilities'
 import type { CSSProperties } from 'react'
 import { AllocationPatientHoverHost } from './AllocationPatientHoverHost'
-import type { EnrichedBed } from './allocationUtils'
+import type { PatientDragDetail } from './allocationUtils'
 
 const railClass = {
   high: 'bg-[#e85d4a]',
@@ -17,7 +17,7 @@ const chipBg = {
 } as const
 
 type Props = {
-  bed: EnrichedBed
+  bed: PatientDragDetail
   dragging?: boolean
   overlay?: boolean
   fill?: boolean
@@ -77,7 +77,7 @@ export function AllocationBedChip({ bed, dragging, overlay, fill }: Props) {
   if (overlay) return chip
 
   return (
-    <AllocationPatientHoverHost patientId={bed.id} disabled={isDragging || dragging}>
+    <AllocationPatientHoverHost patient={bed} disabled={isDragging || dragging}>
       {chip}
     </AllocationPatientHoverHost>
   )

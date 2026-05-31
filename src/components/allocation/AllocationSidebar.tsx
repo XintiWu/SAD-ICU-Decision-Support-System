@@ -1,4 +1,3 @@
-import { NURSES } from '../../data/allocationMock'
 import type { AllocationStats, NurseLoadRow } from './allocationUtils'
 import { formatDelta } from './allocationUtils'
 
@@ -40,10 +39,10 @@ export function AllocationSidebar({
       <div className="rounded-xl bg-surface p-3 text-xs leading-relaxed text-slate-600 ring-1 ring-black/5">
         {stats.maxNurseId && stats.minNurseId ? (
           <p>
-            <span className="font-semibold text-slate-800">最高</span> {NURSES[stats.maxNurseId].shortName}{' '}
+            <span className="font-semibold text-slate-800">最高</span> {stats.maxNurseName}{' '}
             {stats.max}
             <span className="mx-1 text-slate-400">·</span>
-            <span className="font-semibold text-slate-800">最低</span> {NURSES[stats.minNurseId].shortName}{' '}
+            <span className="font-semibold text-slate-800">最低</span> {stats.minNurseName}{' '}
             {stats.min}
           </p>
         ) : null}
@@ -54,7 +53,7 @@ export function AllocationSidebar({
         {loadRows.map((row) => (
           <div key={row.nurseId}>
             <div className="mb-1 flex items-center justify-between text-xs">
-              <span className="font-semibold text-slate-900">{NURSES[row.nurseId].shortName}</span>
+              <span className="font-semibold text-slate-900">{row.shortName}</span>
               <span className="text-slate-600">
                 {row.load} · {row.bedCount}床 · Δ{formatDelta(row.deltaFromAvg)}
               </span>
@@ -108,4 +107,3 @@ export function AllocationSidebar({
     </aside>
   )
 }
-

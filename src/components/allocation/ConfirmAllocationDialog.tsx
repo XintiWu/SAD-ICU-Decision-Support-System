@@ -1,4 +1,3 @@
-import { NURSES } from '../../data/allocationMock'
 import type { AllocationStats } from './allocationUtils'
 
 type Props = {
@@ -28,8 +27,8 @@ export function ConfirmAllocationDialog({ stats, totalBeds, onConfirm, onCancel 
           <li>· 班級平均負荷 {stats.avg}</li>
           {stats.maxNurseId && stats.minNurseId ? (
             <li>
-              · 最高 {NURSES[stats.maxNurseId].shortName} {stats.max} / 最低{' '}
-              {NURSES[stats.minNurseId].shortName} {stats.min}
+              · 最高 {stats.maxNurseName} {stats.max} / 最低{' '}
+              {stats.minNurseName} {stats.min}
             </li>
           ) : null}
         </ul>
