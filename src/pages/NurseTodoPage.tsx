@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import { apiGet, type ApiStatOrder } from '../api/client'
 import { useShift } from '../context/ShiftContext'
+import { useUser } from '../context/UserContext'
 
 type StatOrderKind = ApiStatOrder['kind']
 const KINDS: StatOrderKind[] = ['檢查', '治療', '給藥', '監測', '其他']
@@ -11,6 +12,7 @@ const KIND_WEIGHT: Record<StatOrderKind, number> = {
 
 export function NurseTodoPage() {
   const { shiftId } = useShift()
+  const { userId } = useUser()
   const [kindFilter, setKindFilter] = useState<Set<StatOrderKind>>(new Set())
   const [orders, setOrders] = useState<ApiStatOrder[]>([])
   const [loading, setLoading] = useState(true)
@@ -21,7 +23,7 @@ export function NurseTodoPage() {
     let alive = true
     setLoading(true)
     setError(null)
-    apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${shiftId}`)
+    apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${shiftId}&assignee=me`, { userId })
       .then((data) => {
         if (!alive) return
         setOrders(sortByOrderedAt(data))
@@ -36,7 +38,7 @@ export function NurseTodoPage() {
     return () => {
       alive = false
     }
-  }, [shiftId])
+  }, [shiftId, userId])
 
   const shown = useMemo(() => {
     if (kindFilter.size === 0) return orders
@@ -76,7 +78,7 @@ export function NurseTodoPage() {
           <div>
             <div className="text-sm font-semibold text-slate-900">突發立即性醫囑 STAT TODO</div>
             <div className="mt-1 text-xs text-slate-600">
-              醫師 bedside 開立之立即檢查/治療；僅供提醒，不需在此標記完成
+              僅顯示您負責病患的 STAT 醫囑；僅供提醒，不需在此標記完成
             </div>
           </div>
           <div className="rounded-full bg-[#ffe8e1] px-3 py-1.5 text-xs font-semibold text-[#b3341f]">

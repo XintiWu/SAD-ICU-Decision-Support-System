@@ -91,6 +91,7 @@ export type ApiTask = {
   createdAt?: string
   points: number
   source: string
+  assignedNurseId?: string
 }
 
 export type ApiStatOrder = {

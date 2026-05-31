@@ -54,7 +54,21 @@ export async function listShifts({ unitName = 'ICU' } = {}) {
   return result.rows.map(formatShift)
 }
 
-export async function listStatOrders({ shiftId } = {}) {
+export async function listStatOrders({ shiftId, includeCompleted = false, assignee = 'all', userId = ids.currentNurse } = {}) {
+  const statusFilter = includeCompleted ? "so.status in ('pending', 'done')" : "so.status = 'pending'"
+  const params = [shiftId]
+  let ownerWhere = ''
+  if (assignee === 'me') {
+    params.push(userId)
+    ownerWhere = `
+      and so.admission_id in (
+        select ai.admission_id
+        from allocation_items ai
+        join allocation_runs ar on ar.id = ai.allocation_run_id
+        where ar.shift_id = $1 and ai.nurse_id = $${params.length}
+      )
+    `
+  }
   const result = await query(
     `
     select so.id, so.admission_id, so.title, so.kind,
@@ -63,10 +77,10 @@ export async function listStatOrders({ shiftId } = {}) {
     from stat_orders so
     join admissions a on a.id = so.admission_id
     join beds b on b.id = a.bed_id
-    where so.shift_id = $1 and so.status = 'pending'
-    order by so.ordered_at_display asc
+    where so.shift_id = $1 and ${statusFilter}${ownerWhere}
+    order by so.status asc, so.ordered_at_display asc
     `,
-    [shiftId],
+    params,
   )
   return result.rows.map((r) => ({
     id: r.id,
@@ -80,6 +94,45 @@ export async function listStatOrders({ shiftId } = {}) {
     reason: r.reason ?? undefined,
     status: r.status,
   }))
+}
+
+export async function updateStatOrder({ orderId, patch, userId = ids.currentNurse } = {}) {
+  if (!['pending', 'done', 'cancelled'].includes(patch.status)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'status 參數不合法', { status: patch.status })
+  }
+  await getCurrentUser(userId)
+  const result = await query(
+    `
+    update stat_orders
+    set status = $2::varchar
+    where id = $1
+    returning id, admission_id, title, kind, ordered_by, ordered_at_display, reason, status
+    `,
+    [orderId, patch.status],
+  )
+  if (!result.rows[0]) throw new ApiError(404, 'STAT_ORDER_NOT_FOUND', '找不到 STAT 醫囑', { orderId })
+  const row = result.rows[0]
+  const bed = await query(
+    `
+    select b.label as bed_label, a.diagnosis
+    from admissions a
+    join beds b on b.id = a.bed_id
+    where a.id = $1
+    `,
+    [row.admission_id],
+  )
+  return {
+    id: row.id,
+    admissionId: row.admission_id,
+    bedLabel: bed.rows[0]?.bed_label ?? '—',
+    diagnosis: bed.rows[0]?.diagnosis ?? '',
+    title: row.title,
+    kind: row.kind,
+    orderedBy: row.ordered_by,
+    orderedAt: row.ordered_at_display,
+    reason: row.reason ?? undefined,
+    status: row.status,
+  }
 }
 
 async function resolveOnDutyCharge(shift) {
@@ -288,13 +341,15 @@ export async function updateTask({ taskId, patch, userId = ids.currentNurse } = 
   if (!['pending', 'done', 'cancelled'].includes(patch.status)) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'status 參數不合法', { status: patch.status })
   }
+  const user = await getCurrentUser(userId)
+  const isLeader = ['charge_nurse', 'admin'].includes(user.role)
   const result = await query(
     `
     update tasks
     set status = $2::varchar,
       completed_at = case when $2::varchar = 'done' then now() else null end,
       completed_by = case when $2::varchar = 'done' then $3::uuid else null end
-    where id = $1 and assigned_nurse_id = $3
+    where id = $1 ${isLeader ? '' : 'and assigned_nurse_id = $3'}
     returning *
     `,
     [taskId, patch.status, userId],
@@ -450,28 +505,54 @@ export async function confirmAllocationRun({ allocationRunId, userId } = {}) {
 }
 
 export async function getWarRoom({ shiftId } = {}) {
-  const allocation = await latestAllocation(shiftId)
+  const allocation = await latestConfirmedAllocation(shiftId)
+  const allocationRunId = allocation.allocationRunId
   const tasksResult = await listTasks({ shiftId, assignee: 'all' })
+  const statTasks = (await listStatOrders({ shiftId, includeCompleted: true })).map(formatStatOrderAsTask)
+  const allTasks = [...tasksResult.data, ...statTasks]
+
+  const ownerCache = new Map()
+  const resolveOwner = async (admissionId) => {
+    if (!ownerCache.has(admissionId)) {
+      if (!allocationRunId) {
+        ownerCache.set(admissionId, null)
+      } else {
+        const result = await query(
+          'select nurse_id from allocation_items where allocation_run_id = $1 and admission_id = $2',
+          [allocationRunId, admissionId],
+        )
+        ownerCache.set(admissionId, result.rows[0] ? { nurseId: result.rows[0].nurse_id } : null)
+      }
+    }
+    return ownerCache.get(admissionId)
+  }
+
   const tasksByNurse = new Map()
-  for (const task of tasksResult.data) {
-    const admission = await admissionOwner(shiftId, task.admissionId)
+  for (const task of allTasks) {
+    const admission = await resolveOwner(task.admissionId)
     if (!admission) continue
     const list = tasksByNurse.get(admission.nurseId) ?? []
-    list.push(task)
+    if (list.some((item) => item.id === task.id)) continue
+    list.push({ ...task, assignedNurseId: admission.nurseId })
     tasksByNurse.set(admission.nurseId, list)
   }
-  const nurses = allocation.byNurse.map((row) => {
-    const nurseTasks = tasksByNurse.get(row.nurseId) ?? []
-    const remaining = nurseTasks.filter((task) => !task.done).reduce((sum, task) => sum + task.points, 0)
-    return { ...row, remaining, tasks: nurseTasks }
-  })
+
+  const nurses = allocation.byNurse
+    .map((row) => {
+      const nurseTasks = (tasksByNurse.get(row.nurseId) ?? []).sort(warRoomTaskSort)
+      const remaining = nurseTasks.filter((task) => !task.done).reduce((sum, task) => sum + task.points, 0)
+      return { ...row, remaining, tasks: nurseTasks }
+    })
+    .filter((row) => row.patients.length > 0 || row.tasks.length > 0)
+
+  const openTasks = allTasks.filter((task) => !task.done)
   return {
     overview: {
       nurseCount: nurses.length,
-      totalTasks: tasksResult.meta.counts.total,
-      doneTasks: tasksResult.meta.counts.done,
-      pendingTasks: tasksResult.meta.counts.pending,
-      urgentOpenTasks: tasksResult.data.filter((task) => task.urgent && !task.done).length,
+      totalTasks: allTasks.length,
+      doneTasks: allTasks.filter((task) => task.done).length,
+      pendingTasks: openTasks.length,
+      urgentOpenTasks: openTasks.filter((task) => task.urgent).length,
     },
     nurses,
   }
@@ -503,15 +584,23 @@ export async function getHandoffSheet({ shiftId } = {}) {
   }
 }
 
-export async function listHandoffSnapshots() {
+export async function listHandoffSnapshots({ shiftId } = {}) {
+  const params = []
+  let where = ''
+  if (shiftId) {
+    params.push(shiftId)
+    where = `where hs.shift_id = $${params.length}`
+  }
   const result = await query(
     `
     select hs.*, s.shift_key, s.starts_at, s.ends_at, n.short_name as created_by_name
     from handoff_snapshots hs
     join shifts s on s.id = hs.shift_id
     left join nurses n on n.id = hs.created_by
+    ${where}
     order by hs.created_at desc
     `,
+    params,
   )
   return result.rows.map(formatHandoffSnapshotListItem)
 }
@@ -692,6 +781,41 @@ function taskPoints(task) {
   return base + (task.urgent ? 2 : 0)
 }
 
+function statOrderKindToTaskKind(kind) {
+  if (kind === '給藥' || kind === '檢查' || kind === '監測') return kind
+  if (kind === '治療') return '給藥'
+  return '紀錄'
+}
+
+function formatStatOrderAsTask(order) {
+  const kind = statOrderKindToTaskKind(order.kind)
+  return {
+    id: `stat:${order.id}`,
+    admissionId: order.admissionId,
+    bedLabel: order.bedLabel,
+    bedDetail: order.bedLabel,
+    title: order.title,
+    kind,
+    urgent: true,
+    status: order.status,
+    done: order.status !== 'pending',
+    completedAt: null,
+    points: taskPoints({ kind, urgent: true }),
+    source: 'STAT',
+  }
+}
+
+function warRoomBedNo(label) {
+  const match = label.match(/\d+/)
+  return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+}
+
+function warRoomTaskSort(a, b) {
+  if (a.done !== b.done) return Number(a.done) - Number(b.done)
+  if (a.urgent !== b.urgent) return Number(b.urgent) - Number(a.urgent)
+  return warRoomBedNo(a.bedLabel) - warRoomBedNo(b.bedLabel)
+}
+
 async function admissionsWithScores(shiftId) {
   const rows = await listAdmissions({ shiftId, status: 'active' })
   return Promise.all(rows.map(async (admission) => ({ ...admission, score: await scoreForAdmission(admission.admissionId) })))
@@ -711,6 +835,45 @@ async function allocationRunRow(id) {
 function allocationPatient(admission, score, isManualOverride) {
   if (!admission) return null
   return { admissionId: admission.admissionId, bedLabel: admission.bedLabel, patientName: admission.patientName, diagnosis: admission.diagnosis, score, tone: score >= 22 ? 'high' : score >= 14 ? 'mid' : 'low', isManualOverride }
+}
+
+async function latestAllocationForWarRoom(shiftId) {
+  const confirmed = await query(
+    `
+    select id
+    from allocation_runs
+    where shift_id = $1 and status = 'confirmed'
+    order by confirmed_at desc nulls last, suggested_at desc
+    limit 1
+    `,
+    [shiftId],
+  )
+  if (confirmed.rows[0]) {
+    return getAllocationRun({ allocationRunId: confirmed.rows[0].id })
+  }
+
+  const draftWithItems = await query(
+    `
+    select ar.id
+    from allocation_runs ar
+    join allocation_items ai on ai.allocation_run_id = ar.id
+    where ar.shift_id = $1 and ar.status = 'draft'
+    group by ar.id
+    having count(ai.id) > 0
+    order by max(ar.suggested_at) desc
+    limit 1
+    `,
+    [shiftId],
+  )
+  if (draftWithItems.rows[0]) {
+    return getAllocationRun({ allocationRunId: draftWithItems.rows[0].id })
+  }
+
+  return emptyAllocationForShift(shiftId)
+}
+
+async function latestConfirmedAllocation(shiftId) {
+  return latestAllocationForWarRoom(shiftId)
 }
 
 async function latestAllocation(shiftId) {

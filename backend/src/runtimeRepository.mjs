@@ -35,6 +35,7 @@ export const getLatestAllocationRun = pg.getLatestAllocationRun
 export const suggestAllocationRun = pg.suggestAllocationRun
 export const updateAllocationItems = pg.updateAllocationItems
 export const updateBurdenAssessment = pg.updateBurdenAssessment
+export const updateStatOrder = pg.updateStatOrder
 export const updateTask = pg.updateTask
 
 export async function getCurrentShift(unitName = 'ICU') {

@@ -20,6 +20,7 @@ import {
   suggestAllocationRun,
   updateAllocationItems,
   updateBurdenAssessment,
+  updateStatOrder,
   updateTask,
 } from './src/runtimeRepository.mjs'
 
@@ -64,6 +65,7 @@ async function handleRequest(req, res) {
           'GET /api/v1/shifts/current',
           'GET /api/v1/nurses?shiftId={shiftId}',
           'GET /api/v1/stat-orders?shiftId={shiftId}',
+          'PATCH /api/v1/stat-orders/{orderId}',
           'GET /api/v1/admissions?shiftId={shiftId}&status=active',
           'GET /api/v1/nurse/overview?shiftId={shiftId}',
           'GET /api/v1/burden-assessments?shiftId={shiftId}&scope=mine',
@@ -120,7 +122,26 @@ async function handleRequest(req, res) {
     assertMethod(req, 'GET')
     const shiftId = url.searchParams.get('shiftId')
     if (!shiftId) throw new ApiError(400, 'MISSING_PARAM', 'shiftId required')
-    sendJson(res, { data: await listStatOrders({ shiftId }) })
+    sendJson(res, {
+      data: await listStatOrders({
+        shiftId,
+        assignee: url.searchParams.get('assignee') ?? 'all',
+        userId: getUserId(req, url),
+      }),
+    })
+    return
+  }
+
+  const statOrderMatch = url.pathname.match(/^\/api\/v1\/stat-orders\/([^/]+)$/)
+  if (statOrderMatch) {
+    assertMethod(req, 'PATCH')
+    sendJson(res, {
+      data: await updateStatOrder({
+        orderId: decodeURIComponent(statOrderMatch[1]),
+        patch: await readJsonBody(req),
+        userId: getUserId(req, url),
+      }),
+    })
     return
   }
 
@@ -278,7 +299,9 @@ async function handleRequest(req, res) {
 
   if (url.pathname === '/api/v1/handoff-snapshots') {
     assertMethod(req, 'GET')
-    sendJson(res, { data: await listHandoffSnapshots() })
+    sendJson(res, {
+      data: await listHandoffSnapshots({ shiftId: nullable(url.searchParams.get('shiftId')) }),
+    })
     return
   }
 

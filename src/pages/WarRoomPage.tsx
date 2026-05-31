@@ -1,78 +1,151 @@
-import { useEffect, useMemo, useState } from 'react'
-import { apiGet, type WarRoomData } from '../api/client'
+import { Link } from 'react-router-dom'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { createPortal } from 'react-dom'
+import { apiGet, apiPatch, CURRENT_NURSE_USER_ID, type ApiTask, type WarRoomData } from '../api/client'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/ShiftContext'
 
+type WarRoomTask = {
+  id: string
+  ownerNurseId: string
+  admissionId: string
+  bedLabel: string
+  title: string
+  urgent: boolean
+  done: boolean
+  stat: boolean
+  newbie: boolean
+  points: number
+}
+
+type PatientInfo = {
+  admissionId: string
+  bed: string
+  bedLabel: string
+  patient: string
+  diagnosis: string
+  score: number
+  tone: 'high' | 'mid' | 'low'
+}
+
+type NurseCardModel = {
+  nurseId: string
+  name: string
+  remaining: number
+  tone: 'high' | 'mid' | 'low'
+  patients: PatientInfo[]
+  tasks: WarRoomTask[]
+}
+
 export function WarRoomPage() {
-  const { shiftId } = useShift()
+  const { shiftId, selectedShift } = useShift()
   const chargeNurseId = useChargeNurseId()
+  const actorId = chargeNurseId ?? CURRENT_NURSE_USER_ID
   const [data, setData] = useState<WarRoomData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [togglingKey, setTogglingKey] = useState<string | null>(null)
+  const togglingRef = useRef(false)
+  const suppressPollUntilRef = useRef(0)
+  const [detailPatient, setDetailPatient] = useState<{
+    nurseId: string
+    nurseName: string
+    patient: PatientInfo
+    tasks: WarRoomTask[]
+  } | null>(null)
+
+  const load = useCallback((opts?: { initial?: boolean }) => {
+    if (!opts?.initial) {
+      if (togglingRef.current) return Promise.resolve()
+      if (Date.now() < suppressPollUntilRef.current) return Promise.resolve()
+    }
+    return apiGet<WarRoomData>(`/war-room?shiftId=${shiftId}`)
+      .then((nextData) => {
+        setData((prev) => (prev && !opts?.initial ? mergeWarRoomData(prev, nextData) : nextData))
+        setError(null)
+      })
+      .catch((err: Error) => setError(err.message))
+  }, [shiftId])
+
+  useEffect(() => {
+    suppressPollUntilRef.current = 0
+  }, [shiftId])
 
   useEffect(() => {
     let alive = true
     setLoading(true)
     setData(null)
 
-    const load = () => {
-      apiGet<WarRoomData>(`/war-room?shiftId=${shiftId}`)
-        .then((nextData) => {
-          if (!alive) return
-          setData(nextData)
-          setError(null)
-        })
-        .catch((err: Error) => {
-          if (!alive) return
-          setError(err.message)
-        })
-        .finally(() => {
-          if (alive) setLoading(false)
-        })
-    }
+    load({ initial: true })
+      .finally(() => {
+        if (alive) setLoading(false)
+      })
 
-    load()
-    const timer = window.setInterval(load, 5000)
+    const timer = window.setInterval(() => {
+      if (alive && !togglingRef.current && Date.now() >= suppressPollUntilRef.current) load()
+    }, 5000)
 
     return () => {
       alive = false
       window.clearInterval(timer)
     }
-  }, [shiftId])
+  }, [load])
+
+  const handleTaskToggle = useCallback(
+    async (cardNurseId: string, task: WarRoomTask) => {
+      const ownerNurseId = task.ownerNurseId
+      if (ownerNurseId !== cardNurseId) return
+
+      const toggleKey = taskToggleKey(ownerNurseId, task.id)
+      if (togglingRef.current) return
+
+      const prevDone = task.done
+      const nextDone = !prevDone
+      togglingRef.current = true
+      suppressPollUntilRef.current = Date.now() + 10000
+      setTogglingKey(toggleKey)
+      setData((prev) => (prev ? patchTaskDoneInData(prev, ownerNurseId, task.id, nextDone) : prev))
+
+      try {
+        const nextStatus = nextDone ? 'done' : 'pending'
+        if (task.stat) {
+          const orderId = task.id.startsWith('stat:') ? task.id.slice(5) : task.id
+          await apiPatch(`/stat-orders/${orderId}`, { status: nextStatus }, { userId: actorId })
+        } else {
+          await apiPatch(`/tasks/${task.id}`, { status: nextStatus }, { userId: actorId })
+        }
+      } catch (err) {
+        setData((prev) => (prev ? patchTaskDoneInData(prev, ownerNurseId, task.id, prevDone) : prev))
+        setError(err instanceof Error ? err.message : '更新失敗')
+      } finally {
+        togglingRef.current = false
+        setTogglingKey(null)
+      }
+    },
+    [actorId],
+  )
 
   const nurses: NurseCardModel[] = useMemo(() => {
-    const toneRank: Record<NurseCardModel['tone'], number> = { high: 2, mid: 1, low: 0 }
-
-    return (data?.nurses ?? [])
-      .map((row) => toNurseCard(row, chargeNurseId))
-      .sort((a, b) => {
-        const aUrgentOpen = a.tasks.some((t) => !!t.urgent && !t.done)
-        const bUrgentOpen = b.tasks.some((t) => !!t.urgent && !t.done)
-        if (aUrgentOpen !== bUrgentOpen) return Number(bUrgentOpen) - Number(aUrgentOpen)
-
-        const toneDiff = toneRank[b.tone] - toneRank[a.tone]
-        if (toneDiff !== 0) return toneDiff
-
-        const remainingDiff = b.remaining - a.remaining
-        if (remainingDiff !== 0) return remainingDiff
-
-        return a.name.localeCompare(b.name, 'zh-Hant')
-      })
+    return (data?.nurses ?? []).map((row) => toNurseCard(row, chargeNurseId))
   }, [data, chargeNurseId])
 
   if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入戰情室...</div>
-  if (error) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
+  if (error && !data) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
 
   const totalTasks = nurses.reduce((acc, n) => acc + n.tasks.length, 0)
-  const doneTasks = nurses.reduce((acc, n) => acc + n.tasks.filter((t) => !!t.done).length, 0)
-  const urgentTasks = nurses.reduce((acc, n) => acc + n.tasks.filter((t) => !!t.urgent && !t.done).length, 0)
+  const doneTasks = nurses.reduce((acc, n) => acc + n.tasks.filter((t) => t.done).length, 0)
+  const urgentTasks = nurses.reduce((acc, n) => acc + n.tasks.filter((t) => t.urgent && !t.done).length, 0)
   const highCount = nurses.filter((n) => n.tone === 'high').length
   const midCount = nurses.filter((n) => n.tone === 'mid').length
   const lowCount = nurses.filter((n) => n.tone === 'low').length
 
   return (
     <div className="grid gap-4">
+      {error ? (
+        <div className="rounded-xl bg-[#fff7ed] px-4 py-2 text-xs font-semibold text-[#9a5b1a] ring-1 ring-[#f1d7b8]">{error}</div>
+      ) : null}
+
       <div className="overflow-hidden rounded-2xl bg-gradient-to-br from-[#eef2ff] via-[#f5fbff] to-[#ecfeff] ring-1 ring-black/10 shadow-[0_1px_0_rgba(255,255,255,0.7)_inset,0_0_0_1px_rgba(2,6,23,0.04)_inset]">
         <div className="h-1.5 w-full bg-gradient-to-r from-[#1d4ed8] via-[#0ea5e9] to-[#14b8a6]" />
         <div className="p-4">
@@ -106,72 +179,213 @@ export function WarRoomPage() {
       </div>
 
       <section className="rounded-2xl bg-white p-3 ring-1 ring-black/10">
-        <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
-          {nurses.map((n) => (
-            <NurseLoadCard key={n.name} name={n.name} remaining={n.remaining} tone={n.tone} assignments={n.assignments} tasks={n.tasks} />
-          ))}
-        </div>
+        {nurses.length ? (
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 [&>*]:min-w-0">
+            {nurses.map((n) => (
+              <NurseLoadCard
+                key={n.nurseId}
+                nurseId={n.nurseId}
+                name={n.name}
+                remaining={n.remaining}
+                tone={n.tone}
+                patients={n.patients}
+                tasks={n.tasks}
+                togglingKey={togglingKey}
+                onTaskToggle={(task) => handleTaskToggle(n.nurseId, task)}
+                onPatientDetail={(patient) =>
+                  setDetailPatient({
+                    nurseId: n.nurseId,
+                    nurseName: n.name,
+                    patient,
+                    tasks: n.tasks.filter((t) => t.admissionId === patient.admissionId),
+                  })
+                }
+              />
+            ))}
+          </div>
+        ) : (
+          <div className="rounded-xl bg-[#fafaf8] px-5 py-8 text-center ring-1 ring-black/10">
+            <div className="text-sm font-semibold text-slate-900">此班別尚無戰情資料</div>
+            {selectedShift ? (
+              <p className="mt-1 text-sm text-slate-600">{selectedShift.label}</p>
+            ) : null}
+            <p className="mt-3 text-sm text-slate-600">
+              戰情室需有<strong className="font-semibold text-slate-800">已確認分床</strong>才能將 STAT／任務對應到護理師。請至{' '}
+              <Link to="/leader/allocation" className="font-semibold text-[#1e4ea7] underline underline-offset-2">
+                指派分床配對
+              </Link>{' '}
+              完成確認，或切換至已有分床的班別（例如 2026/05/20 小夜班）。
+            </p>
+            {data?.overview.totalTasks ? (
+              <p className="mt-2 text-xs text-slate-500">
+                此班別有 {data.overview.totalTasks} 筆任務／STAT，但尚未對應到分床結果。
+              </p>
+            ) : null}
+          </div>
+        )}
       </section>
+
+      {detailPatient ? (
+        <PatientDetailModal
+          nurseId={detailPatient.nurseId}
+          nurseName={detailPatient.nurseName}
+          patient={detailPatient.patient}
+          tasks={detailPatient.tasks}
+          togglingKey={togglingKey}
+          onClose={() => setDetailPatient(null)}
+          onTaskToggle={(task) => handleTaskToggle(detailPatient.nurseId, task)}
+        />
+      ) : null}
     </div>
   )
 }
 
-type NurseCardModel = {
-  name: string
-  remaining: number
-  tone: 'high' | 'mid' | 'low'
-  assignments: { bed: string; patient: string }[]
-  tasks: { text: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]
+function patchTaskDoneInData(data: WarRoomData, nurseId: string, taskId: string, done: boolean): WarRoomData {
+  const status = done ? ('done' as const) : ('pending' as const)
+  const nurses = data.nurses.map((nurse) => {
+    if (nurse.nurseId !== nurseId) return nurse
+    const tasks = nurse.tasks.map((task) =>
+      task.id !== taskId
+        ? task
+        : {
+            ...task,
+            done,
+            status,
+            completedAt: done ? (task.completedAt ?? new Date().toISOString()) : null,
+          },
+    )
+    const remaining = tasks.filter((t) => !t.done).reduce((sum, t) => sum + t.points, 0)
+    return { ...nurse, tasks, remaining }
+  })
+  return { ...data, nurses, overview: recalculateOverview(nurses) }
+}
+
+function recalculateOverview(nurses: WarRoomData['nurses']): WarRoomData['overview'] {
+  const allTasks = nurses.flatMap((n) => n.tasks)
+  const openTasks = allTasks.filter((t) => !t.done)
+  const activeNurses = nurses.filter((n) => n.patients.length > 0 || n.tasks.length > 0)
+  return {
+    nurseCount: activeNurses.length,
+    totalTasks: allTasks.length,
+    doneTasks: allTasks.filter((t) => t.done).length,
+    pendingTasks: openTasks.length,
+    urgentOpenTasks: openTasks.filter((t) => t.urgent).length,
+  }
+}
+
+function mergeWarRoomData(prev: WarRoomData, next: WarRoomData): WarRoomData {
+  const prevNurseOrder = prev.nurses.map((n) => n.nurseId)
+  const nextByNurseId = new Map(next.nurses.map((n) => [n.nurseId, n]))
+  const orderedNurses = prevNurseOrder
+    .map((id) => nextByNurseId.get(id))
+    .filter((n): n is WarRoomData['nurses'][number] => Boolean(n))
+  const newNurses = next.nurses.filter((n) => !prevNurseOrder.includes(n.nurseId))
+  const nurses = [...orderedNurses, ...newNurses].map((nurse) => {
+    const prevNurse = prev.nurses.find((p) => p.nurseId === nurse.nurseId)
+    if (!prevNurse) return nurse
+    const prevTaskOrder = prevNurse.tasks.map((t) => t.id)
+    const nextTasksById = new Map(nurse.tasks.map((t) => [t.id, t]))
+    const orderedTasks = prevTaskOrder
+      .map((id) => nextTasksById.get(id))
+      .filter((t): t is ApiTask => Boolean(t))
+    const newTasks = nurse.tasks.filter((t) => !prevTaskOrder.includes(t.id))
+    return { ...nurse, tasks: [...orderedTasks, ...newTasks] }
+  })
+  return { ...next, nurses, overview: recalculateOverview(nurses) }
 }
 
 function toNurseCard(row: WarRoomData['nurses'][number], chargeNurseId: string | null): NurseCardModel {
-  const assignments = row.patients.map((patient) => ({
+  const patients: PatientInfo[] = row.patients.map((patient) => ({
+    admissionId: patient.admissionId,
     bed: bedNo(patient.bedLabel),
+    bedLabel: patient.bedLabel,
     patient: patient.patientName,
+    diagnosis: patient.diagnosis,
+    score: patient.score,
+    tone: patient.tone,
   }))
   const maxScore = row.patients.reduce((max, patient) => Math.max(max, patient.score), 0)
   const displayName = formatNurseDisplay(row.shortName, { nurseId: row.nurseId, chargeNurseId })
+  const tasks = row.tasks
+    .filter((task) => (task.assignedNurseId ?? row.nurseId) === row.nurseId)
+    .map((task) => {
+      const ownerNurseId = task.assignedNurseId ?? row.nurseId
+      return {
+        id: task.id,
+        ownerNurseId,
+        admissionId: task.admissionId,
+        bedLabel: task.bedLabel,
+        title: task.title,
+        urgent: task.urgent,
+        done: task.done,
+        stat: task.source === 'STAT',
+        newbie: task.source === '新病人',
+        points: task.points,
+      }
+    })
+  const remainingFromTasks = tasks.filter((task) => !task.done).reduce((sum, task) => sum + task.points, 0)
+
   return {
+    nurseId: row.nurseId,
     name: `護理師 ${displayName}`,
-    remaining: row.remaining,
-    tone: maxScore >= 22 || row.remaining >= 16 ? 'high' : maxScore >= 14 || row.remaining >= 9 ? 'mid' : 'low',
-    assignments,
-    tasks: row.tasks.map((task) => ({
-      text: `${task.bedLabel} ${task.title}`,
-      urgent: task.urgent,
-      done: task.done,
-      newbie: task.source === '新病人',
-    })),
+    remaining: remainingFromTasks,
+    tone: maxScore >= 22 || remainingFromTasks >= 16 ? 'high' : maxScore >= 14 || remainingFromTasks >= 9 ? 'mid' : 'low',
+    patients,
+    tasks,
   }
+}
+
+function taskToggleKey(nurseId: string, taskId: string) {
+  return `${nurseId}::${taskId}`
+}
+
+function burdenToneLabel(tone: 'high' | 'mid' | 'low') {
+  return tone === 'high' ? '高' : tone === 'mid' ? '中' : '低'
 }
 
 function bedNo(label: string) {
   const match = label.match(/\d+/)
-  return match ? match[0] : '—'
+  return match ? match[0] : label
 }
 
-function taskBed(text: string) {
-  const m = text.match(/^床\s*(\d+)\s*(.*)$/)
-  if (!m) return null
-  return { bed: m[1], title: m[2].trim() }
+function formatTaskBedLabel(label: string) {
+  const num = label.match(/\d+/)
+  return num ? `床${num[0]}` : label
+}
+
+function sortTasks(tasks: WarRoomTask[]) {
+  return tasks.slice().sort((a, b) => {
+    if (a.done !== b.done) return Number(a.done) - Number(b.done)
+    const bed = a.bedLabel.localeCompare(b.bedLabel, 'zh-Hant')
+    if (bed !== 0) return bed
+    const title = a.title.localeCompare(b.title, 'zh-Hant')
+    if (title !== 0) return title
+    return a.id.localeCompare(b.id)
+  })
 }
 
 function NurseLoadCard({
+  nurseId,
   name,
   remaining,
   tone,
-  assignments,
+  patients,
   tasks,
+  togglingKey,
+  onTaskToggle,
+  onPatientDetail,
 }: {
+  nurseId: string
   name: string
   remaining: number
   tone: 'high' | 'mid' | 'low'
-  assignments: { bed: string; patient: string }[]
-  tasks: { text: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]
+  patients: PatientInfo[]
+  tasks: WarRoomTask[]
+  togglingKey: string | null
+  onTaskToggle: (task: WarRoomTask) => void
+  onPatientDetail: (patient: PatientInfo) => void
 }) {
-  const [expanded, setExpanded] = useState(false)
-  const bar =
-    tone === 'high' ? 'bg-[#c64a2c]' : tone === 'mid' ? 'bg-[#d88b2c]' : 'bg-[#2f7a44]'
+  const bar = tone === 'high' ? 'bg-[#c64a2c]' : tone === 'mid' ? 'bg-[#d88b2c]' : 'bg-[#2f7a44]'
   const pill =
     tone === 'high'
       ? 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f2b3a6]'
@@ -180,37 +394,23 @@ function NurseLoadCard({
         : 'bg-[#eaf7ee] text-[#1e6c3a] ring-1 ring-[#b7e0c5]'
 
   const pct = Math.min(100, Math.round((remaining / 25) * 100))
-  const doneCount = tasks.filter((t) => !!t.done).length
+  const doneCount = tasks.filter((t) => t.done).length
   const totalCount = tasks.length
-  const urgentOpen = tasks.filter((t) => !!t.urgent && !t.done).length
+  const urgentOpen = tasks.filter((t) => t.urgent && !t.done).length
   const burdenLabel = tone === 'high' ? '高' : tone === 'mid' ? '中' : '低'
+  const sortedTasks = useMemo(() => sortTasks(tasks), [tasks])
 
-  const openTasks = useMemo(() => tasks.filter((t) => !t.done), [tasks])
-  const preview = openTasks
-    .slice()
-    .sort((a, b) => Number(!!b.urgent) - Number(!!a.urgent))
-    .slice(0, 3)
-
-  const tasksByBed = tasks.reduce<Record<string, { title: string; urgent?: boolean; done?: boolean; newbie?: boolean }[]>>(
-    (acc, t) => {
-      const parsed = taskBed(t.text)
-      const bedKey = parsed?.bed ?? '—'
-      const title = parsed?.title?.length ? parsed.title : t.text
-      if (!acc[bedKey]) acc[bedKey] = []
-      acc[bedKey].push({ title, urgent: t.urgent, done: t.done, newbie: t.newbie })
-      return acc
-    },
-    {},
-  )
-
-  const bedOrder = [...new Set([...assignments.map((a) => a.bed), ...Object.keys(tasksByBed).filter((k) => k !== '—')])].sort(
-    (a, b) => Number(a) - Number(b),
-  )
-
-  const bedPatient = new Map(assignments.map((a) => [a.bed, a.patient]))
+  const pendingByAdmission = useMemo(() => {
+    const map = new Map<string, number>()
+    for (const task of tasks) {
+      if (task.done) continue
+      map.set(task.admissionId, (map.get(task.admissionId) ?? 0) + 1)
+    }
+    return map
+  }, [tasks])
 
   return (
-    <section className="flex min-w-0 flex-col overflow-hidden rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/10">
+    <section className="flex min-w-0 flex-col rounded-2xl bg-white p-3 shadow-sm ring-1 ring-black/10">
       <div className="mb-2 h-2 overflow-hidden rounded-full bg-black/5">
         <div className={`h-full ${bar}`} style={{ width: `${pct}%` }} />
       </div>
@@ -238,127 +438,188 @@ function NurseLoadCard({
       </div>
 
       <div className="mt-3 grid gap-2">
-        <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl bg-[#fafaf8] px-3 py-2 ring-1 ring-black/10">
-          <div className="min-w-0 flex-1 break-words text-[11px] font-semibold leading-snug text-slate-700">
-            床位：{assignments.length ? assignments.map((a) => `床 ${a.bed}`).join('、') : '—'}
-          </div>
-          <button
-            type="button"
-            onClick={() => setExpanded((v) => !v)}
-            className="shrink-0 rounded-full bg-white px-3 py-1 text-[11px] font-semibold text-slate-800 ring-1 ring-black/10 hover:bg-slate-50"
-            aria-expanded={expanded}
-          >
-            {expanded ? '收起細節' : '展開細節'}
-          </button>
-        </div>
-
-        {!expanded ? (
-          <div className="grid gap-1.5">
-            {preview.length ? (
-              preview.map((t, idx) => (
-                <div
-                  key={`preview-${idx}`}
-                  className={[
-                    'flex items-start justify-between gap-3 rounded-xl bg-white px-3 py-2',
-                    'ring-1 ring-black/10',
-                    t.urgent ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.14)]' : '',
-                  ].join(' ')}
+        {patients.length ? (
+          <div className="flex flex-wrap gap-1.5">
+            {patients.map((patient) => {
+              const pending = pendingByAdmission.get(patient.admissionId) ?? 0
+              return (
+                <button
+                  key={patient.admissionId}
+                  type="button"
+                  onClick={() => onPatientDetail(patient)}
+                  className="inline-flex max-w-full items-center gap-1.5 rounded-full bg-[#f8fafc] px-2.5 py-1 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10 transition hover:bg-white hover:ring-[#1d4ed8]/30"
+                  title={`${patient.patient} · ${patient.diagnosis}`}
                 >
-                  <div className="min-w-0 flex-1 overflow-hidden">
-                    <div className="line-clamp-2 break-words text-xs font-semibold leading-snug text-slate-900">{t.text}</div>
-                    <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
-                      {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
-                      {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
-                      <span className="text-slate-500">未完成</span>
-                    </div>
-                  </div>
-                  {idx === 0 && openTasks.length > preview.length ? (
-                    <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
-                      還有 {openTasks.length - preview.length} 筆
-                    </span>
+                  <span className="truncate">床 {patient.bed}</span>
+                  {pending ? (
+                    <span className="shrink-0 rounded-full bg-[#ffe8e1] px-1.5 py-px text-[10px] font-bold text-[#b3341f]">{pending}</span>
                   ) : null}
-                </div>
-              ))
-            ) : (
-              <div className="rounded-xl bg-[#fafaf8] px-3 py-2 text-xs text-slate-600 ring-1 ring-black/10">目前沒有未完成任務</div>
-            )}
+                </button>
+              )
+            })}
           </div>
         ) : (
-          <div className="grid gap-2.5">
-            {bedOrder.map((bed) => (
-              <section key={bed} className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
-                <div className="flex items-center justify-between gap-3 border-b border-black/10 bg-white px-2.5 py-2">
-                  <div className="min-w-0 flex-1 overflow-hidden text-xs font-extrabold tracking-wide text-slate-900">
-                    床 {bed}
-                    <span className="ml-2 font-semibold text-slate-600">{bedPatient.get(bed) ?? ''}</span>
-                  </div>
-                  <span className="shrink-0 rounded-full bg-[#f1f5f9] px-2 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
-                    {tasksByBed[bed]?.filter((t) => !!t.done).length ?? 0}/{tasksByBed[bed]?.length ?? 0}
-                  </span>
-                </div>
-                <ul className="grid max-h-44 gap-1.5 overflow-y-auto p-2 pr-1">
-                  {(tasksByBed[bed] ?? []).map((t, idx) => (
-                    <li
-                      key={`${bed}-${idx}`}
-                      className={[
-                        'flex items-start justify-between gap-3 rounded-xl bg-white px-2.5 py-2',
-                        'ring-1 ring-black/10',
-                        t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
-                      ].join(' ')}
-                    >
-                      <div className="min-w-0 flex-1 overflow-hidden">
-                        <div
-                          className={`line-clamp-2 break-words text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}
-                        >
-                          {t.title}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
-                          {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
-                          {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
-                          {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
-                        </div>
-                      </div>
-                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 shrink-0 accent-black" />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ))}
-            {tasksByBed['—']?.length ? (
-              <section className="overflow-hidden rounded-xl bg-[#fafaf8] ring-1 ring-black/10">
-                <div className="border-b border-black/10 bg-white px-2.5 py-2 text-xs font-extrabold tracking-wide text-slate-900">其他</div>
-                <ul className="grid max-h-44 gap-1.5 overflow-y-auto p-2 pr-1">
-                  {tasksByBed['—'].map((t, idx) => (
-                    <li
-                      key={`other-${idx}`}
-                      className={[
-                        'flex items-start justify-between gap-3 rounded-xl bg-white px-2.5 py-2',
-                        'ring-1 ring-black/10',
-                        t.urgent && !t.done ? 'shadow-[0_0_0_2px_rgba(179,52,31,0.18)]' : '',
-                      ].join(' ')}
-                    >
-                      <div className="min-w-0 flex-1 overflow-hidden">
-                        <div
-                          className={`line-clamp-2 break-words text-xs leading-snug ${t.done ? 'text-slate-400 line-through' : 'text-slate-900'}`}
-                        >
-                          {t.title}
-                        </div>
-                        <div className="mt-1 flex flex-wrap items-center gap-2 text-[11px]">
-                          {t.urgent ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
-                          {t.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
-                          {t.done ? <span className="text-slate-500">完成</span> : <span className="text-slate-500">—</span>}
-                        </div>
-                      </div>
-                      <input type="checkbox" checked={!!t.done} readOnly className="mt-0.5 h-4 w-4 shrink-0 accent-black" />
-                    </li>
-                  ))}
-                </ul>
-              </section>
-            ) : null}
-          </div>
+          <div className="rounded-xl bg-[#fafaf8] px-3 py-2 text-[11px] font-semibold text-slate-600 ring-1 ring-black/10">尚無分配床位</div>
         )}
+
+        <ul className="flex max-h-52 flex-col gap-1.5 overflow-y-auto rounded-xl bg-[#fafaf8] p-1.5 ring-1 ring-black/5">
+          {sortedTasks.length ? (
+            sortedTasks.map((task) => (
+              <TaskRow
+                key={taskToggleKey(nurseId, task.id)}
+                inputId={taskToggleKey(nurseId, task.id)}
+                task={task}
+                disabled={togglingKey === taskToggleKey(nurseId, task.id)}
+                onToggle={() => onTaskToggle(task)}
+              />
+            ))
+          ) : (
+            <li className="rounded-lg bg-white px-3 py-2 text-xs text-slate-600 ring-1 ring-black/10">目前沒有未完成任務</li>
+          )}
+        </ul>
       </div>
     </section>
+  )
+}
+
+function TaskRow({
+  inputId,
+  task,
+  disabled,
+  onToggle,
+}: {
+  inputId: string
+  task: WarRoomTask
+  disabled: boolean
+  onToggle: () => void
+}) {
+  return (
+    <li
+      className={[
+        'flex items-start justify-between gap-2.5 rounded-lg px-2.5 py-2',
+        task.done ? 'border border-slate-200 bg-slate-50/80' : 'bg-white',
+        !task.done && task.urgent ? 'border border-[#f2b3a6]' : !task.done ? 'border border-black/10' : '',
+        disabled ? 'opacity-60' : '',
+      ].join(' ')}
+    >
+      <div className="min-w-0 flex-1 overflow-hidden">
+        <div className={`break-words text-xs font-semibold leading-snug ${task.done ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-900'}`}>
+          <span className={`mr-1.5 text-[10px] font-bold tracking-wide ${task.done ? 'text-slate-400' : 'text-slate-500'}`}>{formatTaskBedLabel(task.bedLabel)}</span>
+          {task.title}
+        </div>
+        <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
+          {task.stat && !task.done ? <span className="rounded-full bg-red-100 px-2 py-0.5 font-bold text-red-800">STAT</span> : null}
+          {task.urgent && !task.stat && !task.done ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
+          {task.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
+          <span className={task.done ? 'font-semibold text-[#1e6c3a]' : 'text-slate-500'}>{task.done ? '已完成' : '待處理'}</span>
+        </div>
+      </div>
+      <input
+        id={inputId}
+        type="checkbox"
+        checked={task.done}
+        disabled={disabled}
+        onChange={onToggle}
+        className="mt-0.5 h-4 w-4 shrink-0 cursor-pointer accent-[#1d4ed8] disabled:cursor-wait"
+        aria-label={task.done ? '標記為未完成' : '標記為完成'}
+      />
+    </li>
+  )
+}
+
+function PatientDetailModal({
+  nurseId,
+  nurseName,
+  patient,
+  tasks,
+  togglingKey,
+  onClose,
+  onTaskToggle,
+}: {
+  nurseId: string
+  nurseName: string
+  patient: PatientInfo
+  tasks: WarRoomTask[]
+  togglingKey: string | null
+  onClose: () => void
+  onTaskToggle: (task: WarRoomTask) => void
+}) {
+  const tonePill =
+    patient.tone === 'high'
+      ? 'bg-[#ffe8e1] text-[#b3341f] ring-[#f2b3a6]'
+      : patient.tone === 'mid'
+        ? 'bg-[#fff7ed] text-[#9a5b1a] ring-[#f1d7b8]'
+        : 'bg-[#eaf7ee] text-[#1e6c3a] ring-[#b7e0c5]'
+
+  const sortedTasks = sortTasks(tasks)
+  const openCount = tasks.filter((t) => !t.done).length
+
+  return createPortal(
+    <div className="fixed inset-0 z-50 grid place-items-center p-4" role="dialog" aria-modal="true" aria-labelledby="patient-detail-title">
+      <button type="button" className="absolute inset-0 bg-slate-900/40 backdrop-blur-[1px]" onClick={onClose} aria-label="關閉" />
+      <div className="relative z-10 w-full max-w-md overflow-hidden rounded-2xl bg-white shadow-xl ring-1 ring-black/10">
+        <div className="border-b border-black/10 bg-gradient-to-r from-[#eef2ff] to-white px-4 py-3">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div id="patient-detail-title" className="text-base font-extrabold tracking-tight text-slate-900">
+                床 {patient.bed} · {patient.patient}
+              </div>
+              <div className="mt-0.5 text-xs font-medium text-slate-600">{nurseName}</div>
+            </div>
+            <button
+              type="button"
+              onClick={onClose}
+              className="shrink-0 rounded-full bg-white px-2.5 py-1 text-xs font-semibold text-slate-700 ring-1 ring-black/10 hover:bg-slate-50"
+            >
+              關閉
+            </button>
+          </div>
+        </div>
+
+        <div className="grid gap-3 p-4">
+          <div className="grid gap-2 rounded-xl bg-[#fafaf8] p-3 ring-1 ring-black/10">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold text-slate-500">床位編號</span>
+              <span className="text-sm font-bold text-slate-900">{patient.bedLabel}</span>
+            </div>
+            <div>
+              <div className="text-[11px] font-semibold text-slate-500">診斷</div>
+              <div className="mt-0.5 text-sm leading-snug text-slate-800">{patient.diagnosis}</div>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-[11px] font-semibold text-slate-500">麻煩度</span>
+              <span className="text-sm font-extrabold text-slate-900">{patient.score}</span>
+              <span className={`rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ${tonePill}`}>
+                {burdenToneLabel(patient.tone)}
+              </span>
+            </div>
+          </div>
+
+          <div>
+            <div className="mb-2 flex items-center justify-between gap-2">
+              <div className="text-xs font-extrabold tracking-wide text-slate-900">任務清單</div>
+              <span className="text-[11px] font-semibold text-slate-500">待處理 {openCount}</span>
+            </div>
+            <ul className="flex max-h-56 flex-col gap-1.5 overflow-y-auto rounded-xl bg-[#fafaf8] p-1.5 ring-1 ring-black/5">
+              {sortedTasks.length ? (
+                sortedTasks.map((task) => (
+                  <TaskRow
+                    key={taskToggleKey(nurseId, task.id)}
+                    inputId={`modal-${taskToggleKey(nurseId, task.id)}`}
+                    task={task}
+                    disabled={togglingKey === taskToggleKey(nurseId, task.id)}
+                    onToggle={() => onTaskToggle(task)}
+                  />
+                ))
+              ) : (
+                <li className="rounded-xl bg-[#fafaf8] px-3 py-2 text-xs text-slate-600 ring-1 ring-black/10">此病患目前無任務</li>
+              )}
+            </ul>
+          </div>
+        </div>
+      </div>
+    </div>,
+    document.body,
   )
 }
 

@@ -70,12 +70,15 @@ export function AllocationResultPage() {
         </div>
         <div className="rounded-2xl bg-surface p-8 text-center ring-1 ring-black/10">
           <div className="text-sm font-semibold text-slate-900">此班別尚無已封存的交班快照</div>
+          {selectedShift ? (
+            <p className="mt-2 text-sm font-medium text-slate-700">{selectedShift.label}</p>
+          ) : null}
           <p className="mt-2 text-sm text-slate-600">
-            請至{' '}
+            交班表僅顯示<strong className="font-semibold text-slate-800">該班別</strong>確認分床當下封存的資料。請至{' '}
             <Link to="/leader/allocation" className="font-semibold text-[#1e4ea7] underline underline-offset-2">
               指派分床配對
             </Link>{' '}
-            完成確認分床後，系統會自動寫入交班紀錄。
+            完成確認，或切換至已有快照的班別（demo：2026/05/08 白班）。
           </p>
         </div>
       </div>

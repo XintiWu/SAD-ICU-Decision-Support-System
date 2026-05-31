@@ -1,10 +1,12 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link, useSearchParams } from 'react-router-dom'
 import { apiGet, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
+import { useShift } from '../context/ShiftContext'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
 
 export function HandoverSnapshotsPage() {
+  const { shiftId, selectedShift } = useShift()
   const [items, setItems] = useState<HandoffSnapshotListItem[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -14,9 +16,15 @@ export function HandoverSnapshotsPage() {
   const [detailLoading, setDetailLoading] = useState(false)
 
   useEffect(() => {
+    setSearchParams({}, { replace: true })
+  }, [shiftId, setSearchParams])
+
+  useEffect(() => {
     let alive = true
     setLoading(true)
-    apiGet<HandoffSnapshotListItem[]>('/handoff-snapshots')
+    setItems([])
+    setSelected(null)
+    apiGet<HandoffSnapshotListItem[]>(`/handoff-snapshots?shiftId=${shiftId}`)
       .then((data) => {
         if (!alive) return
         setItems(data)
@@ -33,7 +41,7 @@ export function HandoverSnapshotsPage() {
     return () => {
       alive = false
     }
-  }, [])
+  }, [shiftId])
 
   const activeId = selectedId ?? items[0]?.id ?? null
 
@@ -61,8 +69,6 @@ export function HandoverSnapshotsPage() {
     }
   }, [activeId])
 
-  const listItems = useMemo(() => items, [items])
-
   if (error) {
     return (
       <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">
@@ -81,15 +87,18 @@ export function HandoverSnapshotsPage() {
               <div className="text-[11px] font-semibold tracking-wide text-slate-600">HANDOVER ARCHIVE</div>
               <h1 className="mt-1 text-lg font-extrabold tracking-tight text-slate-900">交班快照紀錄</h1>
               <p className="mt-1 text-sm text-slate-600">
-                確認分床時會自動封存交班快照（handoff_snapshots / handoff_rows）。若要新增快照，請至{' '}
+                依右上角<strong className="font-bold text-slate-800">班別</strong>顯示該班已封存的交班快照。若要新增，請至{' '}
                 <Link to="/leader/allocation" className="font-semibold text-slate-900 underline underline-offset-2">
                   指派分床配對
                 </Link>{' '}
                 確認分床。
               </p>
+              {selectedShift ? (
+                <p className="mt-2 text-xs font-semibold text-slate-500">目前班別：{selectedShift.label}</p>
+              ) : null}
             </div>
             <p className="shrink-0 text-sm text-slate-600">
-              <span className="font-extrabold text-slate-900">{listItems.length}</span> 筆快照
+              <span className="font-extrabold text-slate-900">{items.length}</span> 筆快照
             </p>
           </div>
         </div>
@@ -100,19 +109,27 @@ export function HandoverSnapshotsPage() {
           <div className="flex items-center justify-between gap-2 px-2 py-1">
             <div className="text-xs font-semibold text-slate-600">歷史快照</div>
             <span className="rounded-full bg-surface px-2.5 py-0.5 text-[11px] font-semibold text-slate-700 ring-1 ring-black/10">
-              {listItems.length} 筆
+              {items.length} 筆
             </span>
           </div>
 
           {loading ? (
             <div className="mt-3 rounded-xl bg-surface p-4 text-sm text-slate-600">載入中…</div>
-          ) : listItems.length === 0 ? (
+          ) : items.length === 0 ? (
             <div className="mt-3 rounded-xl bg-surface p-4 text-sm text-slate-600 ring-1 ring-black/5">
-              尚無已確認的分床快照。請至「指派分床配對」完成確認。
+              {selectedShift ? (
+                <>
+                  <span className="font-semibold text-slate-800">{selectedShift.label}</span>
+                  <span> 尚無交班快照。</span>
+                </>
+              ) : (
+                '此班別尚無交班快照。'
+              )}
+              <p className="mt-2 text-xs text-slate-500">請切換至已確認分床的班別，或至「指派分床配對」完成確認。</p>
             </div>
           ) : (
             <ul className="mt-2 grid max-h-[70vh] gap-1 overflow-y-auto pr-1">
-              {listItems.map((item) => {
+              {items.map((item) => {
                 const active = item.id === activeId
                 return (
                   <li key={item.id}>
