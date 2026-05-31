@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
-import { apiGet, CURRENT_SHIFT_ID } from '../api/client'
+import { apiGet } from '../api/client'
 import type { HandoffData } from '../api/client'
+import { useShift } from '../context/ShiftContext'
 
 export function AllocationResultPage() {
+  const { shiftId } = useShift()
   const [rows, setRows] = useState<HandoffData['rows']>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-   useEffect(() => {
+  useEffect(() => {
     let alive = true
 
     const load = () => {
-      apiGet<HandoffData>(`/handoff-sheets?shiftId=${CURRENT_SHIFT_ID}`)
+      apiGet<HandoffData>(`/handoff-sheets?shiftId=${shiftId}`)
         .then((data) => {
           if (!alive) return
           setRows(data.rows)
@@ -34,7 +36,7 @@ export function AllocationResultPage() {
       alive = false
       window.clearInterval(timer)
     }
-  }, [])
+  }, [shiftId])
 
   const stats = useMemo(() => {
     const changed = rows.filter((row) => row.currentNurse !== row.nextNurse).length

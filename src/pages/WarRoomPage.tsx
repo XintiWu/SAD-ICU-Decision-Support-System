@@ -1,17 +1,19 @@
 import { useEffect, useMemo, useState } from 'react'
-import { apiGet, CURRENT_SHIFT_ID } from '../api/client'
+import { apiGet } from '../api/client'
 import type { WarRoomData } from '../api/client'
+import { useShift } from '../context/ShiftContext'
 
 export function WarRoomPage() {
+  const { shiftId } = useShift()
   const [data, setData] = useState<WarRoomData | null>(null)
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
-    useEffect(() => {
+  useEffect(() => {
     let alive = true
 
     const load = () => {
-      apiGet<WarRoomData>(`/war-room?shiftId=${CURRENT_SHIFT_ID}`)
+      apiGet<WarRoomData>(`/war-room?shiftId=${shiftId}`)
         .then((nextData) => {
           if (!alive) return
           setData(nextData)
@@ -33,7 +35,7 @@ export function WarRoomPage() {
       alive = false
       window.clearInterval(timer)
     }
-  }, [])
+  }, [shiftId])
 
   const nurses: NurseCardModel[] = useMemo(() => (data?.nurses ?? []).map(toNurseCard), [data])
 
