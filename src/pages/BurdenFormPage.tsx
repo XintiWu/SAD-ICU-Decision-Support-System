@@ -246,9 +246,8 @@ export function BurdenFormPage() {
               </p>
             ) : null}
             <p className="mt-2">
-              請確認右上角<strong className="font-semibold text-slate-800">班別</strong>與
-              <strong className="font-semibold text-slate-800">登入身份</strong>
-              一致：只有「本分床分配給該護理師」的病患才會出現。若此班別沒有你的分床，列表會是空的。
+              請確認右上角<strong className="font-semibold text-slate-800">班別</strong>
+              正確：只有分床分配給 {nurseShortName} 的病患才會出現。
             </p>
           </div>
         </div>
