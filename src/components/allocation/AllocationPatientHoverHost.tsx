@@ -20,7 +20,7 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
     if (!el) return
     const rect = el.getBoundingClientRect()
     
-    const estimatedHeight = 320 // Estimated height of hover card detail
+    const estimatedHeight = 480 // Estimated height of hover card detail
     const spaceBelow = window.innerHeight - rect.bottom
 
     if (spaceBelow < estimatedHeight && rect.top > spaceBelow) {
