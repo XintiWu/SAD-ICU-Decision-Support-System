@@ -22,5 +22,4 @@ export function formatShiftOption(shift: Pick<ApiShift, 'label' | 'startsAt' | '
   return `${shift.label}（${shiftStatusLabel(shift.status)}）`
 }
 
-/** Demo：陳O媚有值班且有分床資料的班別 */
-export const DEMO_NURSE_SHIFT_HINTS = ['2026/05/08 白班', '2026/05/19 白班', '2026/05/20 白班']
+export const DEMO_NURSE_SHIFT_HINTS = ['2026/05/19 白班', '2026/05/20 白班']

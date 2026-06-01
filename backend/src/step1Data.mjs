@@ -1,5 +1,5 @@
 export const ids = {
-  currentShift: '00000000-0000-0000-0000-000000000201',
+  currentShift: '00000000-0000-0000-0000-000000000202',
   currentNurse: '00000000-0000-0000-0000-000000000101',
   chargeNurse: '00000000-0000-0000-0000-000000000110',
 }
@@ -32,22 +32,13 @@ export const nurses = [
 
 export const shifts = [
   {
-    id: ids.currentShift,
-    unitName: 'ICU',
-    shiftKey: 'day',
-    startsAt: '2026-05-08T06:00:00+08:00',
-    endsAt: '2026-05-08T14:00:00+08:00',
-    chargeNurseId: ids.chargeNurse,
-    status: 'open',
-  },
-  {
     id: '00000000-0000-0000-0000-000000000202',
     unitName: 'ICU',
     shiftKey: 'day',
     startsAt: '2026-05-19T07:00:00+08:00',
     endsAt: '2026-05-19T15:00:00+08:00',
     chargeNurseId: ids.chargeNurse,
-    status: 'confirmed',
+    status: 'open',
   },
   {
     id: '00000000-0000-0000-0000-000000000203',

@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { query, withTransaction } from './db.mjs'
 import { ids } from './step1Data.mjs'
 import { objectiveFactorDefinitions, subjectiveFactorDefinitions } from './step2Data.mjs'
@@ -974,6 +976,84 @@ async function admissionOwner(shiftId, admissionId) {
   return result.rows[0] ? { nurseId: result.rows[0].nurse_id } : null
 }
 
+function getMockBurdenDataForBed(bedLabel) {
+  try {
+    const raw = readFileSync(resolve('backend/db/病人模擬資料.json'), 'utf8')
+    const patients = JSON.parse(raw)
+    const p = patients.find((item) => item['床號'] === bedLabel)
+    if (!p) return null
+
+    const objData = p['客觀評估'] || {}
+    const subjData = p['主觀評估'] || {}
+
+    // Map objective factors
+    const objective = {
+      negativePressureIsolation: Number(objData['是否需住在負壓隔離病房']?.['分數'] ?? 0),
+      highVentilatorDemand: Number(objData['高呼吸器需求']?.['分數'] ?? 0),
+      medicationTypeCount: Number(objData['藥物計數']?.['分數'] ?? 0),
+      medicationFrequency: 0,
+      crrtContinuousA: 0,
+      iabpContinuousB: 0,
+      ecmoContinuousB: 0,
+      proneContinuousB: 0,
+      hypothermiaContinuousB: 0,
+      massiveTransfusionSingleC: 0,
+      plasmaSingleC: 0,
+    }
+
+    // Map特殊處置
+    const specialDispositions = objData['特殊處置']?.['系統帶入項目'] || []
+    for (const item of specialDispositions) {
+      const name = item['項目'] || ''
+      const score = Number(item['分數'] ?? 0)
+      if (name.includes('CRRT')) objective.crrtContinuousA = score
+      if (name.includes('IABP')) objective.iabpContinuousB = score
+      if (name.includes('ECMO')) objective.ecmoContinuousB = score
+      if (name.includes('PRONE')) objective.proneContinuousB = score
+      if (name.includes('Cooling') || name.includes('低溫')) objective.hypothermiaContinuousB = score
+      if (name.includes('Plasma') || name.includes('血漿')) objective.plasmaSingleC = score
+      if (name.includes('Transfusion') || name.includes('輸血')) objective.massiveTransfusionSingleC = score
+    }
+
+    // Map subjective factors
+    let rassScore = null
+    const rassResult = subjData['RASS鎮靜分數']?.['選擇結果'] || ''
+    const rassMatch = rassResult.match(/RASS\s*=\s*([-+]?\d+)/i)
+    if (rassMatch) {
+      rassScore = Number(rassMatch[1])
+    }
+
+    const agitatedFallRisk = subjData['躁動且有下床風險']?.['選擇結果'] === '是'
+    const agitatedTubeRemovalRisk = subjData['躁動且有自拔管路風險']?.['選擇結果'] === '是'
+    
+    // 引流管: 是否具特殊管路
+    const drainageTube = objData['是否具特殊管路']?.['選擇項目'] !== '否' && objData['是否具特殊管路']?.['選擇項目'] !== '無'
+
+    const tubeFeeding = subjData['是否需人工管灌']?.['選擇結果'] === '是'
+    
+    // 換藥頻繁程度: 是否需頻繁換藥
+    const dressingChangeFrequency = subjData['是否需頻繁換藥']?.['選擇結果'] === '是' ? 1 : 0
+
+    // 生理狀態監測頻繁程度: 需頻繁監測生理狀態
+    const vitalMonitoringFrequency = objData['需頻繁監測生理狀態']?.['選擇項目'] === '是' ? 2 : 0
+
+    const subjective = {
+      rassScore,
+      agitatedFallRisk,
+      agitatedTubeRemovalRisk,
+      drainageTube,
+      tubeFeeding,
+      dressingChangeFrequency,
+      vitalMonitoringFrequency,
+    }
+
+    return { objective, subjective }
+  } catch (error) {
+    console.error('Failed to read mock patient burden data:', error)
+    return null
+  }
+}
+
 async function ensureBurdenAssessmentsForShift(shiftId) {
   const admissions = await listAdmissions({ shiftId, status: 'active' })
   for (const admission of admissions) {
@@ -995,47 +1075,139 @@ async function ensureBurdenAssessmentsForShift(shiftId) {
     )
     const templateRow = template.rows[0]
     const assessmentId = randomUUID()
-    const objectiveTotal = templateRow ? Number(templateRow.objective_total) : 0
 
-    await query(
-      `
-      insert into burden_assessments (
-        id, shift_id, admission_id, submitted_by, status,
-        objective_total, subjective_total, total_score
-      ) values ($1, $2, $3, null, 'draft', $4, 0, $4)
-      `,
-      [assessmentId, shiftId, admission.admissionId, objectiveTotal],
-    )
-
-    if (!templateRow) continue
-
-    const values = await query(
-      `
-      select bv.number_value, bv.boolean_value, bv.level_value, bv.points, bf.code, bf.value_type
-      from burden_values bv
-      join burden_factors bf on bf.id = bv.factor_id
-      where bv.assessment_id = $1 and bf.category = 'objective'
-      `,
-      [templateRow.id],
-    )
-    for (const value of values.rows) {
-      const factor = await query('select id from burden_factors where code = $1', [value.code])
-      if (!factor.rows[0]) continue
+    if (templateRow) {
+      const objectiveTotal = Number(templateRow.objective_total)
       await query(
         `
-        insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
-        values ($1, $2, $3, $4, $5, $6)
-        on conflict (assessment_id, factor_id) do nothing
+        insert into burden_assessments (
+          id, shift_id, admission_id, submitted_by, status,
+          objective_total, subjective_total, total_score
+        ) values ($1, $2, $3, null, 'draft', $4, 0, $4)
         `,
-        [
-          assessmentId,
-          factor.rows[0].id,
-          value.number_value,
-          value.boolean_value,
-          value.level_value,
-          value.points,
-        ],
+        [assessmentId, shiftId, admission.admissionId, objectiveTotal],
       )
+
+      const values = await query(
+        `
+        select bv.number_value, bv.boolean_value, bv.level_value, bv.points, bf.code, bf.value_type
+        from burden_values bv
+        join burden_factors bf on bf.id = bv.factor_id
+        where bv.assessment_id = $1 and bf.category = 'objective'
+        `,
+        [templateRow.id],
+      )
+      for (const value of values.rows) {
+        const factor = await query('select id from burden_factors where code = $1', [value.code])
+        if (!factor.rows[0]) continue
+        await query(
+          `
+          insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
+          values ($1, $2, $3, $4, $5, $6)
+          on conflict (assessment_id, factor_id) do nothing
+          `,
+          [
+            assessmentId,
+            factor.rows[0].id,
+            value.number_value,
+            value.boolean_value,
+            value.level_value,
+            value.points,
+          ],
+        )
+      }
+    } else {
+      // No template found, load from mock patient data
+      const mockData = getMockBurdenDataForBed(admission.bedLabel)
+      if (mockData) {
+        let objectiveTotal = 0
+        let subjectiveTotal = 0
+
+        const objectiveValues = []
+        const subjectiveValues = []
+
+        // Calculate and collect objective values
+        for (const factor of objectiveFactorDefinitions) {
+          const value = Number(mockData.objective[factor.code] ?? 0)
+          objectiveTotal += value
+          objectiveValues.push({
+            code: factor.code,
+            valueType: 'number',
+            value,
+            points: value,
+          })
+        }
+
+        // Calculate and collect subjective values
+        for (const factor of subjectiveFactorDefinitions) {
+          const value = mockData.subjective[factor.code]
+          let points = 0
+          if (factor.valueType === 'boolean') {
+            points = value ? 2 : 0
+          } else if (factor.valueType === 'level') {
+            points = Number(value ?? 0)
+          } else {
+            points = rassPoints(value)
+          }
+          subjectiveTotal += points
+          subjectiveValues.push({
+            code: factor.code,
+            valueType: factor.valueType,
+            value,
+            points,
+          })
+        }
+
+        const totalScore = objectiveTotal + subjectiveTotal
+
+        await query(
+          `
+          insert into burden_assessments (
+            id, shift_id, admission_id, submitted_by, status,
+            objective_total, subjective_total, total_score
+          ) values ($1, $2, $3, null, 'draft', $4, $5, $6)
+          `,
+          [assessmentId, shiftId, admission.admissionId, objectiveTotal, subjectiveTotal, totalScore],
+        )
+
+        // Insert into burden_values
+        const allValues = [...objectiveValues, ...subjectiveValues]
+        for (const item of allValues) {
+          const factor = await query('select id from burden_factors where code = $1', [item.code])
+          if (!factor.rows[0]) continue
+
+          const numberValue = item.valueType === 'number' ? item.value : null
+          const booleanValue = item.valueType === 'boolean' ? Boolean(item.value) : null
+          const levelValue = item.valueType === 'level' ? Number(item.value ?? 0) : null
+
+          await query(
+            `
+            insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
+            values ($1, $2, $3, $4, $5, $6)
+            on conflict (assessment_id, factor_id) do nothing
+            `,
+            [
+              assessmentId,
+              factor.rows[0].id,
+              numberValue,
+              booleanValue,
+              levelValue,
+              item.points,
+            ],
+          )
+        }
+      } else {
+        // Fallback if no mock data
+        await query(
+          `
+          insert into burden_assessments (
+            id, shift_id, admission_id, submitted_by, status,
+            objective_total, subjective_total, total_score
+          ) values ($1, $2, $3, null, 'draft', 0, 0, 0)
+          `,
+          [assessmentId, shiftId, admission.admissionId],
+        )
+      }
     }
   }
 }

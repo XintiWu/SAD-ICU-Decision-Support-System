@@ -9,6 +9,10 @@ export const pool = new Pool({
   connectionString: databaseUrl,
 })
 
+pool.on('error', (err) => {
+  console.error('Unexpected error on idle client:', err.message || err)
+})
+
 export async function query(text, params = []) {
   const result = await pool.query(text, params)
   return result
