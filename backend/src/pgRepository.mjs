@@ -390,22 +390,33 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     const sortOrders = new Map(nurses.map((n) => [n.id, 0]))
     const assignedBeds = new Map(nurses.map((n) => [n.id, []]))
     const MAX_BED_GAP = 2
+    // 小組長床數上限：低於平均，讓合計保持最低
+    const avgBeds = admissions.length / nurses.length
+    const MAX_CHARGE_BEDS = Math.max(1, Math.floor(avgBeds) - 1)
 
     for (const admission of admissions.sort((a, b) => b.score - a.score)) {
       const seniorityKey = (n) => (n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年'))
       const patientBedNo = bedNo(admission.bedLabel)
 
       const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
-      const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
+      const nearMin = nurses.filter((n) => {
+        // 小組長達到床數上限後不再納入候選（除非所有人都超標）
+        if (n.role === 'charge_nurse' && assignedBeds.get(n.id).length >= MAX_CHARGE_BEDS) return false
+        return (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE
+      })
+      // fallback: if nearMin is empty (all nurses at cap), include everyone
+      const candidates = nearMin.length > 0 ? nearMin : nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
 
       const isHighBurden = admission.score >= avgScore
       const hasNearbyBed = (n) => {
         const beds = assignedBeds.get(n.id)
         return beds.length === 0 || beds.some((b) => Math.abs(b - patientBedNo) <= MAX_BED_GAP)
       }
-      const selected = [...nearMin].sort((a, b) => {
+      const selected = [...candidates].sort((a, b) => {
         const ra = SENIORITY_RANK[seniorityKey(a)] ?? 2
         const rb = SENIORITY_RANK[seniorityKey(b)] ?? 2
+        // 高負擔→年資低的優先（ascending）；低負擔→年資高的優先（descending）
+        // 小組長 rank=5（最高），高負擔時排最後，低負擔時排前，但有床數上限保護
         const bySeniority = isHighBurden ? ra - rb : rb - ra
         if (bySeniority !== 0) return bySeniority
         return (hasNearbyBed(a) ? 0 : 1) - (hasNearbyBed(b) ? 0 : 1)
