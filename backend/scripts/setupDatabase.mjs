@@ -62,13 +62,14 @@ async function seedCompleteDemoData(client) {
   for (const assessment of burdenAssessments) {
     const objectiveTotal = Object.values(assessment.objective).reduce((sum, value) => sum + Number(value ?? 0), 0)
     const subjectiveTotal = assessment.subjective ? subjectiveScore(assessment.subjective) : 0
-    await client.query(
+    const assessmentResult = await client.query(
       `
       insert into burden_assessments (
         id, shift_id, admission_id, submitted_by, status,
         objective_total, subjective_total, total_score, submitted_at, updated_at
       ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
       on conflict (shift_id, admission_id) do nothing
+      returning id
       `,
       [
         assessment.id,
@@ -83,6 +84,7 @@ async function seedCompleteDemoData(client) {
         assessment.updatedAt,
       ],
     )
+    if (assessmentResult.rowCount === 0) continue
 
     for (const factor of objectiveFactorDefinitions) {
       const value = Number(assessment.objective[factor.code] ?? 0)

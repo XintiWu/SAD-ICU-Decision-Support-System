@@ -94,7 +94,7 @@ function BurdenFormPageBody() {
         const prevShift = findPreviousShift(shifts, shiftId)
         if (prevShift) {
           const prev = await apiGet<BurdenAssessment[]>(
-            `/burden-assessments?shiftId=${prevShift.id}&scope=mine`,
+            `/burden-assessments?shiftId=${prevShift.id}&scope=all`,
             { userId },
           )
           if (!alive) return

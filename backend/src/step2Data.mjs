@@ -72,7 +72,7 @@ export const burdenAssessments = admissions.map((admission, index) => {
   const subjective = subjectiveByNo.get(no) ?? null
 
   return {
-    id: `00000000-0000-0000-0000-${String(600 + no).padStart(12, '0')}`,
+    id: `00000000-0000-0000-0000-${String(650 + no).padStart(12, '0')}`,
     shiftId: ids.currentShift,
     admissionId: admission.id,
     submittedBy: ownerForAdmission(admission.id),

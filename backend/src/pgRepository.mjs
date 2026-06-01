@@ -290,8 +290,13 @@ export async function listBurdenAssessments({ shiftId, scope = 'all', userId = i
       and ba.admission_id in (
         select ai.admission_id
         from allocation_items ai
-        join allocation_runs ar on ar.id = ai.allocation_run_id
-        where ar.shift_id = $1 and ai.nurse_id = $2
+        where ai.nurse_id = $2
+          and ai.allocation_run_id = (
+            select id from allocation_runs
+            where shift_id = $1
+            order by (status = 'draft') desc, suggested_at desc
+            limit 1
+          )
       )
     `
   }
