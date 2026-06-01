@@ -105,6 +105,9 @@ function ensureShift(shiftId) {
 }
 
 function formatShift(shift) {
+  const nurseIds = shiftNurses
+    .filter((sn) => sn.shiftId === shift.id)
+    .map((sn) => sn.nurseId)
   return {
     id: shift.id,
     shiftKey: shift.shiftKey,
@@ -113,6 +116,7 @@ function formatShift(shift) {
     endsAt: shift.endsAt,
     chargeNurse: nurseRef(shift.chargeNurseId),
     status: shift.status,
+    nurseIds,
   }
 }
 

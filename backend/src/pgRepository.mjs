@@ -1,4 +1,6 @@
 import { randomUUID } from 'node:crypto'
+import { readFileSync } from 'node:fs'
+import { resolve } from 'node:path'
 import { query, withTransaction } from './db.mjs'
 import { ids } from './step1Data.mjs'
 import { objectiveFactorDefinitions, subjectiveFactorDefinitions } from './step2Data.mjs'
@@ -43,7 +45,8 @@ export async function getCurrentShift(unitName = 'ICU') {
 export async function listShifts({ unitName = 'ICU' } = {}) {
   const result = await query(
     `
-    select s.*, n.short_name as charge_short_name
+    select s.*, n.short_name as charge_short_name,
+           (select json_agg(nurse_id) from shift_nurses where shift_id = s.id) as nurse_ids
     from shifts s
     left join nurses n on n.id = s.charge_nurse_id
     where s.unit_name = $1
@@ -135,6 +138,49 @@ export async function updateStatOrder({ orderId, patch, userId = ids.currentNurs
   }
 }
 
+export async function createStatOrder({ shiftId, admissionId, title, kind, orderedBy, reason, userId = ids.currentNurse } = {}) {
+  await getCurrentUser(userId)
+  
+  if (!['給藥', '檢查', '監測', '治療', '其他'].includes(kind)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'kind 參數不合法', { kind })
+  }
+
+  const now = new Date()
+  const orderedAtDisplay = new Intl.DateTimeFormat('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' }).format(now)
+
+  const result = await query(
+    `
+    insert into stat_orders (shift_id, admission_id, title, kind, ordered_by, ordered_at_display, reason)
+    values ($1, $2, $3, $4, $5, $6, $7)
+    returning id, admission_id, title, kind, ordered_by, ordered_at_display, reason, status
+    `,
+    [shiftId, admissionId, title, kind, orderedBy ?? '醫師', orderedAtDisplay, reason || null]
+  )
+  
+  const row = result.rows[0]
+  const bed = await query(
+    `
+    select b.label as bed_label, a.diagnosis
+    from admissions a
+    join beds b on b.id = a.bed_id
+    where a.id = $1
+    `,
+    [row.admission_id],
+  )
+  return {
+    id: row.id,
+    admissionId: row.admission_id,
+    bedLabel: bed.rows[0]?.bed_label ?? '—',
+    diagnosis: bed.rows[0]?.diagnosis ?? '',
+    title: row.title,
+    kind: row.kind,
+    orderedBy: row.ordered_by,
+    orderedAt: row.ordered_at_display,
+    reason: row.reason ?? undefined,
+    status: row.status,
+  }
+}
+
 async function resolveOnDutyCharge(shift) {
   if (shift.charge_nurse_id && shift.charge_short_name) {
     return { id: shift.charge_nurse_id, shortName: shift.charge_short_name }
@@ -158,16 +204,18 @@ async function resolveOnDutyCharge(shift) {
 export async function listNurses({ shiftId } = {}) {
   const params = []
   let join = ''
+  let selectRole = 'u.role as role'
   let where = 'where n.is_active = true'
   if (shiftId) {
     params.push(shiftId)
     join = 'join shift_nurses sn on sn.nurse_id = n.id'
+    selectRole = 'coalesce(sn.role, u.role) as role'
     where += ' and sn.shift_id = $1'
   }
   const result = await query(
     `
     select n.id, n.display_name, n.short_name, n.seniority_level, n.is_active,
-      coalesce(sn.role, u.role) as role
+      ${selectRole}
     from nurses n
     join users u on u.id = n.id
     ${join}
@@ -303,10 +351,14 @@ export async function updateBurdenAssessment({ assessmentId, patch, userId = ids
   return (await listBurdenAssessments({ shiftId: assessment.shift_id, scope: 'all' })).find((item) => item.assessmentId === assessmentId)
 }
 
-export async function listTasks({ shiftId, assignee = 'me', status, kind, urgent, userId = ids.currentNurse } = {}) {
+export async function listTasks({ shiftId, assignee = 'me', status, kind, urgent, admissionId, userId = ids.currentNurse } = {}) {
   if (!shiftId) throw new ApiError(400, 'VALIDATION_ERROR', 'shiftId 為必填', { field: 'shiftId' })
   const params = [shiftId]
   const where = ['t.shift_id = $1']
+  if (admissionId) {
+    params.push(admissionId)
+    where.push(`t.admission_id = $${params.length}`)
+  }
   if (assignee === 'me') {
     params.push(userId)
     where.push(`t.assigned_nurse_id = $${params.length}`)
@@ -323,7 +375,19 @@ export async function listTasks({ shiftId, assignee = 'me', status, kind, urgent
     where.push('t.urgent = true')
   }
   const rows = await query(taskSelectSql(where), params)
-  const all = await query(taskSelectSql(['t.shift_id = $1', assignee === 'me' ? 't.assigned_nurse_id = $2' : 'true']), assignee === 'me' ? [shiftId, userId] : [shiftId])
+  
+  // Update 'all' query logic to respect admissionId if provided
+  const allWhere = ['t.shift_id = $1']
+  const allParams = [shiftId]
+  if (admissionId) {
+    allParams.push(admissionId)
+    allWhere.push(`t.admission_id = $${allParams.length}`)
+  }
+  if (assignee === 'me') {
+    allParams.push(userId)
+    allWhere.push(`t.assigned_nurse_id = $${allParams.length}`)
+  }
+  const all = await query(taskSelectSql(allWhere), allParams)
   return {
     data: rows.rows.map(formatTask),
     meta: {
@@ -369,7 +433,7 @@ const SENIORITY_RANK = {
   charge_nurse: 5,
 }
 
-export async function suggestAllocationRun({ shiftId, targetShiftId, userId = ids.chargeNurse } = {}) {
+export async function suggestAllocationRun({ shiftId, targetShiftId, userId = ids.chargeNurse, dryRun = false } = {}) {
   const user = await getCurrentUser(userId)
   if (!['charge_nurse', 'admin'].includes(user.role)) throw new ApiError(403, 'FORBIDDEN', '只有小組長或管理者可以產生分床建議')
 
@@ -379,59 +443,96 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   const avgScore = admissions.length ? admissions.reduce((s, a) => s + a.score, 0) / admissions.length : 0
   const TOLERANCE = 5
 
+  const loads = new Map(nurses.map((n) => [n.id, 0]))
+  const sortOrders = new Map(nurses.map((n) => [n.id, 0]))
+  const assignedBeds = new Map(nurses.map((n) => [n.id, []]))
+  const MAX_BED_GAP = 2
+  const decisionLogs = []
+
+  // 小組長床數上限：比平均少1床（至少1床），讓合計保持最低
+  const avgBeds = admissions.length / (nurses.length || 1)
+  const MAX_CHARGE_BEDS = Math.max(1, Math.round(avgBeds) - 1)
+
+  for (const admission of admissions.sort((a, b) => b.score - a.score)) {
+    const seniorityKey = (n) => (n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年'))
+    const patientBedNo = bedNo(admission.bedLabel)
+
+    const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
+    const nearMin = nurses.filter((n) => {
+      // 小組長達到床數上限後不再納入候選（除非所有人都超標）
+      if (n.role === 'charge_nurse' && assignedBeds.get(n.id).length >= MAX_CHARGE_BEDS) return false
+      return (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE
+    })
+    const nearMinCandidates = nearMin.length > 0 ? nearMin : nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
+
+    const isHighBurden = admission.score >= avgScore
+    const hasNearbyBed = (n) => {
+      const beds = assignedBeds.get(n.id)
+      return beds.length === 0 || beds.some((b) => Math.abs(b - patientBedNo) <= MAX_BED_GAP)
+    }
+
+    // Record candidate information before sorting
+    const candidates = nearMinCandidates.map((n) => {
+      const seniorityRank = SENIORITY_RANK[seniorityKey(n)] ?? 2
+      return {
+        nurseId: n.id,
+        displayName: n.displayName,
+        shortName: n.shortName,
+        currentLoad: loads.get(n.id) ?? 0,
+        seniorityLevel: n.seniorityLevel ?? '4-10年',
+        seniorityRank,
+        hasNearbyBed: hasNearbyBed(n),
+      }
+    })
+
+    const selected = [...nearMinCandidates].sort((a, b) => {
+      const ra = SENIORITY_RANK[seniorityKey(a)] ?? 2
+      const rb = SENIORITY_RANK[seniorityKey(b)] ?? 2
+      // Original seniority sorting: High burden -> Junior first (ra - rb); Low burden -> Senior first (rb - ra)
+      const bySeniority = isHighBurden ? ra - rb : rb - ra
+      if (bySeniority !== 0) return bySeniority
+      return (hasNearbyBed(a) ? 0 : 1) - (hasNearbyBed(b) ? 0 : 1)
+    })[0]
+
+    if (!selected) continue
+
+    decisionLogs.push({
+      admissionId: admission.admissionId,
+      bedLabel: admission.bedLabel,
+      patientName: admission.patientName,
+      score: admission.score,
+      isHighBurden,
+      minLoad,
+      candidates,
+      chosenNurseId: selected.id,
+    })
+
+    assignedBeds.get(selected.id).push(patientBedNo)
+    loads.set(selected.id, (loads.get(selected.id) ?? 0) + admission.score)
+  }
+
+  if (dryRun) {
+    return { decisionLogs }
+  }
+
   const runId = randomUUID()
   await withTransaction(async (client) => {
     await client.query(
       `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','seniority-aware-v1')`,
       [runId, shiftId, targetShiftId ?? shiftId, user.id],
     )
-
-    const loads = new Map(nurses.map((n) => [n.id, 0]))
-    const sortOrders = new Map(nurses.map((n) => [n.id, 0]))
-    const assignedBeds = new Map(nurses.map((n) => [n.id, []]))
-    const MAX_BED_GAP = 2
-    // 小組長床數上限：比平均少1床（至少1床），讓合計保持最低
-    const avgBeds = admissions.length / nurses.length
-    const MAX_CHARGE_BEDS = Math.max(1, Math.round(avgBeds) - 1)
-
-    for (const admission of admissions.sort((a, b) => b.score - a.score)) {
-      const seniorityKey = (n) => (n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年'))
-      const patientBedNo = bedNo(admission.bedLabel)
-
-      const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
-      const nearMin = nurses.filter((n) => {
-        // 小組長達到床數上限後不再納入候選（除非所有人都超標）
-        if (n.role === 'charge_nurse' && assignedBeds.get(n.id).length >= MAX_CHARGE_BEDS) return false
-        return (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE
-      })
-      // fallback: if nearMin is empty (all nurses at cap), include everyone
-      const candidates = nearMin.length > 0 ? nearMin : nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
-
-      const isHighBurden = admission.score >= avgScore
-      const hasNearbyBed = (n) => {
-        const beds = assignedBeds.get(n.id)
-        return beds.length === 0 || beds.some((b) => Math.abs(b - patientBedNo) <= MAX_BED_GAP)
-      }
-      const selected = [...candidates].sort((a, b) => {
-        const ra = SENIORITY_RANK[seniorityKey(a)] ?? 2
-        const rb = SENIORITY_RANK[seniorityKey(b)] ?? 2
-        // 高負擔→年資低的優先（ascending）；低負擔→年資高的優先（descending）
-        // 小組長 rank=5（最高），高負擔時排最後，低負擔時排前，但有床數上限保護
-        const bySeniority = isHighBurden ? ra - rb : rb - ra
-        if (bySeniority !== 0) return bySeniority
-        return (hasNearbyBed(a) ? 0 : 1) - (hasNearbyBed(b) ? 0 : 1)
-      })[0]
-
-      if (!selected) continue
-      assignedBeds.get(selected.id).push(patientBedNo)
-      const sortOrder = (sortOrders.get(selected.id) ?? 0) + 1
+    for (const log of decisionLogs) {
+      const sortOrder = (sortOrders.get(log.chosenNurseId) ?? 0) + 1
       await client.query(
         `insert into allocation_items (allocation_run_id, admission_id, nurse_id, score, sort_order) values ($1,$2,$3,$4,$5)`,
-        [runId, admission.admissionId, selected.id, admission.score, sortOrder],
+        [runId, log.admissionId, log.chosenNurseId, log.score, sortOrder],
       )
-      loads.set(selected.id, (loads.get(selected.id) ?? 0) + admission.score)
-      sortOrders.set(selected.id, sortOrder)
+      sortOrders.set(log.chosenNurseId, sortOrder)
     }
+    await client.query(
+      `update allocation_runs set decision_logs = $2::jsonb where id = $1`,
+      [runId, JSON.stringify(decisionLogs)],
+    )
   })
   return getAllocationRun({ allocationRunId: runId })
 }
@@ -472,6 +573,7 @@ export async function getAllocationRun({ allocationRunId } = {}) {
     confirmedAt: run.confirmed_at,
     unassigned,
     byNurse,
+    decisionLogs: run.decision_logs ?? null,
     stats: {
       totalBeds: admissions.length,
       totalNurses: nurses.length,
@@ -652,7 +754,8 @@ export async function getHandoffSnapshot({ snapshotId, allocationRunId } = {}) {
 async function currentShiftRow(unitName = 'ICU') {
   const result = await query(
     `
-    select s.*, n.short_name as charge_short_name
+    select s.*, n.short_name as charge_short_name,
+           (select json_agg(nurse_id) from shift_nurses where shift_id = s.id) as nurse_ids
     from shifts s
     left join nurses n on n.id = s.charge_nurse_id
     where s.unit_name = $1 and s.status <> 'closed'
@@ -667,7 +770,11 @@ async function currentShiftRow(unitName = 'ICU') {
 
 async function ensureShift(shiftId) {
   const result = await query(
-    `select s.*, n.short_name as charge_short_name from shifts s left join nurses n on n.id = s.charge_nurse_id where s.id = $1`,
+    `select s.*, n.short_name as charge_short_name,
+            (select json_agg(nurse_id) from shift_nurses where shift_id = s.id) as nurse_ids
+     from shifts s
+     left join nurses n on n.id = s.charge_nurse_id
+     where s.id = $1`,
     [shiftId],
   )
   if (!result.rows[0]) throw new ApiError(404, 'SHIFT_NOT_FOUND', '找不到指定班別', { shiftId })
@@ -675,7 +782,16 @@ async function ensureShift(shiftId) {
 }
 
 function formatShift(row) {
-  return { id: row.id, shiftKey: row.shift_key, label: shiftLabel(row), startsAt: row.starts_at, endsAt: row.ends_at, chargeNurse: { id: row.charge_nurse_id, shortName: row.charge_short_name }, status: row.status }
+  return {
+    id: row.id,
+    shiftKey: row.shift_key,
+    label: shiftLabel(row),
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    chargeNurse: { id: row.charge_nurse_id, shortName: row.charge_short_name },
+    status: row.status,
+    nurseIds: row.nurse_ids || [],
+  }
 }
 
 function shiftLabel(row) {
@@ -945,6 +1061,84 @@ async function admissionOwner(shiftId, admissionId) {
   return result.rows[0] ? { nurseId: result.rows[0].nurse_id } : null
 }
 
+function getMockBurdenDataForBed(bedLabel) {
+  try {
+    const raw = readFileSync(resolve('backend/db/病人模擬資料.json'), 'utf8')
+    const patients = JSON.parse(raw)
+    const p = patients.find((item) => item['床號'] === bedLabel)
+    if (!p) return null
+
+    const objData = p['客觀評估'] || {}
+    const subjData = p['主觀評估'] || {}
+
+    // Map objective factors
+    const objective = {
+      negativePressureIsolation: Number(objData['是否需住在負壓隔離病房']?.['分數'] ?? 0),
+      highVentilatorDemand: Number(objData['高呼吸器需求']?.['分數'] ?? 0),
+      medicationTypeCount: Number(objData['藥物計數']?.['分數'] ?? 0),
+      medicationFrequency: 0,
+      crrtContinuousA: 0,
+      iabpContinuousB: 0,
+      ecmoContinuousB: 0,
+      proneContinuousB: 0,
+      hypothermiaContinuousB: 0,
+      massiveTransfusionSingleC: 0,
+      plasmaSingleC: 0,
+    }
+
+    // Map特殊處置
+    const specialDispositions = objData['特殊處置']?.['系統帶入項目'] || []
+    for (const item of specialDispositions) {
+      const name = item['項目'] || ''
+      const score = Number(item['分數'] ?? 0)
+      if (name.includes('CRRT')) objective.crrtContinuousA = score
+      if (name.includes('IABP')) objective.iabpContinuousB = score
+      if (name.includes('ECMO')) objective.ecmoContinuousB = score
+      if (name.includes('PRONE')) objective.proneContinuousB = score
+      if (name.includes('Cooling') || name.includes('低溫')) objective.hypothermiaContinuousB = score
+      if (name.includes('Plasma') || name.includes('血漿')) objective.plasmaSingleC = score
+      if (name.includes('Transfusion') || name.includes('輸血')) objective.massiveTransfusionSingleC = score
+    }
+
+    // Map subjective factors
+    let rassScore = null
+    const rassResult = subjData['RASS鎮靜分數']?.['選擇結果'] || ''
+    const rassMatch = rassResult.match(/RASS\s*=\s*([-+]?\d+)/i)
+    if (rassMatch) {
+      rassScore = Number(rassMatch[1])
+    }
+
+    const agitatedFallRisk = subjData['躁動且有下床風險']?.['選擇結果'] === '是'
+    const agitatedTubeRemovalRisk = subjData['躁動且有自拔管路風險']?.['選擇結果'] === '是'
+    
+    // 引流管: 是否具特殊管路
+    const drainageTube = objData['是否具特殊管路']?.['選擇項目'] !== '否' && objData['是否具特殊管路']?.['選擇項目'] !== '無'
+
+    const tubeFeeding = subjData['是否需人工管灌']?.['選擇結果'] === '是'
+    
+    // 換藥頻繁程度: 是否需頻繁換藥
+    const dressingChangeFrequency = subjData['是否需頻繁換藥']?.['選擇結果'] === '是' ? 1 : 0
+
+    // 生理狀態監測頻繁程度: 需頻繁監測生理狀態
+    const vitalMonitoringFrequency = objData['需頻繁監測生理狀態']?.['選擇項目'] === '是' ? 2 : 0
+
+    const subjective = {
+      rassScore,
+      agitatedFallRisk,
+      agitatedTubeRemovalRisk,
+      drainageTube,
+      tubeFeeding,
+      dressingChangeFrequency,
+      vitalMonitoringFrequency,
+    }
+
+    return { objective, subjective }
+  } catch (error) {
+    console.error('Failed to read mock patient burden data:', error)
+    return null
+  }
+}
+
 async function ensureBurdenAssessmentsForShift(shiftId) {
   const admissions = await listAdmissions({ shiftId, status: 'active' })
   for (const admission of admissions) {
@@ -966,47 +1160,139 @@ async function ensureBurdenAssessmentsForShift(shiftId) {
     )
     const templateRow = template.rows[0]
     const assessmentId = randomUUID()
-    const objectiveTotal = templateRow ? Number(templateRow.objective_total) : 0
 
-    await query(
-      `
-      insert into burden_assessments (
-        id, shift_id, admission_id, submitted_by, status,
-        objective_total, subjective_total, total_score
-      ) values ($1, $2, $3, null, 'draft', $4, 0, $4)
-      `,
-      [assessmentId, shiftId, admission.admissionId, objectiveTotal],
-    )
-
-    if (!templateRow) continue
-
-    const values = await query(
-      `
-      select bv.number_value, bv.boolean_value, bv.level_value, bv.points, bf.code, bf.value_type
-      from burden_values bv
-      join burden_factors bf on bf.id = bv.factor_id
-      where bv.assessment_id = $1 and bf.category = 'objective'
-      `,
-      [templateRow.id],
-    )
-    for (const value of values.rows) {
-      const factor = await query('select id from burden_factors where code = $1', [value.code])
-      if (!factor.rows[0]) continue
+    if (templateRow) {
+      const objectiveTotal = Number(templateRow.objective_total)
       await query(
         `
-        insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
-        values ($1, $2, $3, $4, $5, $6)
-        on conflict (assessment_id, factor_id) do nothing
+        insert into burden_assessments (
+          id, shift_id, admission_id, submitted_by, status,
+          objective_total, subjective_total, total_score
+        ) values ($1, $2, $3, null, 'draft', $4, 0, $4)
         `,
-        [
-          assessmentId,
-          factor.rows[0].id,
-          value.number_value,
-          value.boolean_value,
-          value.level_value,
-          value.points,
-        ],
+        [assessmentId, shiftId, admission.admissionId, objectiveTotal],
       )
+
+      const values = await query(
+        `
+        select bv.number_value, bv.boolean_value, bv.level_value, bv.points, bf.code, bf.value_type
+        from burden_values bv
+        join burden_factors bf on bf.id = bv.factor_id
+        where bv.assessment_id = $1 and bf.category = 'objective'
+        `,
+        [templateRow.id],
+      )
+      for (const value of values.rows) {
+        const factor = await query('select id from burden_factors where code = $1', [value.code])
+        if (!factor.rows[0]) continue
+        await query(
+          `
+          insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
+          values ($1, $2, $3, $4, $5, $6)
+          on conflict (assessment_id, factor_id) do nothing
+          `,
+          [
+            assessmentId,
+            factor.rows[0].id,
+            value.number_value,
+            value.boolean_value,
+            value.level_value,
+            value.points,
+          ],
+        )
+      }
+    } else {
+      // No template found, load from mock patient data
+      const mockData = getMockBurdenDataForBed(admission.bedLabel)
+      if (mockData) {
+        let objectiveTotal = 0
+        let subjectiveTotal = 0
+
+        const objectiveValues = []
+        const subjectiveValues = []
+
+        // Calculate and collect objective values
+        for (const factor of objectiveFactorDefinitions) {
+          const value = Number(mockData.objective[factor.code] ?? 0)
+          objectiveTotal += value
+          objectiveValues.push({
+            code: factor.code,
+            valueType: 'number',
+            value,
+            points: value,
+          })
+        }
+
+        // Calculate and collect subjective values
+        for (const factor of subjectiveFactorDefinitions) {
+          const value = mockData.subjective[factor.code]
+          let points = 0
+          if (factor.valueType === 'boolean') {
+            points = value ? 2 : 0
+          } else if (factor.valueType === 'level') {
+            points = Number(value ?? 0)
+          } else {
+            points = rassPoints(value)
+          }
+          subjectiveTotal += points
+          subjectiveValues.push({
+            code: factor.code,
+            valueType: factor.valueType,
+            value,
+            points,
+          })
+        }
+
+        const totalScore = objectiveTotal + subjectiveTotal
+
+        await query(
+          `
+          insert into burden_assessments (
+            id, shift_id, admission_id, submitted_by, status,
+            objective_total, subjective_total, total_score
+          ) values ($1, $2, $3, null, 'draft', $4, $5, $6)
+          `,
+          [assessmentId, shiftId, admission.admissionId, objectiveTotal, subjectiveTotal, totalScore],
+        )
+
+        // Insert into burden_values
+        const allValues = [...objectiveValues, ...subjectiveValues]
+        for (const item of allValues) {
+          const factor = await query('select id from burden_factors where code = $1', [item.code])
+          if (!factor.rows[0]) continue
+
+          const numberValue = item.valueType === 'number' ? item.value : null
+          const booleanValue = item.valueType === 'boolean' ? Boolean(item.value) : null
+          const levelValue = item.valueType === 'level' ? Number(item.value ?? 0) : null
+
+          await query(
+            `
+            insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
+            values ($1, $2, $3, $4, $5, $6)
+            on conflict (assessment_id, factor_id) do nothing
+            `,
+            [
+              assessmentId,
+              factor.rows[0].id,
+              numberValue,
+              booleanValue,
+              levelValue,
+              item.points,
+            ],
+          )
+        }
+      } else {
+        // Fallback if no mock data
+        await query(
+          `
+          insert into burden_assessments (
+            id, shift_id, admission_id, submitted_by, status,
+            objective_total, subjective_total, total_score
+          ) values ($1, $2, $3, null, 'draft', 0, 0, 0)
+          `,
+          [assessmentId, shiftId, admission.admissionId],
+        )
+      }
     }
   }
 }
@@ -1245,4 +1531,76 @@ function levelDetailLabel(value) {
 function bedNo(label) {
   const match = label.match(/\d+/)
   return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+}
+
+const DEMO_TEMPLATES = [
+  { admissionBedNo: 1, title: 'ABG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 1, title: 'Lactate STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 1, title: 'Blood cultures x2 STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 1, title: 'Bedside echo STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 1, title: 'NS 250 mL IV bolus STAT', kind: '給藥', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 2, title: 'ECG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 2, title: 'Troponin-I STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 3, title: 'ABG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 3, title: 'Portable CXR STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 3, title: 'Lactate STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 3, title: 'Propofol 10mL IV STAT', kind: '給藥', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 6, title: 'Bedside echo STAT', kind: '檢查', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 8, title: 'Furosemide 1amp IV STAT', kind: '給藥', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 9, title: 'CBC STAT', kind: '檢查', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 9, title: 'check blood type STAT', kind: '檢查', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 9, title: 'Pantoprazole 1vial IV STAT', kind: '給藥', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 9, title: 'Lorazepam 0.5 mg PO STAT', kind: '給藥', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 12, title: 'Serum Na/osmolality STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 12, title: 'Urine osmolality STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 12, title: 'Urine specific gravity STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 12, title: 'DDAVP PO STAT', kind: '給藥', orderedBy: '李OO醫師' },
+  { admissionBedNo: 13, title: 'Ammonia STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 13, title: 'PT/INR STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 13, title: '會診肝臟科', kind: '其他', orderedBy: '李OO醫師' },
+  { admissionBedNo: 13, title: '召開家庭會議', kind: '其他', orderedBy: '李OO醫師' },
+  { admissionBedNo: 15, title: 'Serum ketone STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'check CBC', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'check U/A', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'check U/C', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'Blood cultures x2 STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'Sputum culture STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'Portable CXR STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'ACT 1 tab PO', kind: '給藥', orderedBy: '李OO醫師' }
+]
+
+export async function importDemoStatOrders({ shiftId }) {
+  const admissionsResult = await query(
+    `
+    select a.id as admission_id, b.bed_no
+    from admissions a
+    join beds b on b.id = a.bed_id
+    where a.status = 'active'
+    `
+  )
+  const bedToAdmission = new Map(admissionsResult.rows.map(r => [Number(r.bed_no), r.admission_id]))
+
+  const now = new Date()
+  const orderedAtDisplay = new Intl.DateTimeFormat('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' }).format(now)
+
+  const inserted = []
+  
+  await query(`delete from stat_orders where shift_id = $1`, [shiftId])
+
+  for (const t of DEMO_TEMPLATES) {
+    const admissionId = bedToAdmission.get(t.admissionBedNo)
+    if (admissionId) {
+      const result = await query(
+        `
+        insert into stat_orders (shift_id, admission_id, title, kind, ordered_by, ordered_at_display)
+        values ($1, $2, $3, $4, $5, $6)
+        returning id, admission_id, title, kind, ordered_by, ordered_at_display, status
+        `,
+        [shiftId, admissionId, t.title, t.kind, t.orderedBy, orderedAtDisplay]
+      )
+      inserted.push(result.rows[0])
+    }
+  }
+
+  return inserted
 }

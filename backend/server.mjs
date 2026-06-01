@@ -21,6 +21,8 @@ import {
   updateAllocationItems,
   updateBurdenAssessment,
   updateStatOrder,
+  createStatOrder,
+  importDemoStatOrders,
   updateTask,
 } from './src/runtimeRepository.mjs'
 
@@ -65,6 +67,7 @@ async function handleRequest(req, res) {
           'GET /api/v1/shifts/current',
           'GET /api/v1/nurses?shiftId={shiftId}',
           'GET /api/v1/stat-orders?shiftId={shiftId}',
+          'POST /api/v1/stat-orders',
           'PATCH /api/v1/stat-orders/{orderId}',
           'GET /api/v1/admissions?shiftId={shiftId}&status=active',
           'GET /api/v1/nurse/overview?shiftId={shiftId}',
@@ -119,6 +122,24 @@ async function handleRequest(req, res) {
   }
 
   if (url.pathname === '/api/v1/stat-orders') {
+    if (req.method === 'POST') {
+      const body = await readJsonBody(req)
+      const shiftId = body.shiftId || url.searchParams.get('shiftId')
+      if (!shiftId) throw new ApiError(400, 'MISSING_PARAM', 'shiftId required')
+      sendJson(res, {
+        data: await createStatOrder({
+          shiftId,
+          admissionId: body.admissionId,
+          title: body.title,
+          kind: body.kind,
+          orderedBy: body.orderedBy,
+          reason: body.reason,
+          userId: getUserId(req, url),
+        }),
+      }, 201)
+      return
+    }
+
     assertMethod(req, 'GET')
     const shiftId = url.searchParams.get('shiftId')
     if (!shiftId) throw new ApiError(400, 'MISSING_PARAM', 'shiftId required')
@@ -130,6 +151,17 @@ async function handleRequest(req, res) {
         userId: getUserId(req, url),
       }),
     })
+    return
+  }
+
+  if (url.pathname === '/api/v1/stat-orders/import') {
+    assertMethod(req, 'POST')
+    const body = await readJsonBody(req)
+    const shiftId = body.shiftId
+    if (!shiftId) throw new ApiError(400, 'MISSING_PARAM', 'shiftId required')
+    sendJson(res, {
+      data: await importDemoStatOrders({ shiftId }),
+    }, 201)
     return
   }
 
@@ -201,6 +233,7 @@ async function handleRequest(req, res) {
       status: nullable(url.searchParams.get('status')),
       kind: nullable(url.searchParams.get('kind')),
       urgent: nullable(url.searchParams.get('urgent')),
+      admissionId: nullable(url.searchParams.get('admissionId')),
       userId: getUserId(req, url),
     })
     sendJson(res, result)
@@ -236,6 +269,7 @@ async function handleRequest(req, res) {
         shiftId: body.shiftId,
         targetShiftId: body.targetShiftId,
         userId: getUserId(req, url) ?? body.createdBy,
+        dryRun: body.dryRun === true,
       }),
     }, 201)
     return

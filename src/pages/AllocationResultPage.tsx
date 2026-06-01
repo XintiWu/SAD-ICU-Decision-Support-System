@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { apiGet, type HandoffData } from '../api/client'
+import { apiGet, type HandoffData, type BurdenAssessment } from '../api/client'
 import { formatNurseByShortName, formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/useShift'
 
@@ -18,6 +18,7 @@ export function AllocationResultPage() {
 function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
   const { selectedShift } = useShift()
   const [handoff, setHandoff] = useState<HandoffData | null>(null)
+  const [burdens, setBurdens] = useState<BurdenAssessment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [chargeName, setChargeName] = useState<string | null>(null)
@@ -28,11 +29,13 @@ function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
     Promise.all([
       apiGet<HandoffData>(`/handoff-sheets?shiftId=${shiftId}`),
       apiGet<OverviewMeta>(`/nurse/overview?shiftId=${shiftId}`),
+      apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`).catch(() => []),
     ])
-      .then(([handoffData, overview]) => {
+      .then(([handoffData, overview, burdenData]) => {
         if (!alive) return
         setHandoff(handoffData)
         setChargeName(overview.onDutyCharge?.shortName ?? null)
+        setBurdens(burdenData)
         setError(null)
       })
       .catch((err: Error) => {
@@ -54,6 +57,8 @@ function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
     const high = rows.filter((row) => row.burdenScore >= 22).length
     return { changed, high, total: rows.length }
   }, [handoff?.rows])
+
+  const burdenMap = useMemo(() => new Map(burdens.map((b) => [b.admissionId, b])), [burdens])
 
   const rows = handoff?.rows ?? []
 
@@ -131,23 +136,32 @@ function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
             </tr>
           </thead>
           <tbody className="bg-[#fafaf8]">
-            {rows.map((row) => (
-              <tr key={row.admissionId} className="border-t border-black/10">
-                <Td strong>{row.bedLabel}</Td>
-                <Td>{row.attendingPhysician}</Td>
-                <Td strong>{row.patientName}</Td>
-                <Td strong>{row.sex}</Td>
-                <Td strong>{row.age}</Td>
-                <Td>{formatDate(row.admittedAt)}</Td>
-                <Td strong>{formatNurseByShortName(row.currentNurse, chargeName)}</Td>
-                <td className="px-4 py-3 align-top whitespace-nowrap">
-                  <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${burdenPill(row.burdenScore)}`}>{row.burdenScore}</span>
-                </td>
-                <TdLong text={row.burdenDetail}>{row.burdenDetail}</TdLong>
-                <TdLong text={row.handoffDiagnosis}>{row.handoffDiagnosis}</TdLong>
-                <Td strong>{formatNurseByShortName(row.nextNurse, chargeName)}</Td>
-              </tr>
-            ))}
+            {rows.map((row) => {
+              const b = burdenMap.get(row.admissionId)
+              const objScore = b?.score.objectiveTotal ?? row.burdenScore
+              const subScore = b?.score.subjectiveTotal ?? 0
+              return (
+                <tr key={row.admissionId} className="border-t border-black/10">
+                  <Td strong>{row.bedLabel}</Td>
+                  <Td>{row.attendingPhysician}</Td>
+                  <Td strong>{row.patientName}</Td>
+                  <Td strong>{row.sex}</Td>
+                  <Td strong>{row.age}</Td>
+                  <Td>{formatDate(row.admittedAt)}</Td>
+                  <Td strong>{formatNurseByShortName(row.currentNurse, chargeName)}</Td>
+                  <td className="px-4 py-3 align-top whitespace-nowrap">
+                    <ScoreHoverTooltip objective={objScore} subjective={subScore}>
+                      <span className={`rounded-full px-3 py-1 text-xs font-extrabold ${burdenPill(row.burdenScore)}`}>
+                        {row.burdenScore}
+                      </span>
+                    </ScoreHoverTooltip>
+                  </td>
+                  <TdLong text={row.burdenDetail}>{row.burdenDetail}</TdLong>
+                  <TdLong text={row.handoffDiagnosis}>{row.handoffDiagnosis}</TdLong>
+                  <Td strong>{formatNurseByShortName(row.nextNurse, chargeName)}</Td>
+                </tr>
+              )
+            })}
           </tbody>
         </table>
       </div>
@@ -177,22 +191,30 @@ function Td({ children, strong }: { children: ReactNode; strong?: boolean }) {
   )
 }
 
-function TdLong({ text, children }: { text: string; children: ReactNode }) {
+function TdLong({ children }: { text: string; children: ReactNode }) {
   return (
     <td className="px-4 py-3 align-top text-xs text-slate-700">
-      <OverflowHoverText text={text}>{children}</OverflowHoverText>
+      <div className="whitespace-normal break-words leading-relaxed">
+        {children}
+      </div>
     </td>
   )
 }
 
-function OverflowHoverText({ text, children }: { text: string; children: ReactNode }) {
+function ScoreHoverTooltip({
+  objective,
+  subjective,
+  children,
+}: {
+  objective: number
+  subjective: number
+  children: ReactNode
+}) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
-  const showTip = text.trim().length > 36
 
   function handleEnter() {
-    if (!showTip) return
     const rect = anchorRef.current?.getBoundingClientRect()
     if (!rect) return
     setPos({ left: rect.left, top: rect.bottom + 6 })
@@ -207,26 +229,23 @@ function OverflowHoverText({ text, children }: { text: string; children: ReactNo
     <>
       <div
         ref={anchorRef}
-        className={[
-          'whitespace-normal break-words leading-relaxed',
-          showTip ? 'cursor-help' : '',
-        ].join(' ')}
+        className="inline-block cursor-help"
         onMouseEnter={handleEnter}
         onMouseLeave={handleLeave}
         onFocus={handleEnter}
         onBlur={handleLeave}
-        tabIndex={showTip ? 0 : undefined}
+        tabIndex={0}
       >
         {children}
       </div>
-      {open && pos && showTip
+      {open && pos
         ? createPortal(
             <div
-              className="pointer-events-none fixed z-[100] max-w-md rounded-xl bg-slate-900 px-3 py-2.5 text-xs leading-relaxed text-white shadow-xl ring-1 ring-black/20"
+              className="pointer-events-none fixed z-[100] rounded-xl bg-slate-900 px-3 py-2 text-xs font-bold leading-relaxed text-white shadow-xl ring-1 ring-black/20"
               style={{ left: pos.left, top: pos.top }}
               role="tooltip"
             >
-              {text}
+              客觀 {objective} 分 · 主觀 {subjective} 分
             </div>,
             document.body,
           )
@@ -250,3 +269,4 @@ function formatDateTime(iso: string) {
   if (Number.isNaN(d.getTime())) return iso
   return d.toLocaleString('zh-TW', { year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
+

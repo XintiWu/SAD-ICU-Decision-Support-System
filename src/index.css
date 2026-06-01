@@ -19,6 +19,13 @@
   .rounded-full {
     border-radius: 6px;
   }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+  .scrollbar-none {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
 }
 
 /* 先提供乾淨底層，後續會依你的線稿再定調整體視覺語言 */

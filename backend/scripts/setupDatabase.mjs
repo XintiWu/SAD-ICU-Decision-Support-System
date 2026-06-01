@@ -30,6 +30,7 @@ async function main() {
     'backend/db/migrations/003_allocation_schema.sql',
     'backend/db/migrations/004_stat_orders_schema.sql',
     'backend/db/migrations/005_handoff_schema.sql',
+    'backend/db/migrations/006_allocation_decision_logs.sql',
     'backend/db/seeds/001_demo_core_data.sql',
     'backend/db/seeds/002_demo_burden_tasks_data.sql',
     'backend/db/seeds/003_demo_allocation_data.sql',

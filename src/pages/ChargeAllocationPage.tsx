@@ -21,6 +21,7 @@ import {
   type ApiNurse,
   type ApiStatOrder,
   type BurdenAssessment,
+  type DecisionLog,
 } from '../api/client'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { AllocationDragPatientPanel } from '../components/allocation/AllocationDragPatientPanel'
@@ -29,6 +30,7 @@ import { AllocationUnassignedStrip } from '../components/allocation/AllocationUn
 import { AllocationBedChip } from '../components/allocation/AllocationBedChip'
 import { AllocationSidebar } from '../components/allocation/AllocationSidebar'
 import { ConfirmAllocationDialog } from '../components/allocation/ConfirmAllocationDialog'
+import { AllocationDecisionLogDialog } from '../components/allocation/AllocationDecisionLogDialog'
 import {
   applyRunToCatalog,
   boardStateToItems,
@@ -91,6 +93,9 @@ function ChargeAllocationPageBody() {
   const [error, setError] = useState<string | null>(null)
   const [burdenAssessments, setBurdenAssessments] = useState<BurdenAssessment[]>([])
   const [statOrders, setStatOrders] = useState<ApiStatOrder[]>([])
+  const [decisionLogs, setDecisionLogs] = useState<DecisionLog[] | null>(null)
+  const [decisionLogOpen, setDecisionLogOpen] = useState(false)
+  const [loadingLogs, setLoadingLogs] = useState(false)
 
   const nurseIds = useMemo(() => nurses.map((n) => n.id), [nurses])
   const chargeNurseIdFromShift = useChargeNurseId()
@@ -179,6 +184,7 @@ function ChargeAllocationPageBody() {
           setAllocationRunId(latestRun.allocationRunId)
           setRunStatus(latestRun.status)
           setSuggestedOwner(invertBoard(board.byNurse))
+          setDecisionLogs(latestRun.decisionLogs ?? null)
         } else {
           const board = emptyBoardState(
             admissionRows.map((a) => a.admissionId),
@@ -293,13 +299,34 @@ function ChargeAllocationPageBody() {
     })
     if (!next || containersEqual(next, containers)) return
 
-    if (!allocationRef.current.allocationRunId) {
-      setError('請先按「套用系統建議分床」產生草稿')
-      return
-    }
-
     pushUndoFromRef()
     applyContainers(next)
+
+    if (!allocationRef.current.allocationRunId) {
+      // Auto-initialize a draft in the backend
+      setSaving(true)
+      void (async () => {
+        try {
+          const run = await apiPost<AllocationRun>(
+            '/allocation-runs/suggest',
+            { shiftId, targetShiftId: shiftId },
+            leaderOpts,
+          )
+          setAllocationRunId(run.allocationRunId)
+          setRunStatus(run.status)
+          // Overwrite the automatically generated suggested items with the current manual state immediately
+          const nextState = containersToState(next, nurseIds)
+          if (run.allocationRunId) {
+            await persistDraft(nextState.byNurse, run.allocationRunId)
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : '初始化手動分床草稿失敗')
+        } finally {
+          setSaving(false)
+        }
+      })()
+    }
+
     lastOverRef.current = null
     lastContainerOverRef.current = null
   }
@@ -331,6 +358,7 @@ function ChargeAllocationPageBody() {
       setAllocationRunId(run.allocationRunId)
       setRunStatus(run.status)
       setSuggestedOwner(invertBoard(board.byNurse))
+      setDecisionLogs(run.decisionLogs ?? null)
     } catch (err) {
       setError(err instanceof Error ? err.message : '產生建議分床失敗')
     } finally {
@@ -363,6 +391,32 @@ function ChargeAllocationPageBody() {
       setError(err instanceof Error ? err.message : '確認分床失敗')
     } finally {
       setConfirming(false)
+    }
+  }
+
+  async function handleViewDecisionLogs() {
+    if (decisionLogs && decisionLogs.length > 0) {
+      setDecisionLogOpen(true)
+      return
+    }
+    setLoadingLogs(true)
+    setError(null)
+    try {
+      const res = await apiPost<{ decisionLogs: DecisionLog[] }>(
+        '/allocation-runs/suggest',
+        { shiftId, targetShiftId: shiftId, dryRun: true },
+        leaderOpts,
+      )
+      if (res.decisionLogs && res.decisionLogs.length > 0) {
+        setDecisionLogs(res.decisionLogs)
+        setDecisionLogOpen(true)
+      } else {
+        setError('無法取得系統自動分床決策')
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '取得自動分床決策軌跡失敗')
+    } finally {
+      setLoadingLogs(false)
     }
   }
 
@@ -415,6 +469,8 @@ function ChargeAllocationPageBody() {
                     activePatientId={activeId}
                     onSuggest={applySuggested}
                     suggestLoading={suggestLoading}
+                    onViewDecision={handleViewDecisionLogs}
+                    viewDecisionLoading={loadingLogs}
                   />
                   <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                     {nurseIds.map((nid) => {
@@ -467,6 +523,14 @@ function ChargeAllocationPageBody() {
           onCancel={() => setConfirmOpen(false)}
         />
       ) : null}
+
+      {decisionLogOpen && (
+        <AllocationDecisionLogDialog
+          decisionLogs={decisionLogs}
+          nurseNames={nurseNames}
+          onClose={() => setDecisionLogOpen(false)}
+        />
+      )}
     </AllocationCatalogProvider>
   )
 }

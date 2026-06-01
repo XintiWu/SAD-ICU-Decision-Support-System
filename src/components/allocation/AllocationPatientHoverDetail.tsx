@@ -26,25 +26,25 @@ export function AllocationPatientHoverDetail({ patient, className = '' }: Props)
     <div
       role="tooltip"
       className={[
-        'pointer-events-none absolute left-0 top-full z-50 mt-2 w-[min(340px,calc(100vw-2rem))] rounded-xl bg-white p-3.5 text-[13px] text-slate-700 shadow-lg ring-1 ring-black/10',
+        'pointer-events-none absolute left-0 top-full z-50 mt-1.5 w-[min(340px,calc(100vw-2rem))] rounded-xl bg-white p-3 text-[13px] text-slate-700 shadow-lg ring-1 ring-black/10',
         className,
       ]
         .filter(Boolean)
         .join(' ')}
     >
       <div className="flex items-start justify-between gap-2">
-        <div className="min-w-0">
-          <div className="text-base font-bold text-slate-900">
+         <div className="min-w-0">
+          <div className="text-base font-bold text-slate-900 leading-tight">
             {patient.bedLabel} · {patient.patientName}
           </div>
-          <div className="mt-0.5 text-sm font-medium text-slate-600">{patient.diagnosis}</div>
+          <div className="mt-0.5 text-xs font-medium text-slate-500 leading-normal">{patient.diagnosis}</div>
         </div>
-        <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-bold ${scorePillClass[patient.tone]}`}>
+        <span className={`shrink-0 rounded-full px-2 py-0.5 text-[11px] font-bold ${scorePillClass[patient.tone]}`}>
           麻煩度 {patient.score}
         </span>
       </div>
 
-      <dl className="mt-2.5 grid grid-cols-2 gap-x-3 gap-y-1.5">
+      <dl className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1">
         <DetailItem label="性別" value={patient.sex} />
         <DetailItem label="年齡" value={`${patient.age} 歲`} />
         <DetailItem label="入院" value={patient.admittedAt} className="col-span-2" />
@@ -52,12 +52,12 @@ export function AllocationPatientHoverDetail({ patient, className = '' }: Props)
       </dl>
 
       {patient.badges.length ? (
-        <div className="mt-2.5 flex flex-wrap gap-1 border-t border-black/5 pt-2">
+        <div className="mt-2 flex flex-wrap gap-1 border-t border-black/5 pt-1.5">
           {patient.badges.map((b) => (
             <span
               key={b}
               className={[
-                'rounded px-1.5 py-0.5 text-[10px] font-bold uppercase tracking-wide',
+                'rounded px-1 py-0.5 text-[9px] font-bold uppercase tracking-wide',
                 b === 'STAT' ? 'bg-red-100 text-red-800' : 'bg-slate-100 text-slate-600',
               ].join(' ')}
             >
@@ -68,19 +68,19 @@ export function AllocationPatientHoverDetail({ patient, className = '' }: Props)
       ) : null}
 
       {showBurden ? (
-        <div className="mt-2.5 border-t border-black/5 pt-2.5">
-          <div className="text-sm font-bold text-slate-900">麻煩度細項</div>
+        <div className="mt-2 border-t border-black/5 pt-2">
+          <div className="text-xs font-bold text-slate-900">麻煩度細項</div>
           {patient.objectiveTotal != null || patient.subjectiveTotal != null ? (
-            <div className="mt-1 text-sm font-semibold text-slate-800">
+            <div className="mt-0.5 text-xs font-semibold text-slate-600">
               客觀 {patient.objectiveTotal ?? 0} · 主觀 {patient.subjectiveTotal ?? 0}
             </div>
           ) : null}
           {patient.burdenLines?.length ? (
-            <ul className="mt-2 grid gap-y-2">
+            <ul className="mt-1.5 grid gap-y-1">
               {patient.burdenLines.map((line) => (
                 <li key={line.label} className="flex items-baseline justify-between gap-3">
                   <span className="text-xs text-slate-400">{line.label}</span>
-                  <span className="text-sm font-semibold text-slate-800">
+                  <span className="text-xs font-semibold text-slate-800">
                     {line.points != null ? line.points : line.value}
                   </span>
                 </li>

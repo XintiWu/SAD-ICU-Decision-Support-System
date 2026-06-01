@@ -18,9 +18,12 @@ export function formatShiftDate(startsAt: string) {
 }
 
 /** 班別下拉選單顯示（含日期與狀態） */
-export function formatShiftOption(shift: Pick<ApiShift, 'label' | 'startsAt' | 'status'>) {
-  return `${shift.label}（${shiftStatusLabel(shift.status)}）`
+export function formatShiftOption(shift: Pick<ApiShift, 'label' | 'startsAt' | 'status' | 'nurseIds'>, currentUserId?: string) {
+  const isOnDuty = currentUserId && shift.nurseIds?.includes(currentUserId)
+  if (isOnDuty) {
+    return `${shift.label}（當班）`
+  }
+  return shift.label
 }
 
-/** Demo：陳O媚有值班且有分床資料的班別 */
-export const DEMO_NURSE_SHIFT_HINTS = ['2026/05/08 白班', '2026/05/19 白班', '2026/05/20 白班']
+export const DEMO_NURSE_SHIFT_HINTS = ['2026/05/19 白班', '2026/05/20 白班']
