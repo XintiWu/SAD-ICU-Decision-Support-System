@@ -8,15 +8,20 @@ import { useUser } from '../context/useUser'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { shifts, shiftId, selectedShift, setShiftId, loading, error } = useShift()
-  const { user, loading: userLoading } = useUser()
+  const { user, userId, setUserId, nurses, loading: userLoading } = useUser()
   const chargeNurseId = useChargeNurseId()
   const [dropdownOpen, setDropdownOpen] = useState(false)
+  const [nurseDropdownOpen, setNurseDropdownOpen] = useState(false)
   const dropdownRef = useRef<HTMLDivElement>(null)
+  const nurseDropdownRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     function handleOutsideClick(event: MouseEvent) {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setDropdownOpen(false)
+      }
+      if (nurseDropdownRef.current && !nurseDropdownRef.current.contains(event.target as Node)) {
+        setNurseDropdownOpen(false)
       }
     }
     document.addEventListener('mousedown', handleOutsideClick)
@@ -113,9 +118,52 @@ export function AppShell({ children }: { children: ReactNode }) {
                 {error.includes('endpoint') ? '請重啟後端 npm run api:dev' : error}
               </span>
             ) : null}
-            <span className="rounded-full bg-[#243047] px-3 py-1 text-xs font-medium text-[#94A3B8]">
-              護理師 {nurse}
-            </span>
+            <div className="relative" ref={nurseDropdownRef}>
+              <button
+                type="button"
+                id="nurse-select"
+                onClick={() => setNurseDropdownOpen((prev) => !prev)}
+                className="flex items-center gap-1.5 rounded-full bg-[#243047] px-3.5 py-1 text-xs font-semibold text-[#94A3B8] hover:bg-[#2d3a54] hover:text-[#E2E8F0] active:scale-[0.98] transition-all cursor-pointer shadow-sm ring-1 ring-white/5"
+              >
+                <span>護理師：{nurse}</span>
+                <span className="text-[9px] text-[#64748B]">▼</span>
+              </button>
+
+              {nurseDropdownOpen && (
+                <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-white text-slate-800 shadow-xl ring-1 ring-black/10 z-50 p-2 py-1.5 max-h-80 overflow-y-auto">
+                  <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-100 mb-1">
+                    切換護理師角色
+                  </div>
+                  {nurses.map((n) => {
+                    const isSelected = n.id === userId
+                    const display = formatNurseDisplay(n.shortName, { nurseId: n.id, chargeNurseId })
+                    return (
+                      <button
+                        key={n.id}
+                        type="button"
+                        onClick={() => {
+                          setUserId(n.id)
+                          setNurseDropdownOpen(false)
+                        }}
+                        className={[
+                          'w-full flex items-center gap-2 px-3 py-1.5 text-left text-xs font-semibold rounded-xl transition-colors cursor-pointer',
+                          isSelected
+                            ? 'bg-[#E8F0FE] text-[#1d4ed8] font-extrabold'
+                            : 'hover:bg-slate-50 text-slate-600',
+                        ].join(' ')}
+                      >
+                        {isSelected ? (
+                          <span className="text-sm font-extrabold text-[#1d4ed8]">✓</span>
+                        ) : (
+                          <span className="w-3" />
+                        )}
+                        <span className="truncate">{display}</span>
+                      </button>
+                    )
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </header>
