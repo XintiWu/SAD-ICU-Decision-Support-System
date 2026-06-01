@@ -37,8 +37,8 @@ export function AllocationUnassignedStrip({
           <div>
             <h2 className="text-sm font-bold text-slate-900">待分配病患</h2>
             <p className="mt-0.5 text-[11px] text-slate-600">
-              依右上角<strong className="font-bold text-slate-700">班別</strong>載入資料。可按
-              <strong className="font-bold text-slate-700">「套用系統建議分床」</strong>呼叫後端演算法，再拖曳微調並確認送出。
+              依右上角<strong className="font-bold text-slate-700">班別</strong>載入資料。可直接拖曳病患進行手動分床，或按
+              <strong className="font-bold text-slate-700">「套用系統建議分床」</strong>呼叫演算法自動分床。
             </p>
           </div>
         </div>

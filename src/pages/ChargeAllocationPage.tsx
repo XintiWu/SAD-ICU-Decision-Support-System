@@ -299,13 +299,34 @@ function ChargeAllocationPageBody() {
     })
     if (!next || containersEqual(next, containers)) return
 
-    if (!allocationRef.current.allocationRunId) {
-      setError('請先按「套用系統建議分床」產生草稿')
-      return
-    }
-
     pushUndoFromRef()
     applyContainers(next)
+
+    if (!allocationRef.current.allocationRunId) {
+      // Auto-initialize a draft in the backend
+      setSaving(true)
+      void (async () => {
+        try {
+          const run = await apiPost<AllocationRun>(
+            '/allocation-runs/suggest',
+            { shiftId, targetShiftId: shiftId },
+            leaderOpts,
+          )
+          setAllocationRunId(run.allocationRunId)
+          setRunStatus(run.status)
+          // Overwrite the automatically generated suggested items with the current manual state immediately
+          const nextState = containersToState(next, nurseIds)
+          if (run.allocationRunId) {
+            await persistDraft(nextState.byNurse, run.allocationRunId)
+          }
+        } catch (err) {
+          setError(err instanceof Error ? err.message : '初始化手動分床草稿失敗')
+        } finally {
+          setSaving(false)
+        }
+      })()
+    }
+
     lastOverRef.current = null
     lastContainerOverRef.current = null
   }
