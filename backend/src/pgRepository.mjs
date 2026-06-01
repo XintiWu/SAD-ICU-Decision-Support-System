@@ -1039,6 +1039,36 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
   )
   const snapshotId = snapshotResult.rows[0].id
 
+  // look up next shift's confirmed allocation to fill next_nurse
+  const nextShiftResult = await client.query(
+    `
+    select ar.id as run_id
+    from allocation_runs ar
+    join shifts s on s.id = ar.shift_id
+    join shifts cur on cur.id = $1
+    where s.unit_name = cur.unit_name
+      and s.starts_at >= cur.ends_at
+      and ar.status = 'confirmed'
+    order by s.starts_at asc
+    limit 1
+    `,
+    [shiftId],
+  )
+  const nextRunId = nextShiftResult.rows[0]?.run_id ?? null
+  const nextNurseMap = new Map()
+  if (nextRunId) {
+    const nextItems = await client.query(
+      `
+      select ai.admission_id, n.short_name
+      from allocation_items ai
+      join nurses n on n.id = ai.nurse_id
+      where ai.allocation_run_id = $1
+      `,
+      [nextRunId],
+    )
+    for (const row of nextItems.rows) nextNurseMap.set(row.admission_id, row.short_name)
+  }
+
   let sortOrder = 0
   for (const nurseRow of run.byNurse) {
     for (const patient of nurseRow.patients) {
@@ -1066,7 +1096,7 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
           admission.admittedAt,
           admission.attendingPhysician,
           nurseRow.shortName,
-          nurseRow.shortName,
+          nextNurseMap.get(patient.admissionId) ?? '—',
           patient.score,
           admission.diagnosis,
           burdenDetailText(burden),
