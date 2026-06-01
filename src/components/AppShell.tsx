@@ -40,7 +40,7 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-canvas text-slate-800">
       <header className="sticky top-0 z-10 border-b border-[#2D3748] bg-[#1E2533]">
-        <div className="mx-auto flex w-full flex-wrap lg:flex-nowrap items-center justify-between gap-y-3 px-4 py-3.5 md:px-8">
+        <div className="mx-auto flex w-full flex-wrap xl:flex-nowrap items-center justify-between gap-y-3 px-4 py-3.5 md:px-8">
           <div className="flex items-center gap-3 shrink-0">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#38BDF8] text-xs font-semibold text-[#0F172A]">
               ICU
@@ -50,7 +50,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             </div>
           </div>
 
-          <nav className="hidden items-center gap-1.5 md:flex w-full lg:w-auto order-last lg:order-none overflow-x-auto scrollbar-none py-1 justify-start lg:justify-center">
+          <nav className="hidden items-center gap-1.5 md:flex w-full xl:w-auto order-last xl:order-none overflow-x-auto scrollbar-none py-1 px-2 justify-start">
             <TopNavLink to="/nurse/overview">護理師首頁</TopNavLink>
             <TopNavLink to="/nurse/burden-form">麻煩度填寫</TopNavLink>
             <TopNavLink to="/nurse/stat">突發性醫囑</TopNavLink>
@@ -133,13 +133,14 @@ export function AppShell({ children }: { children: ReactNode }) {
               </button>
 
               {nurseDropdownOpen && (
-                <div className="absolute right-0 mt-2 w-52 rounded-2xl bg-white text-slate-800 shadow-xl ring-1 ring-black/10 z-50 p-2 py-1.5 max-h-80 overflow-y-auto">
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white text-slate-800 shadow-xl ring-1 ring-black/10 z-50 p-2 py-1.5 max-h-80 overflow-y-auto">
                   <div className="px-2.5 py-1 text-[10px] font-bold text-slate-400 border-b border-slate-100 mb-1">
                     切換護理師角色
                   </div>
                   {nurses.map((n) => {
                     const isSelected = n.id === userId
                     const display = formatNurseDisplay(n.shortName, { nurseId: n.id, chargeNurseId })
+                    const isOnDuty = selectedShift?.nurseIds?.includes(n.id)
                     return (
                       <button
                         key={n.id}
@@ -160,7 +161,10 @@ export function AppShell({ children }: { children: ReactNode }) {
                         ) : (
                           <span className="w-3" />
                         )}
-                        <span className="truncate">{display}</span>
+                        <span className="truncate flex-1 text-left">{display}</span>
+                        {isOnDuty && (
+                          <span className="text-[10px] text-slate-400 font-normal shrink-0 ml-auto">（當班）</span>
+                        )}
                       </button>
                     )
                   })}

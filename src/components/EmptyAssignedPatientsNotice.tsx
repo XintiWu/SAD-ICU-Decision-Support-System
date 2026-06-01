@@ -1,3 +1,5 @@
+import { useShift } from '../context/useShift'
+import { useUser } from '../context/useUser'
 import { DEMO_NURSE_SHIFT_HINTS } from '../lib/shiftLabel'
 
 type Props = {
@@ -13,36 +15,55 @@ export function EmptyAssignedPatientsNotice({
   onRoster,
   allPatientCount,
 }: Props) {
+  const { shifts } = useShift()
+  const { userId } = useUser()
+
+  // 篩選出該護理師有排班的班別
+  const dutyShifts = shifts.filter((s) => s.nurseIds?.includes(userId))
+
   return (
     <div className="rounded-2xl bg-[#fafaf8] px-5 py-8 text-center ring-1 ring-black/5">
-      <div className="text-sm font-semibold text-slate-800">
-        此班別目前沒有分配給 {nurseName} 的病患
-      </div>
-      {shiftLabel ? (
-        <p className="mt-2 text-xs text-slate-500">
-          目前班別：<span className="font-semibold text-slate-700">{shiftLabel}</span>
-          {allPatientCount != null && allPatientCount > 0
-            ? `（本班共 ${allPatientCount} 位病患）`
-            : null}
-        </p>
-      ) : null}
       {onRoster === false ? (
-        <p className="mx-auto mt-3 max-w-lg text-xs leading-relaxed text-slate-600">
-          <strong className="font-semibold text-slate-800">{shiftLabel ?? '此班別'}</strong>
-          的排班名單<strong className="font-semibold text-slate-800">不含 {nurseName}</strong>。
-          同名「白班 07:00-15:00」可能對應不同日期，請看右上角班別的<strong className="font-semibold text-slate-700">完整日期</strong>再選。
-        </p>
-      ) : onRoster === true ? (
-        <p className="mx-auto mt-3 max-w-lg text-xs leading-relaxed text-slate-600">
-          {nurseName} <strong className="font-semibold text-slate-800">有在此班值班</strong>，但尚未完成分床分配。
-          請至「指派分床配對」套用系統建議分床，或請管理者執行 demo 分床 seed。
-        </p>
+        <div className="space-y-4">
+          <div className="text-lg font-extrabold text-slate-500 tracking-wide">
+            休假中 非當班護士 無負責病患
+          </div>
+          <div className="mx-auto max-w-lg rounded-xl bg-slate-100 p-5 leading-relaxed ring-1 ring-black/5">
+            {dutyShifts.length > 0 ? (
+              <p className="text-[#1e4ea7] font-bold text-sm md:text-base">
+                您的上班時間：{dutyShifts.map((s) => s.label).join('、')}
+              </p>
+            ) : (
+              <p className="text-slate-500 font-bold text-sm md:text-base">您的上班時間：本週暫無排班</p>
+            )}
+          </div>
+        </div>
       ) : (
-        <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-slate-600">
-          「我的病患」只顯示分床後指派給 {nurseName} 的床位，不是整班全部病人。
-        </p>
+        <>
+          <div className="text-sm font-semibold text-slate-800">
+            此班別目前沒有分配給 {nurseName} 的病患
+          </div>
+          {shiftLabel ? (
+            <p className="mt-2 text-xs text-slate-500">
+              目前班別：<span className="font-semibold text-slate-700">{shiftLabel}</span>
+              {allPatientCount != null && allPatientCount > 0
+                ? `（本班共 ${allPatientCount} 位病患）`
+                : null}
+            </p>
+          ) : null}
+          {onRoster === true ? (
+            <p className="mx-auto mt-3 max-w-lg text-xs leading-relaxed text-slate-600">
+              {nurseName} <strong className="font-semibold text-slate-800">有在此班值班</strong>，但尚未完成分床分配。
+              請至「指派分床配對」套用系統建議分床，或請管理者執行 demo 分床 seed。
+            </p>
+          ) : (
+            <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-slate-600">
+              「我的病患」只顯示分床後指派給 {nurseName} 的床位，不是整班全部病人。
+            </p>
+          )}
+        </>
       )}
-      <p className="mt-3 text-xs text-[#1e4ea7]">
+      <p className="mt-4 text-xs text-slate-400">
         Demo 建議班別：{DEMO_NURSE_SHIFT_HINTS.join('、')}
       </p>
     </div>
