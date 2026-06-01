@@ -130,7 +130,13 @@ function WarRoomPageBody({ shiftId }: { shiftId: string }) {
   )
 
   const nurses: NurseCardModel[] = useMemo(() => {
-    return (data?.nurses ?? []).map((row) => toNurseCard(row, chargeNurseId))
+    const list = (data?.nurses ?? []).map((row) => toNurseCard(row, chargeNurseId))
+    return list.sort((a, b) => {
+      if (b.remaining !== a.remaining) return b.remaining - a.remaining
+      const scoreA = a.patients.reduce((sum, p) => sum + p.score, 0)
+      const scoreB = b.patients.reduce((sum, p) => sum + p.score, 0)
+      return scoreB - scoreA
+    })
   }, [data, chargeNurseId])
 
   if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入戰情室...</div>
