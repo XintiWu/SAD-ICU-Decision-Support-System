@@ -328,7 +328,9 @@ function BurdenFormPageBody() {
           <div className="grid gap-4">
             {previousRows.length === 0 ? (
               <div className="rounded-2xl bg-surface p-5 text-sm font-semibold text-slate-600 ring-1 ring-black/10">
-                找不到上一班資料
+                {!previousLabel
+                  ? `此班次（${selectedShift?.label ?? '本班'}）為本週排班的第一個班別，故無上一班的交班評估資料。`
+                  : `前一班次（${previousLabel}）沒有指派給您的病患，故無對應的上一班評估資料。`}
               </div>
             ) : (
               previousRows

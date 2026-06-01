@@ -1,6 +1,5 @@
 import { useShift } from '../context/useShift'
 import { useUser } from '../context/useUser'
-import { DEMO_NURSE_SHIFT_HINTS } from '../lib/shiftLabel'
 
 type Props = {
   nurseName: string
@@ -28,13 +27,13 @@ export function EmptyAssignedPatientsNotice({
           <div className="text-lg font-extrabold text-slate-500 tracking-wide">
             休假中 非當班護士 無負責病患
           </div>
-          <div className="mx-auto max-w-lg rounded-xl bg-slate-100 p-5 leading-relaxed ring-1 ring-black/5">
+          <div className="mx-auto max-w-[100%] overflow-x-auto scrollbar-none rounded-xl bg-slate-100 p-5 leading-relaxed ring-1 ring-black/5">
             {dutyShifts.length > 0 ? (
-              <p className="text-[#1e4ea7] font-bold text-sm md:text-base">
+              <p className="text-[#1e4ea7] font-bold text-sm md:text-base whitespace-nowrap">
                 您的上班時間：{dutyShifts.map((s) => s.label).join('、')}
               </p>
             ) : (
-              <p className="text-slate-500 font-bold text-sm md:text-base">您的上班時間：本週暫無排班</p>
+              <p className="text-slate-500 font-bold text-sm md:text-base whitespace-nowrap">您的上班時間：本週暫無排班</p>
             )}
           </div>
         </div>
@@ -63,9 +62,6 @@ export function EmptyAssignedPatientsNotice({
           )}
         </>
       )}
-      <p className="mt-4 text-xs text-slate-400">
-        Demo 建議班別：{DEMO_NURSE_SHIFT_HINTS.join('、')}
-      </p>
     </div>
   )
 }
