@@ -7,6 +7,7 @@ import { ChargeAllocationPage } from './pages/ChargeAllocationPage'
 import { WarRoomPage } from './pages/WarRoomPage'
 import { AllocationResultPage } from './pages/AllocationResultPage'
 import { HandoverSnapshotsPage } from './pages/HandoverSnapshotsPage'
+import { DoctorStatPage } from './pages/DoctorStatPage'
 import { ShiftProvider } from './context/ShiftContext'
 import { UserProvider } from './context/UserContext'
 
@@ -26,6 +27,7 @@ function App() {
           <Route path="/leader/allocation-result" element={<AllocationResultPage />} />
           <Route path="/leader/war-room" element={<WarRoomPage />} />
           <Route path="/leader/handover-snapshots" element={<HandoverSnapshotsPage />} />
+          <Route path="/doctor/stat" element={<DoctorStatPage />} />
           <Route path="*" element={<Navigate to="/nurse/overview" replace />} />
         </Routes>
       </AppShell>

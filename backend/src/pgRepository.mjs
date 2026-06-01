@@ -45,7 +45,8 @@ export async function getCurrentShift(unitName = 'ICU') {
 export async function listShifts({ unitName = 'ICU' } = {}) {
   const result = await query(
     `
-    select s.*, n.short_name as charge_short_name
+    select s.*, n.short_name as charge_short_name,
+           (select json_agg(nurse_id) from shift_nurses where shift_id = s.id) as nurse_ids
     from shifts s
     left join nurses n on n.id = s.charge_nurse_id
     where s.unit_name = $1
@@ -113,6 +114,49 @@ export async function updateStatOrder({ orderId, patch, userId = ids.currentNurs
     [orderId, patch.status],
   )
   if (!result.rows[0]) throw new ApiError(404, 'STAT_ORDER_NOT_FOUND', '找不到 STAT 醫囑', { orderId })
+  const row = result.rows[0]
+  const bed = await query(
+    `
+    select b.label as bed_label, a.diagnosis
+    from admissions a
+    join beds b on b.id = a.bed_id
+    where a.id = $1
+    `,
+    [row.admission_id],
+  )
+  return {
+    id: row.id,
+    admissionId: row.admission_id,
+    bedLabel: bed.rows[0]?.bed_label ?? '—',
+    diagnosis: bed.rows[0]?.diagnosis ?? '',
+    title: row.title,
+    kind: row.kind,
+    orderedBy: row.ordered_by,
+    orderedAt: row.ordered_at_display,
+    reason: row.reason ?? undefined,
+    status: row.status,
+  }
+}
+
+export async function createStatOrder({ shiftId, admissionId, title, kind, orderedBy, reason, userId = ids.currentNurse } = {}) {
+  await getCurrentUser(userId)
+  
+  if (!['給藥', '檢查', '監測', '治療', '其他'].includes(kind)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'kind 參數不合法', { kind })
+  }
+
+  const now = new Date()
+  const orderedAtDisplay = new Intl.DateTimeFormat('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' }).format(now)
+
+  const result = await query(
+    `
+    insert into stat_orders (shift_id, admission_id, title, kind, ordered_by, ordered_at_display, reason)
+    values ($1, $2, $3, $4, $5, $6, $7)
+    returning id, admission_id, title, kind, ordered_by, ordered_at_display, reason, status
+    `,
+    [shiftId, admissionId, title, kind, orderedBy ?? '醫師', orderedAtDisplay, reason || null]
+  )
+  
   const row = result.rows[0]
   const bed = await query(
     `
@@ -307,10 +351,14 @@ export async function updateBurdenAssessment({ assessmentId, patch, userId = ids
   return (await listBurdenAssessments({ shiftId: assessment.shift_id, scope: 'all' })).find((item) => item.assessmentId === assessmentId)
 }
 
-export async function listTasks({ shiftId, assignee = 'me', status, kind, urgent, userId = ids.currentNurse } = {}) {
+export async function listTasks({ shiftId, assignee = 'me', status, kind, urgent, admissionId, userId = ids.currentNurse } = {}) {
   if (!shiftId) throw new ApiError(400, 'VALIDATION_ERROR', 'shiftId 為必填', { field: 'shiftId' })
   const params = [shiftId]
   const where = ['t.shift_id = $1']
+  if (admissionId) {
+    params.push(admissionId)
+    where.push(`t.admission_id = $${params.length}`)
+  }
   if (assignee === 'me') {
     params.push(userId)
     where.push(`t.assigned_nurse_id = $${params.length}`)
@@ -327,7 +375,19 @@ export async function listTasks({ shiftId, assignee = 'me', status, kind, urgent
     where.push('t.urgent = true')
   }
   const rows = await query(taskSelectSql(where), params)
-  const all = await query(taskSelectSql(['t.shift_id = $1', assignee === 'me' ? 't.assigned_nurse_id = $2' : 'true']), assignee === 'me' ? [shiftId, userId] : [shiftId])
+  
+  // Update 'all' query logic to respect admissionId if provided
+  const allWhere = ['t.shift_id = $1']
+  const allParams = [shiftId]
+  if (admissionId) {
+    allParams.push(admissionId)
+    allWhere.push(`t.admission_id = $${allParams.length}`)
+  }
+  if (assignee === 'me') {
+    allParams.push(userId)
+    allWhere.push(`t.assigned_nurse_id = $${allParams.length}`)
+  }
+  const all = await query(taskSelectSql(allWhere), allParams)
   return {
     data: rows.rows.map(formatTask),
     meta: {
@@ -694,7 +754,8 @@ export async function getHandoffSnapshot({ snapshotId, allocationRunId } = {}) {
 async function currentShiftRow(unitName = 'ICU') {
   const result = await query(
     `
-    select s.*, n.short_name as charge_short_name
+    select s.*, n.short_name as charge_short_name,
+           (select json_agg(nurse_id) from shift_nurses where shift_id = s.id) as nurse_ids
     from shifts s
     left join nurses n on n.id = s.charge_nurse_id
     where s.unit_name = $1 and s.status <> 'closed'
@@ -709,7 +770,11 @@ async function currentShiftRow(unitName = 'ICU') {
 
 async function ensureShift(shiftId) {
   const result = await query(
-    `select s.*, n.short_name as charge_short_name from shifts s left join nurses n on n.id = s.charge_nurse_id where s.id = $1`,
+    `select s.*, n.short_name as charge_short_name,
+            (select json_agg(nurse_id) from shift_nurses where shift_id = s.id) as nurse_ids
+     from shifts s
+     left join nurses n on n.id = s.charge_nurse_id
+     where s.id = $1`,
     [shiftId],
   )
   if (!result.rows[0]) throw new ApiError(404, 'SHIFT_NOT_FOUND', '找不到指定班別', { shiftId })
@@ -717,7 +782,16 @@ async function ensureShift(shiftId) {
 }
 
 function formatShift(row) {
-  return { id: row.id, shiftKey: row.shift_key, label: shiftLabel(row), startsAt: row.starts_at, endsAt: row.ends_at, chargeNurse: { id: row.charge_nurse_id, shortName: row.charge_short_name }, status: row.status }
+  return {
+    id: row.id,
+    shiftKey: row.shift_key,
+    label: shiftLabel(row),
+    startsAt: row.starts_at,
+    endsAt: row.ends_at,
+    chargeNurse: { id: row.charge_nurse_id, shortName: row.charge_short_name },
+    status: row.status,
+    nurseIds: row.nurse_ids || [],
+  }
 }
 
 function shiftLabel(row) {
@@ -1457,4 +1531,76 @@ function levelDetailLabel(value) {
 function bedNo(label) {
   const match = label.match(/\d+/)
   return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+}
+
+const DEMO_TEMPLATES = [
+  { admissionBedNo: 1, title: 'ABG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 1, title: 'Lactate STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 1, title: 'Blood cultures x2 STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 1, title: 'Bedside echo STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 1, title: 'NS 250 mL IV bolus STAT', kind: '給藥', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 2, title: 'ECG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 2, title: 'Troponin-I STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 3, title: 'ABG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 3, title: 'Portable CXR STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 3, title: 'Lactate STAT', kind: '檢查', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 3, title: 'Propofol 10mL IV STAT', kind: '給藥', orderedBy: '彭OO醫師' },
+  { admissionBedNo: 6, title: 'Bedside echo STAT', kind: '檢查', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 8, title: 'Furosemide 1amp IV STAT', kind: '給藥', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 9, title: 'CBC STAT', kind: '檢查', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 9, title: 'check blood type STAT', kind: '檢查', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 9, title: 'Pantoprazole 1vial IV STAT', kind: '給藥', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 9, title: 'Lorazepam 0.5 mg PO STAT', kind: '給藥', orderedBy: '胡OO醫師' },
+  { admissionBedNo: 12, title: 'Serum Na/osmolality STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 12, title: 'Urine osmolality STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 12, title: 'Urine specific gravity STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 12, title: 'DDAVP PO STAT', kind: '給藥', orderedBy: '李OO醫師' },
+  { admissionBedNo: 13, title: 'Ammonia STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 13, title: 'PT/INR STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 13, title: '會診肝臟科', kind: '其他', orderedBy: '李OO醫師' },
+  { admissionBedNo: 13, title: '召開家庭會議', kind: '其他', orderedBy: '李OO醫師' },
+  { admissionBedNo: 15, title: 'Serum ketone STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'check CBC', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'check U/A', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'check U/C', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'Blood cultures x2 STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'Sputum culture STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'Portable CXR STAT', kind: '檢查', orderedBy: '李OO醫師' },
+  { admissionBedNo: 17, title: 'ACT 1 tab PO', kind: '給藥', orderedBy: '李OO醫師' }
+]
+
+export async function importDemoStatOrders({ shiftId }) {
+  const admissionsResult = await query(
+    `
+    select a.id as admission_id, b.bed_no
+    from admissions a
+    join beds b on b.id = a.bed_id
+    where a.status = 'active'
+    `
+  )
+  const bedToAdmission = new Map(admissionsResult.rows.map(r => [Number(r.bed_no), r.admission_id]))
+
+  const now = new Date()
+  const orderedAtDisplay = new Intl.DateTimeFormat('zh-TW', { hour: '2-digit', minute: '2-digit', hour12: false, timeZone: 'Asia/Taipei' }).format(now)
+
+  const inserted = []
+  
+  await query(`delete from stat_orders where shift_id = $1`, [shiftId])
+
+  for (const t of DEMO_TEMPLATES) {
+    const admissionId = bedToAdmission.get(t.admissionBedNo)
+    if (admissionId) {
+      const result = await query(
+        `
+        insert into stat_orders (shift_id, admission_id, title, kind, ordered_by, ordered_at_display)
+        values ($1, $2, $3, $4, $5, $6)
+        returning id, admission_id, title, kind, ordered_by, ordered_at_display, status
+        `,
+        [shiftId, admissionId, t.title, t.kind, t.orderedBy, orderedAtDisplay]
+      )
+      inserted.push(result.rows[0])
+    }
+  }
+
+  return inserted
 }

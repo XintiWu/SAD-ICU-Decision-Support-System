@@ -5,6 +5,7 @@ import { formatShiftOption } from '../lib/shiftLabel'
 import { formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/useShift'
 import { useUser } from '../context/useUser'
+import { StatNotification } from './StatNotification'
 
 export function AppShell({ children }: { children: ReactNode }) {
   const { shifts, shiftId, selectedShift, setShiftId, loading, error } = useShift()
@@ -39,28 +40,30 @@ export function AppShell({ children }: { children: ReactNode }) {
   return (
     <div className="min-h-dvh bg-canvas text-slate-800">
       <header className="sticky top-0 z-10 border-b border-[#2D3748] bg-[#1E2533]">
-        <div className="mx-auto flex w-full items-center justify-between px-4 py-4 md:px-8">
-          <div className="flex items-center gap-3">
+        <div className="mx-auto flex w-full flex-wrap lg:flex-nowrap items-center justify-between gap-y-3 px-4 py-3.5 md:px-8">
+          <div className="flex items-center gap-3 shrink-0">
             <div className="grid h-9 w-9 place-items-center rounded-xl bg-[#38BDF8] text-xs font-semibold text-[#0F172A]">
               ICU
             </div>
-            <div className="leading-tight">
-              <div className="text-sm font-semibold tracking-wide text-[#E2E8F0]">ICU 護理分配決策支援系統</div>
+            <div className="leading-tight shrink-0">
+              <div className="text-sm font-semibold tracking-wide text-[#E2E8F0] whitespace-nowrap">ICU 護理分配決策支援系統</div>
             </div>
           </div>
 
-          <nav className="hidden items-center gap-2 md:flex">
+          <nav className="hidden items-center gap-1.5 md:flex w-full lg:w-auto order-last lg:order-none overflow-x-auto scrollbar-none py-1 justify-start lg:justify-center">
             <TopNavLink to="/nurse/overview">護理師首頁</TopNavLink>
             <TopNavLink to="/nurse/burden-form">麻煩度填寫</TopNavLink>
             <TopNavLink to="/nurse/stat">突發性醫囑</TopNavLink>
-            <div className="mx-2 h-5 w-px bg-[#2D3748]" />
+            <div className="mx-1 h-5 w-px bg-[#2D3748] shrink-0" />
             <TopNavLink to="/leader/allocation">指派分床配對</TopNavLink>
             <TopNavLink to="/leader/allocation-result">查看分床結果</TopNavLink>
             <TopNavLink to="/leader/war-room">戰情室</TopNavLink>
             <TopNavLink to="/leader/handover-snapshots">交班紀錄</TopNavLink>
+            <div className="mx-1 h-5 w-px bg-[#2D3748] shrink-0" />
+            <TopNavLink to="/doctor/stat">醫師發布醫囑</TopNavLink>
           </nav>
 
-          <div className="flex flex-col items-end gap-1 sm:flex-row sm:items-center sm:gap-2">
+          <div className="flex items-center gap-2 shrink-0">
             <div className="relative" ref={dropdownRef}>
               <button
                 type="button"
@@ -76,7 +79,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                     : shifts.length === 0
                     ? '無班別資料'
                     : selectedShift
-                    ? formatShiftOption(selectedShift)
+                    ? formatShiftOption(selectedShift, userId)
                     : '選擇班別'}
                 </span>
                 <span className="text-[10px] text-slate-500" aria-hidden="true">▼</span>
@@ -106,7 +109,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                         ) : (
                           <span className="w-3" />
                         )}
-                        <span className="truncate">{formatShiftOption(s)}</span>
+                        <span className="truncate">{formatShiftOption(s, userId)}</span>
                       </button>
                     )
                   })}
@@ -169,6 +172,7 @@ export function AppShell({ children }: { children: ReactNode }) {
       </header>
 
       <main className="mx-auto w-full px-4 py-5 md:px-8">{children}</main>
+      <StatNotification />
     </div>
   )
 }
@@ -179,7 +183,7 @@ function TopNavLink({ to, children }: { to: string; children: ReactNode }) {
       to={to}
       className={({ isActive }) =>
         [
-          'rounded-md px-3 py-1.5 text-sm font-medium transition-colors',
+          'rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors whitespace-nowrap shrink-0',
           isActive
             ? 'bg-[#E2E8F0] text-[#1E2533] active:bg-[#243047] active:text-[#E2E8F0]'
             : 'text-[#94A3B8] hover:text-[#E2E8F0] active:bg-[#E2E8F0] active:text-[#1E2533]',

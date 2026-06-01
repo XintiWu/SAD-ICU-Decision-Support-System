@@ -36,6 +36,7 @@ export type ApiShift = {
   endsAt: string
   status: string
   chargeNurse: { id: string; shortName: string } | null
+  nurseIds?: string[]
 }
 
 export type ApiAdmission = {
@@ -227,6 +228,21 @@ export type HandoffData = {
     handoffDiagnosis: string
     burdenDetail: string
   }>
+}
+
+export async function createStatOrder(payload: {
+  shiftId: string
+  admissionId: string
+  title: string
+  kind: '給藥' | '檢查' | '監測' | '治療' | '其他'
+  orderedBy: string
+  reason?: string
+}): Promise<ApiStatOrder> {
+  return apiPost<ApiStatOrder>('/stat-orders', payload)
+}
+
+export async function importStatOrders(shiftId: string): Promise<ApiStatOrder[]> {
+  return apiPost<ApiStatOrder[]>('/stat-orders/import', { shiftId })
 }
 
 export async function apiGet<T>(path: string, opts?: ApiRequestOptions): Promise<T> {
