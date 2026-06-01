@@ -390,9 +390,9 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     const sortOrders = new Map(nurses.map((n) => [n.id, 0]))
     const assignedBeds = new Map(nurses.map((n) => [n.id, []]))
     const MAX_BED_GAP = 2
-    // 小組長床數上限：低於平均，讓合計保持最低
+    // 小組長床數上限：比平均少1床（至少1床），讓合計保持最低
     const avgBeds = admissions.length / nurses.length
-    const MAX_CHARGE_BEDS = Math.max(1, Math.floor(avgBeds) - 1)
+    const MAX_CHARGE_BEDS = Math.max(1, Math.round(avgBeds) - 1)
 
     for (const admission of admissions.sort((a, b) => b.score - a.score)) {
       const seniorityKey = (n) => (n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年'))
