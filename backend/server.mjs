@@ -236,6 +236,7 @@ async function handleRequest(req, res) {
         shiftId: body.shiftId,
         targetShiftId: body.targetShiftId,
         userId: getUserId(req, url) ?? body.createdBy,
+        dryRun: body.dryRun === true,
       }),
     }, 201)
     return

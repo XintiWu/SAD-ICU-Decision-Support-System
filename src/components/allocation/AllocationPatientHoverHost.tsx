@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState, type ReactNode } from 'react'
+import { useCallback, useRef, useState, type ReactNode, type CSSProperties } from 'react'
 import { createPortal } from 'react-dom'
 import { AllocationPatientHoverDetail } from './AllocationPatientHoverDetail'
 import { useOptionalAllocationCatalog } from './useAllocationCatalog'
@@ -12,14 +12,30 @@ type Props = {
 export function AllocationPatientHoverHost({ patientId, children, disabled }: Props) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
-  const [pos, setPos] = useState<{ left: number; top: number } | null>(null)
+  const [posStyle, setPosStyle] = useState<CSSProperties | null>(null)
   const catalogCtx = useOptionalAllocationCatalog()
 
   const updatePosition = useCallback(() => {
     const el = anchorRef.current
     if (!el) return
     const rect = el.getBoundingClientRect()
-    setPos({ left: rect.left, top: rect.bottom + 8 })
+    
+    const estimatedHeight = 320 // Estimated height of hover card detail
+    const spaceBelow = window.innerHeight - rect.bottom
+
+    if (spaceBelow < estimatedHeight && rect.top > spaceBelow) {
+      // Place above the card
+      setPosStyle({
+        left: rect.left,
+        bottom: window.innerHeight - rect.top + 8,
+      })
+    } else {
+      // Place below the card
+      setPosStyle({
+        left: rect.left,
+        top: rect.bottom + 8,
+      })
+    }
   }, [])
 
   const patient = catalogCtx?.getBed(patientId) ?? null
@@ -44,11 +60,11 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
       onBlur={handleLeave}
     >
       {children}
-      {open && pos && patient && !disabled
+      {open && posStyle && patient && !disabled
         ? createPortal(
             <div
               className="pointer-events-none fixed z-[100]"
-              style={{ left: pos.left, top: pos.top }}
+              style={posStyle}
               role="tooltip"
             >
               <AllocationPatientHoverDetail patient={patient} className="!static !mt-0 shadow-xl" />
@@ -59,3 +75,4 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
     </div>
   )
 }
+

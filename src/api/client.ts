@@ -154,6 +154,27 @@ export type AllocationPatient = {
   isManualOverride: boolean
 }
 
+export type DecisionCandidate = {
+  nurseId: string
+  displayName: string
+  shortName: string
+  currentLoad: number
+  seniorityLevel: string
+  seniorityRank: number
+  hasNearbyBed: boolean
+}
+
+export type DecisionLog = {
+  admissionId: string
+  bedLabel: string
+  patientName: string
+  score: number
+  isHighBurden: boolean
+  minLoad: number
+  candidates: DecisionCandidate[]
+  chosenNurseId: string
+}
+
 export type AllocationRun = {
   allocationRunId: string | null
   shiftId: string
@@ -168,6 +189,7 @@ export type AllocationRun = {
     load: number
     patients: AllocationPatient[]
   }>
+  decisionLogs?: DecisionLog[] | null
   stats: {
     totalBeds: number
     totalNurses: number
