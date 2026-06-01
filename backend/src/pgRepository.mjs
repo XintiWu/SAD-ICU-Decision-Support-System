@@ -387,12 +387,21 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   const MAX_BED_GAP = 2
   const decisionLogs = []
 
+  // 小組長床數上限：比平均少1床（至少1床），讓合計保持最低
+  const avgBeds = admissions.length / (nurses.length || 1)
+  const MAX_CHARGE_BEDS = Math.max(1, Math.round(avgBeds) - 1)
+
   for (const admission of admissions.sort((a, b) => b.score - a.score)) {
     const seniorityKey = (n) => (n.role === 'charge_nurse' ? 'charge_nurse' : (n.seniorityLevel ?? '4-10年'))
     const patientBedNo = bedNo(admission.bedLabel)
 
     const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
-    const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
+    const nearMin = nurses.filter((n) => {
+      // 小組長達到床數上限後不再納入候選（除非所有人都超標）
+      if (n.role === 'charge_nurse' && assignedBeds.get(n.id).length >= MAX_CHARGE_BEDS) return false
+      return (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE
+    })
+    const nearMinCandidates = nearMin.length > 0 ? nearMin : nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
 
     const isHighBurden = admission.score >= avgScore
     const hasNearbyBed = (n) => {
@@ -401,7 +410,7 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     }
 
     // Record candidate information before sorting
-    const candidates = nearMin.map((n) => {
+    const candidates = nearMinCandidates.map((n) => {
       const seniorityRank = SENIORITY_RANK[seniorityKey(n)] ?? 2
       return {
         nurseId: n.id,
@@ -414,7 +423,7 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
       }
     })
 
-    const selected = [...nearMin].sort((a, b) => {
+    const selected = [...nearMinCandidates].sort((a, b) => {
       const ra = SENIORITY_RANK[seniorityKey(a)] ?? 2
       const rb = SENIORITY_RANK[seniorityKey(b)] ?? 2
       // Original seniority sorting: High burden -> Junior first (ra - rb); Low burden -> Senior first (rb - ra)
@@ -1251,6 +1260,36 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
   )
   const snapshotId = snapshotResult.rows[0].id
 
+  // look up next shift's confirmed allocation to fill next_nurse
+  const nextShiftResult = await client.query(
+    `
+    select ar.id as run_id
+    from allocation_runs ar
+    join shifts s on s.id = ar.shift_id
+    join shifts cur on cur.id = $1
+    where s.unit_name = cur.unit_name
+      and s.starts_at >= cur.ends_at
+      and ar.status = 'confirmed'
+    order by s.starts_at asc
+    limit 1
+    `,
+    [shiftId],
+  )
+  const nextRunId = nextShiftResult.rows[0]?.run_id ?? null
+  const nextNurseMap = new Map()
+  if (nextRunId) {
+    const nextItems = await client.query(
+      `
+      select ai.admission_id, n.short_name
+      from allocation_items ai
+      join nurses n on n.id = ai.nurse_id
+      where ai.allocation_run_id = $1
+      `,
+      [nextRunId],
+    )
+    for (const row of nextItems.rows) nextNurseMap.set(row.admission_id, row.short_name)
+  }
+
   let sortOrder = 0
   for (const nurseRow of run.byNurse) {
     for (const patient of nurseRow.patients) {
@@ -1278,7 +1317,7 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
           admission.admittedAt,
           admission.attendingPhysician,
           nurseRow.shortName,
-          nurseRow.shortName,
+          nextNurseMap.get(patient.admissionId) ?? '—',
           patient.score,
           admission.diagnosis,
           burdenDetailText(burden),
