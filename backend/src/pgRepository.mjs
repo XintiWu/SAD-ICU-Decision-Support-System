@@ -160,18 +160,18 @@ async function resolveOnDutyCharge(shift) {
 export async function listNurses({ shiftId } = {}) {
   const params = []
   let join = ''
+  let selectRole = 'u.role as role'
   let where = 'where n.is_active = true'
-  let roleSelect = 'u.role'
   if (shiftId) {
     params.push(shiftId)
     join = 'join shift_nurses sn on sn.nurse_id = n.id'
+    selectRole = 'coalesce(sn.role, u.role) as role'
     where += ' and sn.shift_id = $1'
-    roleSelect = 'coalesce(sn.role, u.role)'
   }
   const result = await query(
     `
     select n.id, n.display_name, n.short_name, n.seniority_level, n.is_active,
-      ${roleSelect} as role
+      ${selectRole}
     from nurses n
     join users u on u.id = n.id
     ${join}
