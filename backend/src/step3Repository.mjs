@@ -1,5 +1,5 @@
 import { randomUUID } from 'node:crypto'
-import { admissions, ids } from './step1Data.mjs'
+import { admissions, ids, shifts } from './step1Data.mjs'
 import { ApiError, getCurrentUser, listAdmissions, listNurses } from './step1Repository.mjs'
 import { burdenAssessments, objectiveFactorDefinitions, subjectiveFactorDefinitions } from './step2Data.mjs'
 import { allocationItems, allocationRuns } from './step3Data.mjs'
@@ -32,7 +32,7 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
     targetShiftId,
     createdBy: user.id,
     status: 'draft',
-    algorithmVersion: 'seniority-aware-v1',
+    algorithmVersion: 'seniority-aware-v2',
     suggestedAt: new Date().toISOString(),
     confirmedAt: null,
   }
@@ -45,6 +45,11 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
   const TOLERANCE = 5
   const MAX_BED_GAP = 2
 
+  const shift = shifts.find((s) => s.id === shiftId)
+  const isNightShift = shift?.shiftKey === 'night'
+  const MAX_CHARGE_BEDS = 1
+  const MAX_NURSE_BEDS = isNightShift ? 3 : 2
+
   // 由高分到低分排列病人
   const patientScores = admissionsWithScores(shiftId).sort((a, b) => b.score - a.score)
   const avgScore = patientScores.length
@@ -54,9 +59,17 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
   for (const patient of patientScores) {
     const patientBedNo = bedNo(patient.bedLabel)
 
-    // 找最低負載，保留負載在容差 5 分內的候選人
+    // 找最低負載，保留負載在容差 5 分內且未超過床數上限的候選人
     const minLoad = Math.min(...nurses.map((n) => loads.get(n.id) ?? 0))
-    const nearMin = nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
+    const nearMin = nurses.filter((n) => {
+      const cap = n.role === 'charge_nurse' ? MAX_CHARGE_BEDS : MAX_NURSE_BEDS
+      if (assignedBeds.get(n.id).length >= cap) return false
+      return (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE
+    })
+    // fallback：全員都到上限時放寬床數限制（確保所有病人都能被分配）
+    const candidates = nearMin.length > 0
+      ? nearMin
+      : nurses.filter((n) => (loads.get(n.id) ?? 0) <= minLoad + TOLERANCE)
 
     // 主要：高分病人給資淺的，低分病人給資深的；同年資時優先選床位較近的
     const isHighBurden = patient.score >= avgScore
@@ -64,7 +77,7 @@ export function suggestAllocationRun({ shiftId = ids.currentShift, targetShiftId
       const beds = assignedBeds.get(n.id)
       return beds.length === 0 || beds.some((b) => Math.abs(b - patientBedNo) <= MAX_BED_GAP)
     }
-    const selected = [...nearMin].sort((a, b) => {
+    const selected = [...candidates].sort((a, b) => {
       const rankA = SENIORITY_RANK[a.role === 'charge_nurse' ? 'charge_nurse' : (a.seniorityLevel ?? '4-10年')] ?? 2
       const rankB = SENIORITY_RANK[b.role === 'charge_nurse' ? 'charge_nurse' : (b.seniorityLevel ?? '4-10年')] ?? 2
       const bySeniority = isHighBurden ? rankA - rankB : rankB - rankA
