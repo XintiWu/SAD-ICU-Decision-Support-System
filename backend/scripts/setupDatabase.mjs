@@ -129,6 +129,15 @@ async function seedCompleteDemoData(client) {
 }
 
 async function upsertBurdenValue(client, assessmentId, factorId, numberValue, booleanValue, levelValue, points) {
+  const assessmentExists = await client.query(
+    'select 1 from burden_assessments where id = $1',
+    [assessmentId],
+  )
+
+  if (assessmentExists.rowCount === 0) {
+    return
+  }
+
   await client.query(
     `
     insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
