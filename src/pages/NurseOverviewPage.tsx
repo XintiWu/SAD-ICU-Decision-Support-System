@@ -89,17 +89,6 @@ function NurseOverviewPageBody() {
     chargeNurseId: chargeNurseId ?? overview.onDutyCharge?.id,
   })
 
-  function getCurrentHourShiftKey(): 'day' | 'evening' | 'night' {
-    const hour = new Date().getHours()
-    if (hour >= 7 && hour < 15) {
-      return 'day'
-    } else if (hour >= 15 && hour < 23) {
-      return 'evening'
-    } else {
-      return 'night'
-    }
-  }
-
   return (
     <div className="grid gap-6">
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
