@@ -87,6 +87,48 @@ export function getNurseOverview({ shiftId = ids.currentShift, userId = ids.curr
   const assignment = currentAssignments.find((item) => item.shiftId === shiftId && item.nurseId === currentUser.id)
   const assignedIds = new Set(assignment?.admissionIds ?? [])
 
+  const shiftDateStr = new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Taipei'
+  }).format(new Date(shift.startsAt)).replace(/\//g, '-')
+
+  const dailyShifts = shifts.filter(s => {
+    const sDateStr = new Intl.DateTimeFormat('zh-TW', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      timeZone: 'Asia/Taipei'
+    }).format(new Date(s.startsAt)).replace(/\//g, '-')
+    return sDateStr === shiftDateStr
+  })
+  
+  const dailyRoster = dailyShifts.map(s => {
+    const sNurses = shiftNurses
+      .filter(sn => sn.shiftId === s.id)
+      .map(sn => {
+        const n = nurses.find(nurse => nurse.id === sn.nurseId)
+        return {
+          id: sn.nurseId,
+          shortName: n?.shortName ?? '—',
+          displayName: n?.displayName ?? '—',
+          seniorityLevel: n?.seniorityLevel ?? null,
+          role: sn.role
+        }
+      })
+    return {
+      id: s.id,
+      shiftKey: s.shiftKey,
+      startsAt: s.startsAt,
+      endsAt: s.endsAt,
+      status: s.status,
+      chargeNurseId: s.chargeNurseId,
+      chargeNurseName: nurses.find(n => n.id === s.chargeNurseId)?.shortName ?? '—',
+      nurses: sNurses
+    }
+  })
+
   return {
     shift: {
       id: shift.id,
@@ -95,6 +137,7 @@ export function getNurseOverview({ shiftId = ids.currentShift, userId = ids.curr
     onDutyCharge: nurseRef(shift.chargeNurseId),
     myPatients: allPatients.filter((item) => assignedIds.has(item.admissionId)),
     allPatients,
+    dailyRoster
   }
 }
 
@@ -186,5 +229,132 @@ function ageOnDate(birthDate, asOfDate) {
 function bedNo(label) {
   const match = label.match(/\d+/)
   return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+}
+
+export function importRoster({ startDate, schedule }) {
+  const parsedStartDate = new Date(startDate);
+  const dayOffsets = {
+    '第一天': 0, '第二天': 1, '第三天': 2, '第四天': 3,
+    '第五天': 4, '第六天': 5, '第七天': 6
+  };
+  const shiftKeys = {
+    '白班': 'day',
+    '小夜班': 'evening',
+    '大夜班': 'night'
+  };
+
+  const results = [];
+
+  for (const item of schedule) {
+    const offset = dayOffsets[item.day];
+    if (offset === undefined) continue;
+    const shiftKey = shiftKeys[item.shift];
+    if (!shiftKey) continue;
+
+    const date = new Date(parsedStartDate);
+    date.setDate(date.getDate() + offset);
+    const dateStr = date.toISOString().split('T')[0];
+
+    let startsAt, endsAt;
+    if (shiftKey === 'day') {
+      startsAt = `${dateStr}T07:00:00+08:00`;
+      endsAt = `${dateStr}T15:00:00+08:00`;
+    } else if (shiftKey === 'evening') {
+      startsAt = `${dateStr}T15:00:00+08:00`;
+      endsAt = `${dateStr}T23:00:00+08:00`;
+    } else {
+      startsAt = `${dateStr}T23:00:00+08:00`;
+      const nextDate = new Date(date);
+      nextDate.setDate(nextDate.getDate() + 1);
+      const nextDateStr = nextDate.toISOString().split('T')[0];
+      endsAt = `${nextDateStr}T07:00:00+08:00`;
+    }
+
+    let sRow = shifts.find(s => s.unitName === 'ICU' && s.startsAt === startsAt && s.endsAt === endsAt);
+    if (sRow) {
+      for (let i = shiftNurses.length - 1; i >= 0; i--) {
+        if (shiftNurses[i].shiftId === sRow.id) {
+          shiftNurses.splice(i, 1);
+        }
+      }
+    } else {
+      sRow = {
+        id: `mock-shift-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`,
+        unitName: 'ICU',
+        shiftKey,
+        startsAt,
+        endsAt,
+        chargeNurseId: null,
+        status: 'confirmed'
+      };
+      shifts.push(sRow);
+    }
+
+    const parsedNurses = [];
+    for (const [seniorityCat, nurseNames] of Object.entries(item.nurses)) {
+      if (!nurseNames || !Array.isArray(nurseNames)) continue;
+      for (const name of nurseNames) {
+        let n = nurses.find(nurse => nurse.shortName === name.trim());
+        if (!n) {
+          const newId = `mock-nurse-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+          n = {
+            id: newId,
+            displayName: name.trim(),
+            shortName: name.trim(),
+            seniorityLevel: seniorityCat.includes('1-4年') ? '1-4年' : seniorityCat,
+            isActive: true
+          };
+          nurses.push(n);
+          users.push({
+            id: newId,
+            name: name.trim(),
+            role: 'nurse',
+            employeeNo: `MOCK_N_${Date.now()}`
+          });
+        }
+        parsedNurses.push({
+          id: n.id,
+          name: n.shortName,
+          seniority: seniorityCat,
+          role: users.find(u => u.id === n.id)?.role ?? 'nurse'
+        });
+      }
+    }
+
+    let chargeNurse = parsedNurses.find(n => n.role === 'charge_nurse');
+    if (!chargeNurse) {
+      const priority = ['15年以上', '10-15年', '4-10年', '1-4年', '1年以下'];
+      for (const p of priority) {
+        const matched = parsedNurses.filter(n => p.includes(n.seniority) || n.seniority.includes(p));
+        if (matched.length > 0) {
+          chargeNurse = matched[0];
+          break;
+        }
+      }
+    }
+    if (!chargeNurse && parsedNurses.length > 0) {
+      chargeNurse = parsedNurses[0];
+    }
+
+    sRow.chargeNurseId = chargeNurse ? chargeNurse.id : null;
+
+    for (const pn of parsedNurses) {
+      shiftNurses.push({
+        shiftId: sRow.id,
+        nurseId: pn.id,
+        role: pn.id === sRow.chargeNurseId ? 'charge_nurse' : 'nurse'
+      });
+    }
+
+    results.push({
+      shiftId: sRow.id,
+      date: dateStr,
+      shiftKey,
+      nurseCount: parsedNurses.length,
+      chargeNurseName: chargeNurse ? chargeNurse.name : '—'
+    });
+  }
+
+  return results;
 }
 

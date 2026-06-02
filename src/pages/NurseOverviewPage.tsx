@@ -6,10 +6,28 @@ import { formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/useShift'
 import { useUser } from '../context/useUser'
 
+type DailyRosterItem = {
+  id: string
+  shiftKey: 'day' | 'evening' | 'night'
+  startsAt: string
+  endsAt: string
+  status: string
+  chargeNurseId: string | null
+  chargeNurseName: string
+  nurses: {
+    id: string
+    shortName: string
+    displayName: string
+    seniorityLevel: string | null
+    role: string
+  }[]
+}
+
 type OverviewData = {
   onDutyCharge: { id?: string; shortName: string }
   myPatients: ApiAdmission[]
   allPatients: ApiAdmission[]
+  dailyRoster?: DailyRosterItem[]
 }
 
 export function NurseOverviewPage() {
@@ -71,6 +89,17 @@ function NurseOverviewPageBody() {
     chargeNurseId: chargeNurseId ?? overview.onDutyCharge?.id,
   })
 
+  function getCurrentHourShiftKey(): 'day' | 'evening' | 'night' {
+    const hour = new Date().getHours()
+    if (hour >= 7 && hour < 15) {
+      return 'day'
+    } else if (hour >= 15 && hour < 23) {
+      return 'evening'
+    } else {
+      return 'night'
+    }
+  }
+
   return (
     <div className="grid gap-6">
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
@@ -89,6 +118,81 @@ function NurseOverviewPageBody() {
           />
         </div>
       </section>
+
+      {/* Daily Roster Section (Simplified Table) */}
+      {overview.dailyRoster && overview.dailyRoster.length > 0 && (
+        <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
+          <div className="text-sm font-semibold text-slate-900">今日護理師班表</div>
+          <p className="text-xs text-slate-500 mt-1">顯示當日各時段的護理人力與組長配置</p>
+          
+          <div className="mt-4 overflow-hidden rounded-2xl border border-slate-100">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead className="bg-[#fafaf8] text-xs text-slate-600 border-b border-slate-200/60 font-semibold">
+                <tr>
+                  <th className="px-4 py-3">時段</th>
+                  <th className="px-4 py-3">當班小組長</th>
+                  <th className="px-4 py-3">當班護理人員</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100 bg-white">
+                {['day', 'evening', 'night'].map((key) => {
+                  const item = overview.dailyRoster?.find((r) => r.shiftKey === key)
+                  const shiftName = key === 'day' ? '白班' : key === 'evening' ? '小夜班' : '大夜班'
+                  const timeRange = key === 'day' ? '07:00 - 15:00' : key === 'evening' ? '15:00 - 23:00' : '23:00 - 07:00'
+                  
+                  const isSelectedShift = item?.id === shiftId
+
+                  if (!item) {
+                    return (
+                      <tr key={key} className="text-slate-400">
+                        <td className="px-4 py-3 font-semibold">{shiftName} <span className="text-xs text-slate-400 font-normal">({timeRange})</span></td>
+                        <td className="px-4 py-3">—</td>
+                        <td className="px-4 py-3">無排班資料</td>
+                      </tr>
+                    )
+                  }
+
+                  return (
+                    <tr
+                      key={key}
+                      className={[
+                        'hover:bg-slate-50/50 transition-colors',
+                        isSelectedShift ? 'bg-emerald-50/60' : ''
+                      ].join(' ')}
+                    >
+                      <td className="px-4 py-3">
+                        <span className="font-semibold text-slate-900">{shiftName}</span>
+                        <span className="text-xs text-slate-500 block sm:inline sm:ml-2">({timeRange})</span>
+                      </td>
+                      <td className="px-4 py-3">
+                        <span className="rounded-full bg-amber-50 px-2.5 py-0.5 text-xs font-bold text-amber-800 ring-1 ring-amber-200">
+                          {item.chargeNurseName || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-3 text-xs text-slate-700">
+                        {item.nurses.map((n, nIdx) => {
+                          const isUser = n.id === userId
+                          return (
+                            <span key={n.id}>
+                              {nIdx > 0 && <span className="text-slate-300 mx-1">、</span>}
+                              <span
+                                className={isUser ? 'text-blue-600 font-bold' : ''}
+                              >
+                                {n.shortName}
+                                {isUser && <span className="text-[10px] font-normal text-slate-500 ml-0.5">(您)</span>}
+                              </span>
+                            </span>
+                          )
+                        })}
+                      </td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">
         <div className="text-sm font-semibold text-slate-900">我的病患</div>

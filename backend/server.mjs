@@ -24,6 +24,7 @@ import {
   createStatOrder,
   importDemoStatOrders,
   updateTask,
+  importRoster,
 } from './src/runtimeRepository.mjs'
 
 const port = Number(process.env.PORT ?? 8787)
@@ -161,6 +162,18 @@ async function handleRequest(req, res) {
     if (!shiftId) throw new ApiError(400, 'MISSING_PARAM', 'shiftId required')
     sendJson(res, {
       data: await importDemoStatOrders({ shiftId }),
+    }, 201)
+    return
+  }
+
+  if (url.pathname === '/api/v1/roster/import') {
+    assertMethod(req, 'POST')
+    const body = await readJsonBody(req)
+    const { startDate, schedule } = body
+    if (!startDate) throw new ApiError(400, 'MISSING_PARAM', 'startDate 為必填')
+    if (!schedule || !Array.isArray(schedule)) throw new ApiError(400, 'MISSING_PARAM', 'schedule 格式不合法')
+    sendJson(res, {
+      data: await importRoster({ startDate, schedule }),
     }, 201)
     return
   }

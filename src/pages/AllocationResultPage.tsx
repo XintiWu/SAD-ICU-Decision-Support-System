@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import type { ReactNode } from 'react'
 import { Link } from 'react-router-dom'
-import { apiGet, type HandoffData, type BurdenAssessment } from '../api/client'
+import { apiGet, type HandoffData } from '../api/client'
 import { formatNurseByShortName, formatNurseDisplay } from '../lib/nurseLabel'
 import { useShift } from '../context/useShift'
 
@@ -18,7 +18,6 @@ export function AllocationResultPage() {
 function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
   const { selectedShift } = useShift()
   const [handoff, setHandoff] = useState<HandoffData | null>(null)
-  const [burdens, setBurdens] = useState<BurdenAssessment[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [chargeName, setChargeName] = useState<string | null>(null)
@@ -29,13 +28,11 @@ function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
     Promise.all([
       apiGet<HandoffData>(`/handoff-sheets?shiftId=${shiftId}`),
       apiGet<OverviewMeta>(`/nurse/overview?shiftId=${shiftId}`),
-      apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`).catch(() => []),
     ])
-      .then(([handoffData, overview, burdenData]) => {
+      .then(([handoffData, overview]) => {
         if (!alive) return
         setHandoff(handoffData)
         setChargeName(overview.onDutyCharge?.shortName ?? null)
-        setBurdens(burdenData)
         setError(null)
       })
       .catch((err: Error) => {
@@ -57,8 +54,6 @@ function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
     const high = rows.filter((row) => row.burdenScore >= 22).length
     return { changed, high, total: rows.length }
   }, [handoff?.rows])
-
-  const burdenMap = useMemo(() => new Map(burdens.map((b) => [b.admissionId, b])), [burdens])
 
   const rows = handoff?.rows ?? []
 

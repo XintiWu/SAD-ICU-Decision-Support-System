@@ -128,6 +128,11 @@ export function AppShell({ children }: { children: ReactNode }) {
                     </div>
                     {[...nurses]
                       .sort((a, b) => {
+                        const aIsLeader = a.id === chargeNurseId ? 1 : 0
+                        const bIsLeader = b.id === chargeNurseId ? 1 : 0
+                        if (aIsLeader !== bIsLeader) {
+                          return bIsLeader - aIsLeader
+                        }
                         const aOnDuty = selectedShift?.nurseIds?.includes(a.id) ? 1 : 0
                         const bOnDuty = selectedShift?.nurseIds?.includes(b.id) ? 1 : 0
                         return bOnDuty - aOnDuty
@@ -179,6 +184,7 @@ export function AppShell({ children }: { children: ReactNode }) {
             <TopNavLink to="/leader/allocation-result">查看分床結果</TopNavLink>
             <TopNavLink to="/leader/war-room">戰情室</TopNavLink>
             <TopNavLink to="/leader/handover-snapshots">交班紀錄</TopNavLink>
+            <TopNavLink to="/leader/roster-import">匯入班表</TopNavLink>
             <div className="mx-1.5 h-5 w-px bg-[#2D3748] shrink-0" />
             <TopNavLink to="/doctor/stat">醫師發布醫囑</TopNavLink>
           </nav>

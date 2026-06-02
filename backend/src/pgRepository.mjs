@@ -271,11 +271,68 @@ export async function getNurseOverview({ shiftId, userId = ids.currentNurse } = 
     [shift.id, user.id],
   )
   const assignedIds = new Set(assigned.rows.map((row) => row.admission_id))
+
+  const date = new Date(shift.starts_at)
+  const localDateStr = new Intl.DateTimeFormat('zh-TW', {
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    timeZone: 'Asia/Taipei'
+  }).format(date).replace(/\//g, '-')
+
+  const dailyShiftsResult = await query(
+    `
+    select s.*, n.short_name as charge_short_name
+    from shifts s
+    left join nurses n on n.id = s.charge_nurse_id
+    where (s.starts_at at time zone 'Asia/Taipei')::date = $1::date
+    order by s.starts_at
+    `,
+    [localDateStr]
+  )
+  
+  const dailyShiftIds = dailyShiftsResult.rows.map(s => s.id)
+  let dailyRoster = []
+  if (dailyShiftIds.length > 0) {
+    const shiftNursesResult = await query(
+      `
+      select sn.shift_id, sn.role, n.id as nurse_id, n.short_name, n.display_name, n.seniority_level
+      from shift_nurses sn
+      join nurses n on n.id = sn.nurse_id
+      where sn.shift_id = any($1)
+      `,
+      [dailyShiftIds]
+    )
+    
+    dailyRoster = dailyShiftsResult.rows.map(s => {
+      const nurses = shiftNursesResult.rows
+        .filter(sn => sn.shift_id === s.id)
+        .map(sn => ({
+          id: sn.nurse_id,
+          shortName: sn.short_name,
+          displayName: sn.display_name,
+          seniorityLevel: sn.seniority_level,
+          role: sn.role
+        }))
+      return {
+        id: s.id,
+        shiftKey: s.shift_key,
+        startsAt: s.starts_at.toISOString ? s.starts_at.toISOString() : s.starts_at,
+        endsAt: s.ends_at.toISOString ? s.ends_at.toISOString() : s.ends_at,
+        status: s.status,
+        chargeNurseId: s.charge_nurse_id,
+        chargeNurseName: s.charge_short_name ?? '—',
+        nurses
+      }
+    })
+  }
+
   return {
     shift: { id: shift.id, label: shiftLabel(shift) },
     onDutyCharge: await resolveOnDutyCharge(shift),
     myPatients: allPatients.filter((admission) => assignedIds.has(admission.admissionId)),
     allPatients,
+    dailyRoster
   }
 }
 
@@ -1645,4 +1702,160 @@ export async function importDemoStatOrders({ shiftId }) {
   }
 
   return inserted
+}
+
+export async function importRoster({ startDate, schedule }) {
+  const parsedStartDate = new Date(startDate);
+  
+  const dayOffsets = {
+    '第一天': 0, '第二天': 1, '第三天': 2, '第四天': 3,
+    '第五天': 4, '第六天': 5, '第七天': 6
+  };
+  
+  const shiftKeys = {
+    '白班': 'day',
+    '小夜班': 'evening',
+    '大夜班': 'night'
+  };
+
+  const seniorityMapping = {
+    '15年以上': '15年以上',
+    '10-15年': '10-15年',
+    '4-10年': '4-10年',
+    '1-4年': '1-4年',
+    '1-4年以下': '1-4年',
+    '1年以下': '1年以下'
+  };
+
+  const results = [];
+
+  await withTransaction(async (client) => {
+    async function upsertNurse(name, rawSeniority) {
+      const cleanName = name.trim();
+      const existing = await client.query('select id from nurses where short_name = $1', [cleanName]);
+      if (existing.rows[0]) {
+        return existing.rows[0].id;
+      }
+      const userId = randomUUID();
+      const employeeNo = `TEMP_N_${Date.now()}_${Math.floor(Math.random() * 10000)}`;
+      const seniorityLevel = seniorityMapping[rawSeniority] || '4-10年';
+      
+      await client.query(
+        `insert into users (id, name, role, employee_no) values ($1, $2, 'nurse', $3)`,
+        [userId, cleanName, employeeNo]
+      );
+      await client.query(
+        `insert into nurses (id, display_name, short_name, seniority_level, is_active) values ($1, $2, $2, $3, true)`,
+        [userId, cleanName, seniorityLevel]
+      );
+      return userId;
+    }
+
+    for (const item of schedule) {
+      const offset = dayOffsets[item.day];
+      if (offset === undefined) continue;
+
+      const shiftKey = shiftKeys[item.shift];
+      if (!shiftKey) continue;
+
+      const date = new Date(parsedStartDate);
+      date.setDate(date.getDate() + offset);
+      const dateStr = date.toISOString().split('T')[0];
+
+      let startsAtStr, endsAtStr;
+      if (shiftKey === 'day') {
+        startsAtStr = `${dateStr}T07:00:00+08:00`;
+        endsAtStr = `${dateStr}T15:00:00+08:00`;
+      } else if (shiftKey === 'evening') {
+        startsAtStr = `${dateStr}T15:00:00+08:00`;
+        endsAtStr = `${dateStr}T23:00:00+08:00`;
+      } else {
+        startsAtStr = `${dateStr}T23:00:00+08:00`;
+        const nextDate = new Date(date);
+        nextDate.setDate(nextDate.getDate() + 1);
+        const nextDateStr = nextDate.toISOString().split('T')[0];
+        endsAtStr = `${nextDateStr}T07:00:00+08:00`;
+      }
+
+      const startsAt = new Date(startsAtStr);
+      const endsAt = new Date(endsAtStr);
+
+      let shiftId;
+      const existingShift = await client.query(
+        `select id, status from shifts where unit_name = 'ICU' and starts_at = $1 and ends_at = $2`,
+        [startsAt, endsAt]
+      );
+
+      let status = 'confirmed';
+      if (existingShift.rows[0]) {
+        shiftId = existingShift.rows[0].id;
+        status = existingShift.rows[0].status;
+        await client.query(`delete from shift_nurses where shift_id = $1`, [shiftId]);
+      } else {
+        shiftId = randomUUID();
+        await client.query(
+          `insert into shifts (id, unit_name, shift_key, starts_at, ends_at, status) values ($1, 'ICU', $2, $3, $4, $5)`,
+          [shiftId, shiftKey, startsAt, endsAt, status]
+        );
+      }
+
+      const nursesWithInfo = [];
+      for (const [seniorityCat, nurseNames] of Object.entries(item.nurses)) {
+        if (!nurseNames || !Array.isArray(nurseNames)) continue;
+        for (const name of nurseNames) {
+          const nurseId = await upsertNurse(name, seniorityCat);
+          const userResult = await client.query('select role from users where id = $1', [nurseId]);
+          const userRole = userResult.rows[0]?.role ?? 'nurse';
+          
+          nursesWithInfo.push({
+            id: nurseId,
+            name,
+            seniority: seniorityCat,
+            dbRole: userRole
+          });
+        }
+      }
+
+      let chargeNurse = nursesWithInfo.find(n => n.dbRole === 'charge_nurse');
+      if (!chargeNurse) {
+        const priority = ['15年以上', '10-15年', '4-10年', '1-4年', '1年以下'];
+        for (const p of priority) {
+          const matched = nursesWithInfo.filter(n => p.includes(n.seniority) || n.seniority.includes(p));
+          if (matched.length > 0) {
+            chargeNurse = matched[0];
+            break;
+          }
+        }
+      }
+      if (!chargeNurse && nursesWithInfo.length > 0) {
+        chargeNurse = nursesWithInfo[0];
+      }
+
+      const chargeNurseId = chargeNurse ? chargeNurse.id : null;
+
+      await client.query(
+        `update shifts set charge_nurse_id = $1 where id = $2`,
+        [chargeNurseId, shiftId]
+      );
+
+      for (const nurse of nursesWithInfo) {
+        const isCharge = nurse.id === chargeNurseId;
+        await client.query(
+          `insert into shift_nurses (shift_id, nurse_id, role) values ($1, $2, $3)
+           on conflict (shift_id, nurse_id) do update set role = $3`,
+          [shiftId, nurse.id, isCharge ? 'charge_nurse' : 'nurse']
+        );
+      }
+
+      results.push({
+        shiftId,
+        date: dateStr,
+        shiftKey,
+        nurseCount: nursesWithInfo.length,
+        chargeNurseName: chargeNurse ? chargeNurse.name : '—'
+      });
+    }
+  });
+
+  return results;
 }

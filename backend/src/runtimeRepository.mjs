@@ -1,5 +1,5 @@
 import * as pg from './pgRepository.mjs'
-import { getCurrentShift as memGetCurrentShift, listShifts as memListShifts } from './step1Repository.mjs'
+import { getCurrentShift as memGetCurrentShift, listShifts as memListShifts, importRoster as memImportRoster } from './step1Repository.mjs'
 
 function useMemoryFallback(error) {
   const code = error?.code
@@ -51,5 +51,12 @@ export async function listShifts(opts = {}) {
   return withFallback(
     () => pg.listShifts(opts),
     () => memListShifts(opts),
+  )
+}
+
+export async function importRoster(opts = {}) {
+  return withFallback(
+    () => pg.importRoster(opts),
+    () => memImportRoster(opts),
   )
 }
