@@ -225,6 +225,8 @@ export type HandoffData = {
     currentNurse: string
     nextNurse: string
     burdenScore: number
+    objectiveScore?: number
+    subjectiveScore?: number
     handoffDiagnosis: string
     burdenDetail: string
   }>

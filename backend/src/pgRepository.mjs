@@ -1378,13 +1378,15 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
       if (!admission) continue
       sortOrder += 1
       const burden = burdenByAdmission.get(patient.admissionId)
+      const objectiveScore = burden ? Number(burden.score.objectiveTotal) : patient.score
+      const subjectiveScore = burden ? Number(burden.score.subjectiveTotal) : 0
       await client.query(
         `
         insert into handoff_rows (
           snapshot_id, admission_id, sort_order,
           bed_label, patient_name, diagnosis, sex, age, admitted_at, attending_physician,
-          current_nurse, next_nurse, burden_score, handoff_diagnosis, burden_detail
-        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15)
+          current_nurse, next_nurse, burden_score, objective_score, subjective_score, handoff_diagnosis, burden_detail
+        ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
         `,
         [
           snapshotId,
@@ -1400,6 +1402,8 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
           nurseRow.shortName,
           nextNurseMap.get(patient.admissionId) ?? '—',
           patient.score,
+          objectiveScore,
+          subjectiveScore,
           admission.diagnosis,
           burdenDetailText(burden),
         ],
@@ -1470,6 +1474,8 @@ function formatHandoffRowFromDb(row) {
     currentNurse: row.current_nurse,
     nextNurse: row.next_nurse,
     burdenScore: Number(row.burden_score),
+    objectiveScore: Number(row.objective_score ?? 0),
+    subjectiveScore: Number(row.subjective_score ?? 0),
     handoffDiagnosis: row.handoff_diagnosis,
     burdenDetail: row.burden_detail,
   }

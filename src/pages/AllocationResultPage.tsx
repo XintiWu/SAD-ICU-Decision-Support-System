@@ -137,9 +137,8 @@ function AllocationResultPageBody({ shiftId }: { shiftId: string }) {
           </thead>
           <tbody className="bg-[#fafaf8]">
             {rows.map((row) => {
-              const b = burdenMap.get(row.admissionId)
-              const objScore = b?.score.objectiveTotal ?? row.burdenScore
-              const subScore = b?.score.subjectiveTotal ?? 0
+              const objScore = row.objectiveScore ?? row.burdenScore
+              const subScore = row.subjectiveScore ?? 0
               return (
                 <tr key={row.admissionId} className="border-t border-black/10">
                   <Td strong>{row.bedLabel}</Td>

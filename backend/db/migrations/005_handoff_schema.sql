@@ -30,6 +30,8 @@ create table handoff_rows (
   current_nurse varchar(40) not null,
   next_nurse varchar(40) not null,
   burden_score int not null,
+  objective_score int not null default 0,
+  subjective_score int not null default 0,
   handoff_diagnosis text not null,
   burden_detail text not null default '',
   unique (snapshot_id, admission_id)
