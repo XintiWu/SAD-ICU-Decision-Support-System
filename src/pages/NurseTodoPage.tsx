@@ -43,7 +43,7 @@ function NurseTodoPageBody({ shiftId }: { shiftId: string }) {
     return () => {
       alive = false
     }
-  }, [shiftId])
+  }, [shiftId, userId])
 
   const shown = useMemo(() => {
     if (kindFilter.size === 0) return orders

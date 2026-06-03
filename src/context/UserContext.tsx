@@ -39,7 +39,7 @@ export function UserProvider({ children }: { children: ReactNode }) {
   // Fetch user profile when userId changes
   useEffect(() => {
     let alive = true
-    setLoading(true)
+    setTimeout(() => { if (alive) setLoading(true) }, 0)
     apiGet<ApiUser>('/me', { userId })
       .then((data) => {
         if (!alive) return

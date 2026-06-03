@@ -29,12 +29,12 @@ export function DoctorStatPage() {
     onSuccess: () => {
       // Invalidate both local cache and global stat orders if needed
       queryClient.invalidateQueries({ queryKey: ['stat-orders'] })
-      alert('✅ 突發醫囑發布成功！')
+      alert('突發醫囑發布成功！')
       setTitle('')
       setReason('')
       setAdmissionId('')
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       alert(`發布失敗: ${err.message}`)
     }
   })
@@ -45,7 +45,7 @@ export function DoctorStatPage() {
       queryClient.invalidateQueries({ queryKey: ['stat-orders'] })
       alert('📥 已成功匯入本班所有預設突發事件！護理端將即時觸發通知卡片。')
     },
-    onError: (err: any) => {
+    onError: (err: Error) => {
       alert(`匯入失敗: ${err.message}`)
     }
   })

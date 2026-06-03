@@ -50,7 +50,7 @@ export function RosterImportPage() {
         const workbook = XLSX.read(data, { type: 'array' })
         const sheetName = workbook.SheetNames[0]
         const worksheet = workbook.Sheets[sheetName]
-        const rows = XLSX.utils.sheet_to_json<any[]>(worksheet, { header: 1 })
+        const rows = XLSX.utils.sheet_to_json<Array<string | number | undefined>>(worksheet, { header: 1 })
 
         const schedule: RosterItem[] = []
         let currentDay = ''
@@ -66,11 +66,11 @@ export function RosterImportPage() {
           if (firstVal === '班別') {
             continue
           }
-          if (['白班', '小夜班', '大夜班'].includes(firstVal)) {
+          if (typeof firstVal === 'string' && ['白班', '小夜班', '大夜班'].includes(firstVal)) {
             const shiftName = firstVal
             const totalCount = Number(row[1] ?? 0)
 
-            const parseNurses = (cellVal: any) => {
+            const parseNurses = (cellVal: unknown) => {
               if (!cellVal) return []
               return String(cellVal)
                 .split(/[、,，]/)

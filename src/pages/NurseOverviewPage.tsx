@@ -88,7 +88,6 @@ function NurseOverviewPageBody() {
     nurseId: userId,
     chargeNurseId: chargeNurseId ?? overview.onDutyCharge?.id,
   })
-
   return (
     <div className="grid gap-6">
       <section className="rounded-2xl bg-white p-6 ring-1 ring-black/10">

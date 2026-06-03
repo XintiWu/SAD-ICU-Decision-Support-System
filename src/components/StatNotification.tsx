@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { apiGet, type ApiStatOrder } from '../api/client'
 import { useShift } from '../context/useShift'
@@ -70,7 +70,7 @@ function StatToast({ order, onDismiss }: ToastProps) {
 export function StatNotification() {
   const { shiftId } = useShift()
   const location = useLocation()
-  const [seenIds, setSeenIds] = useState<Set<string>>(new Set())
+  const seenIds = useRef<Set<string>>(new Set())
   const [toasts, setToasts] = useState<ApiStatOrder[]>([])
 
   const isDoctorPage = location.pathname === '/doctor/stat'
@@ -98,26 +98,22 @@ export function StatNotification() {
     if (isDoctorPage) return
     if (!statOrders || statOrders.length === 0) return
 
-    const newOrders = statOrders.filter(o => !seenIds.has(o.id) && o.status === 'pending')
+    const newOrders = statOrders.filter(o => !seenIds.current.has(o.id) && o.status === 'pending')
     
     if (newOrders.length > 0) {
-      setSeenIds(prev => {
-        const next = new Set(prev)
-        newOrders.forEach(o => next.add(o.id))
-        return next
-      })
+      newOrders.forEach(o => seenIds.current.add(o.id))
 
       // Add new orders to the toast list
       // If this is the initial load (seenIds is empty), we probably don't want to show a toast for everything,
       // but if we do, the user gets notified immediately. To prevent notification storm on load:
-      if (seenIds.size > 0) {
+      if (seenIds.current.size > newOrders.length) {
         setToasts(prev => [...prev, ...newOrders].slice(-3)) // keep max 3 toasts
       } else {
         // Initial load: just mark them as seen
-        setSeenIds(new Set(statOrders.map(o => o.id)))
+        statOrders.forEach(o => seenIds.current.add(o.id))
       }
     }
-  }, [statOrders, seenIds])
+  }, [statOrders, isDoctorPage])
 
   if (toasts.length === 0) return null
 
