@@ -4,6 +4,8 @@ import { apiGet, type ApiStatOrder } from '../api/client'
 import { useShift } from '../context/useShift'
 import { useNavigate, useLocation } from 'react-router-dom'
 
+import { useUser } from '../context/useUser'
+
 type ToastProps = {
   order: ApiStatOrder
   onDismiss: () => void
@@ -69,6 +71,7 @@ function StatToast({ order, onDismiss }: ToastProps) {
 
 export function StatNotification() {
   const { shiftId } = useShift()
+  const { userId } = useUser()
   const location = useLocation()
   const seenIds = useRef<Set<string>>(new Set())
   const [toasts, setToasts] = useState<ApiStatOrder[]>([])
@@ -77,20 +80,20 @@ export function StatNotification() {
   
   // We only run this polling if shiftId is set and we're NOT on the doctor page
   useQuery({
-    queryKey: ['stat-orders', shiftId],
+    queryKey: ['stat-orders', shiftId, userId],
     queryFn: async () => {
       if (!shiftId) return []
-      const data = await apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${shiftId}&assignee=all`)
+      const data = await apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${shiftId}&assignee=me`, { userId })
       return data
     },
-    enabled: !isDoctorPage && !!shiftId,
+    enabled: !isDoctorPage && !!shiftId && !!userId,
     refetchInterval: 1000, // Poll every 1 second (near instant!)
     refetchIntervalInBackground: true,
   })
 
   // Hook into the cache directly via a separate useQuery or listen to data changes
   const { data: statOrders } = useQuery<ApiStatOrder[]>({
-    queryKey: ['stat-orders', shiftId],
+    queryKey: ['stat-orders', shiftId, userId],
     enabled: false, // We rely on the polling query to update the cache
   })
 
