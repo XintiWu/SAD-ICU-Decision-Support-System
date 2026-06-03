@@ -600,6 +600,34 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     gi++
   }
 
+  // ── Phase 2c：補位（護理師 > 分組數時，空手護理師從最重載護理師取邊緣病人）──
+  {
+    const emptyRegular = regularNurses.filter((n) => assignments.get(n.id).length === 0)
+    const emptyCharge = chargeNurse && assignments.get(chargeNurse.id).length === 0 ? [chargeNurse] : []
+    for (const emptyNurse of [...emptyRegular, ...emptyCharge]) {
+      const donor = [...regularNurses]
+        .filter((n) => n.id !== emptyNurse.id && assignments.get(n.id).length >= 2)
+        .sort((a, b) => {
+          const aLoad = assignments.get(a.id).reduce((s, p) => s + p.score, 0)
+          const bLoad = assignments.get(b.id).reduce((s, p) => s + p.score, 0)
+          return bLoad - aLoad
+        })[0]
+      if (!donor) continue
+
+      const donorPatients = assignments.get(donor.id)
+      const beds = donorPatients.map((p) => bedNo(p.bedLabel))
+      const medBed = (Math.min(...beds) + Math.max(...beds)) / 2
+      const edgePatient = [...donorPatients].sort(
+        (a, b) => Math.abs(bedNo(b.bedLabel) - medBed) - Math.abs(bedNo(a.bedLabel) - medBed),
+      )[0]
+
+      assignments.set(donor.id, donorPatients.filter((p) => p.admissionId !== edgePatient.admissionId))
+      assignments.get(emptyNurse.id).push(edgePatient)
+      currentLoads.set(donor.id, (currentLoads.get(donor.id) ?? 0) - edgePatient.score)
+      currentLoads.set(emptyNurse.id, (currentLoads.get(emptyNurse.id) ?? 0) + edgePatient.score)
+    }
+  }
+
   // ── Phase 2b：溢出病人（病人數 > 護理師容量）──
   // 優先分配給有鄰近床位的護理師，確保盡量維持 ±2
   const overflow = allAdmissions.filter((p) => !assigned.has(p.admissionId))
