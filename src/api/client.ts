@@ -174,6 +174,7 @@ export type DecisionLog = {
   minLoad: number
   candidates: DecisionCandidate[]
   chosenNurseId: string
+  phase?: 1 | 2 | null
 }
 
 export type AllocationRun = {

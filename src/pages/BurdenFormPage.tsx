@@ -37,9 +37,7 @@ function findPreviousShift(shifts: { id: string; startsAt: string; label: string
 function buildScoresMap(rows: BurdenFormRow[]): Partial<Record<string, BedScore>> {
   const scores: Partial<Record<string, BedScore>> = {}
   for (const row of rows) {
-    const subjective = row.subjective ? subjectiveTotal(row.subjective) : 0
-    const objective = objectiveTotal(row.objective)
-    scores[row.admissionId] = { total: subjective + objective, subjective, objective }
+    scores[row.admissionId] = { total: row.score.totalScore, subjective: row.score.subjectiveTotal, objective: row.score.objectiveTotal }
   }
   return scores
 }
@@ -260,7 +258,7 @@ function BurdenFormPageBody() {
           <div className="-mx-6 px-6">
             <div className="grid gap-3 lg:grid-cols-2">
               {rows.map((row) => {
-                const total = objectiveTotal(row.objective)
+                const total = row.score.objectiveTotal
 
                 return (
                   <div key={row.admissionId} className="rounded-2xl bg-white p-5 ring-1 ring-black/10">
@@ -454,9 +452,9 @@ function statusPill(total: number) {
 
 function SubjectivePatientReadonlyCard({ row }: { row: BurdenFormRow }) {
   const s = row.subjective
-  const sTotal = row.subjective ? subjectiveTotal(s) : 0
-  const oTotal = objectiveTotal(row.objective)
-  const total = sTotal + oTotal
+  const sTotal = row.score.subjectiveTotal
+  const oTotal = row.score.objectiveTotal
+  const total = row.score.totalScore
   const status = statusPill(total)
 
   const yesNo = (v: boolean) => (v ? '是' : '否')
@@ -519,9 +517,9 @@ function SubjectiveSummarySingle({ rows }: { rows: BurdenFormRow[] }) {
       </div>
       <div className="divide-y divide-black/10">
         {rows.map((row) => {
-          const s = row.subjective ? subjectiveTotal(row.subjective) : 0
-          const o = objectiveTotal(row.objective)
-          const total = s + o
+          const s = row.score.subjectiveTotal
+          const o = row.score.objectiveTotal
+          const total = row.score.totalScore
           const status = statusPill(total)
           return (
             <div key={row.admissionId} className="flex items-start justify-between gap-3 px-4 py-3">
@@ -696,9 +694,9 @@ function SubjectiveSummary({
       </div>
       <div className="divide-y divide-black/10">
         {rows.map((row) => {
-          const sTotal = subjectiveTotal(row.subjective)
-          const oTotal = objectiveTotal(row.objective)
-          const total = sTotal + oTotal
+          const sTotal = row.score.subjectiveTotal
+          const oTotal = row.score.objectiveTotal
+          const total = row.score.totalScore
           const status = statusPill(total)
           const prev = previousScores[row.admissionId]
           const prevStatus = prev ? statusPill(prev.total) : null

@@ -521,14 +521,43 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   // nurseId -> [patient, ...]；index 0 = Phase 1 分配的病人
   const assignments = new Map(allNurses.map((n) => [n.id, []]))
   const assigned = new Set()
+  const currentLoads = new Map(allNurses.map((n) => [n.id, 0]))
+  const avgScore = patientsByScore.length > 0
+    ? patientsByScore.reduce((s, p) => s + p.score, 0) / patientsByScore.length
+    : 0
+  const decisionLogMap = new Map()
+
+  const nurseSnapshot = (n, hasNearbyBed) => ({
+    nurseId: n.id,
+    shortName: n.shortName,
+    displayName: n.shortName,
+    seniorityLevel: seniorityKey(n),
+    seniorityRank: SENIORITY_RANK[seniorityKey(n)] ?? 2,
+    currentLoad: currentLoads.get(n.id) ?? 0,
+    hasNearbyBed,
+  })
 
   // ── Phase 1：每位護理師分配第一個病人（複雜度優先）──
   // 最年輕的護理師分到最高分病人，依序配對
   for (const nurse of nursesByJuniority) {
     const topPatient = patientsByScore.find((p) => !assigned.has(p.admissionId))
     if (!topPatient) break
+
+    const loadValues = [...currentLoads.values()]
+    decisionLogMap.set(topPatient.admissionId, {
+      admissionId: topPatient.admissionId,
+      bedLabel: topPatient.bedLabel,
+      patientName: topPatient.patientName,
+      score: topPatient.score,
+      isHighBurden: topPatient.score >= avgScore,
+      phase: 1,
+      minLoad: loadValues.length > 0 ? Math.min(...loadValues) : 0,
+      candidates: allNurses.map((n) => nurseSnapshot(n, false)),
+    })
+
     assignments.get(nurse.id).push(topPatient)
     assigned.add(topPatient.admissionId)
+    currentLoads.set(nurse.id, (currentLoads.get(nurse.id) ?? 0) + topPatient.score)
   }
 
   // ── Phase 2：剩餘病人依床位遠近分配（±2 床）──
@@ -546,10 +575,12 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     if (pool.length === 0) break
 
     // 優先選擇已有床位在 ±2 範圍內的護理師
-    const nearby = pool.filter((n) =>
-      assignments.get(n.id).some((p) => Math.abs(bedNo(p.bedLabel) - patBed) <= MAX_BED_GAP),
+    const nearbySet = new Set(
+      pool
+        .filter((n) => assignments.get(n.id).some((p) => Math.abs(bedNo(p.bedLabel) - patBed) <= MAX_BED_GAP))
+        .map((n) => n.id),
     )
-    const candidates = nearby.length > 0 ? nearby : pool
+    const candidates = nearbySet.size > 0 ? pool.filter((n) => nearbySet.has(n.id)) : pool
 
     // 候選人中選負擔最低的（維持整體平衡）
     const selected = [...candidates].sort(
@@ -558,8 +589,21 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
         assignments.get(b.id).reduce((s, p) => s + p.score, 0),
     )[0]
 
+    const poolLoads = pool.map((n) => currentLoads.get(n.id) ?? 0)
+    decisionLogMap.set(patient.admissionId, {
+      admissionId: patient.admissionId,
+      bedLabel: patient.bedLabel,
+      patientName: patient.patientName,
+      score: patient.score,
+      isHighBurden: patient.score >= avgScore,
+      phase: 2,
+      minLoad: poolLoads.length > 0 ? Math.min(...poolLoads) : 0,
+      candidates: pool.map((n) => nurseSnapshot(n, nearbySet.has(n.id))),
+    })
+
     assignments.get(selected.id).push(patient)
     assigned.add(patient.admissionId)
+    currentLoads.set(selected.id, (currentLoads.get(selected.id) ?? 0) + patient.score)
   }
 
   // ── Phase 3：複雜度衝突修正（交換 Phase 1 病人）──
@@ -591,17 +635,26 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     }
   }
 
-  // 整理 decision logs
+  // 整理 decision logs（Phase 3 可能調換 chosenNurseId，以 assignments 最終結果為準）
   const decisionLogs = []
   for (const nurse of allNurses) {
     for (const patient of assignments.get(nurse.id)) {
-      decisionLogs.push({
-        admissionId: patient.admissionId,
-        bedLabel: patient.bedLabel,
-        patientName: patient.patientName,
-        score: patient.score,
-        chosenNurseId: nurse.id,
-      })
+      const entry = decisionLogMap.get(patient.admissionId)
+      decisionLogs.push(
+        entry
+          ? { ...entry, chosenNurseId: nurse.id }
+          : {
+              admissionId: patient.admissionId,
+              bedLabel: patient.bedLabel,
+              patientName: patient.patientName,
+              score: patient.score,
+              isHighBurden: patient.score >= avgScore,
+              phase: null,
+              minLoad: 0,
+              candidates: [],
+              chosenNurseId: nurse.id,
+            },
+      )
     }
   }
 
@@ -923,6 +976,16 @@ async function formatAssessment(row) {
     if (item.category === 'objective') objective[item.code] = value
     else subjective[item.code] = value
   }
+  // Fallback: if no objective values in DB (e.g. seed data only stored totals), use mock data
+  if (Object.keys(objective).length === 0 && row.bed_label) {
+    const mockData = getMockBurdenDataForBed(row.bed_label)
+    if (mockData) Object.assign(objective, mockData.objective)
+  }
+  // Fallback: if no subjective values in DB, use mock data
+  if (Object.keys(subjective).length === 0 && row.bed_label) {
+    const mockData = getMockBurdenDataForBed(row.bed_label)
+    if (mockData) Object.assign(subjective, mockData.subjective)
+  }
   return { assessmentId: row.id, admissionId: row.admission_id, bedLabel: row.bed_label, diagnosis: row.diagnosis, objective, subjective: Object.keys(subjective).length ? subjective : null, score: { objectiveTotal: Number(row.objective_total), subjectiveTotal: Number(row.subjective_total), totalScore: Number(row.total_score), level: burdenLevel(Number(row.total_score)) }, status: row.status, submittedAt: row.submitted_at, updatedAt: row.updated_at }
 }
 
@@ -1153,6 +1216,7 @@ async function admissionOwner(shiftId, admissionId) {
   )
   return result.rows[0] ? { nurseId: result.rows[0].nurse_id } : null
 }
+
 
 function getMockBurdenDataForBed(bedLabel) {
   try {
