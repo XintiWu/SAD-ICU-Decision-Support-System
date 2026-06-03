@@ -537,34 +537,6 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     hasNearbyBed,
   })
 
-  // ── Phase 1：床位鄰近分組（±MAX_BED_GAP 以內成一組）──
-  // 按床號排序，貪婪地把相鄰病人配對成最多 MAX_NURSE_BEDS 人的組
-  const sortedByBed = [...allAdmissions].sort((a, b) => bedNo(a.bedLabel) - bedNo(b.bedLabel))
-  const bedGroups = []
-  const groupedIdx = new Set()
-
-  for (let i = 0; i < sortedByBed.length; i++) {
-    if (groupedIdx.has(i)) continue
-    const group = [sortedByBed[i]]
-    groupedIdx.add(i)
-
-    for (let j = i + 1; j < sortedByBed.length && group.length < MAX_NURSE_BEDS; j++) {
-      if (groupedIdx.has(j)) continue
-      const allBeds = [...group.map((p) => bedNo(p.bedLabel)), bedNo(sortedByBed[j].bedLabel)]
-      if (Math.max(...allBeds) - Math.min(...allBeds) <= MAX_BED_GAP) {
-        group.push(sortedByBed[j])
-        groupedIdx.add(j)
-      }
-    }
-
-    bedGroups.push(group)
-  }
-
-  // ── Phase 2：依總分降序分配整組給護理師 ──
-  // 年資最淺的護理師分到總分最高的分組
-  const groupTotalScore = (g) => g.reduce((s, p) => s + p.score, 0)
-  bedGroups.sort((a, b) => groupTotalScore(b) - groupTotalScore(a))
-
   const regularNurses = nursesByJuniority.filter((n) => n.role !== 'charge_nurse')
   const chargeNurse = allNurses.find((n) => n.role === 'charge_nurse')
 
@@ -587,65 +559,115 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     }
   }
 
-  let gi = 0
-  for (const nurse of regularNurses) {
-    if (gi >= bedGroups.length) break
-    assignGroup(nurse.id, bedGroups[gi], 1)
-    gi++
+  // ── Phase 1：計算各護理師配床配額 ──
+  // 所有護理師（含小組長）一起均分床位，小組長排最後故優先拿基本配額
+  const nurseOrder = [...regularNurses, ...(chargeNurse ? [chargeNurse] : [])]
+  const totalNurses = nurseOrder.length
+  const baseQuota = totalNurses > 0 ? Math.floor(allAdmissions.length / totalNurses) : 0
+  const extraCount = totalNurses > 0 ? allAdmissions.length % totalNurses : 0
+  const nurseQuota = (i) => baseQuota + (i < extraCount ? 1 : 0)
+
+  // ── Phase 2：依配額貪婪形成 ±MAX_BED_GAP 的床位組 ──
+  const sortedByBed = [...allAdmissions].sort((a, b) => bedNo(a.bedLabel) - bedNo(b.bedLabel))
+  const nurseGroups = []
+  let bedIdx = 0
+
+  for (let n = 0; n < totalNurses; n++) {
+    const quota = nurseQuota(n)
+    const group = []
+    while (group.length < quota && bedIdx < sortedByBed.length) {
+      const candidate = sortedByBed[bedIdx]
+      const testBeds = [...group.map((p) => bedNo(p.bedLabel)), bedNo(candidate.bedLabel)]
+      if (group.length === 0 || Math.max(...testBeds) - Math.min(...testBeds) <= MAX_BED_GAP) {
+        group.push(candidate)
+        bedIdx++
+      } else {
+        break
+      }
+    }
+    nurseGroups.push(group)
   }
 
-  // 小組長：最多 MAX_CHARGE_BEDS 個病人，從剩餘分組中取第一個病人
-  if (chargeNurse && gi < bedGroups.length) {
-    assignGroup(chargeNurse.id, bedGroups[gi].slice(0, MAX_CHARGE_BEDS), 1)
-    gi++
+  // ── Phase 3：輕重混配優化（鄰組間單一病人交換）──
+  // 目標：每個有 ≥2 床的護理師至少有一高分（≥均值）和一低分（<均值）病人
+  // 硬約束：交換後兩組均需維持 ±MAX_BED_GAP；否則不交換
+  const groupHasMix = (g) =>
+    g.length <= 1 || (g.some((p) => p.score >= avgScore) && g.some((p) => p.score < avgScore))
+  const groupBedValid = (g) => {
+    if (g.length <= 1) return true
+    const beds = g.map((p) => bedNo(p.bedLabel))
+    return Math.max(...beds) - Math.min(...beds) <= MAX_BED_GAP
   }
 
-  // ── Phase 2c：補位（護理師 > 分組數時，空手護理師從最重載護理師取邊緣病人）──
-  {
-    const emptyRegular = regularNurses.filter((n) => assignments.get(n.id).length === 0)
-    const emptyCharge = chargeNurse && assignments.get(chargeNurse.id).length === 0 ? [chargeNurse] : []
-    for (const emptyNurse of [...emptyRegular, ...emptyCharge]) {
-      const donor = [...regularNurses]
-        .filter((n) => n.id !== emptyNurse.id && assignments.get(n.id).length >= 2)
-        .sort((a, b) => {
-          const aLoad = assignments.get(a.id).reduce((s, p) => s + p.score, 0)
-          const bLoad = assignments.get(b.id).reduce((s, p) => s + p.score, 0)
-          return bLoad - aLoad
-        })[0]
-      if (!donor) continue
+  for (let i = 0; i < nurseGroups.length - 1; i++) {
+    if (groupHasMix(nurseGroups[i]) && groupHasMix(nurseGroups[i + 1])) continue
+    let swapped = false
+    outer: for (const pa of [...nurseGroups[i]]) {
+      for (const pb of [...nurseGroups[i + 1]]) {
+        if ((pa.score >= avgScore) === (pb.score >= avgScore)) continue
+        const newGa = [...nurseGroups[i].filter((p) => p !== pa), pb]
+        const newGb = [...nurseGroups[i + 1].filter((p) => p !== pb), pa]
+        if (groupBedValid(newGa) && groupBedValid(newGb)) {
+          const before = (groupHasMix(nurseGroups[i]) ? 1 : 0) + (groupHasMix(nurseGroups[i + 1]) ? 1 : 0)
+          const after = (groupHasMix(newGa) ? 1 : 0) + (groupHasMix(newGb) ? 1 : 0)
+          if (after > before) {
+            nurseGroups[i] = newGa
+            nurseGroups[i + 1] = newGb
+            swapped = true
+            break outer
+          }
+        }
+      }
+    }
+    if (swapped) i = Math.max(-1, i - 1)
+  }
 
-      const donorPatients = assignments.get(donor.id)
-      const beds = donorPatients.map((p) => bedNo(p.bedLabel))
-      const medBed = (Math.min(...beds) + Math.max(...beds)) / 2
-      const edgePatient = [...donorPatients].sort(
-        (a, b) => Math.abs(bedNo(b.bedLabel) - medBed) - Math.abs(bedNo(a.bedLabel) - medBed),
-      )[0]
+  // ── Phase 4：依負擔重新指派組別（小組長拿最輕、資深拿較輕）──
+  const groupScores = nurseGroups.map((g) => g.reduce((s, p) => s + p.score, 0))
+  const sortedGroupIndices = nurseGroups.map((_, i) => i).sort((a, b) => groupScores[a] - groupScores[b])
 
-      assignments.set(donor.id, donorPatients.filter((p) => p.admissionId !== edgePatient.admissionId))
-      assignments.get(emptyNurse.id).push(edgePatient)
-      currentLoads.set(donor.id, (currentLoads.get(donor.id) ?? 0) - edgePatient.score)
-      currentLoads.set(emptyNurse.id, (currentLoads.get(emptyNurse.id) ?? 0) + edgePatient.score)
+  if (chargeNurse) {
+    // 小組長取最輕的組
+    const lightestIdx = sortedGroupIndices[0]
+    if (nurseGroups[lightestIdx]?.length > 0) {
+      assignGroup(chargeNurse.id, nurseGroups[lightestIdx], 1)
+    }
+    // 剩餘組（輕→重）依序分給一般護理師（資深→資淺）
+    const remainingIndices = sortedGroupIndices.slice(1)
+    const regularBySeniority = [...regularNurses].sort(
+      (a, b) => (SENIORITY_RANK[seniorityKey(b)] ?? 2) - (SENIORITY_RANK[seniorityKey(a)] ?? 2),
+    )
+    for (let i = 0; i < regularBySeniority.length; i++) {
+      const gIdx = remainingIndices[i]
+      if (gIdx !== undefined && nurseGroups[gIdx]?.length > 0) {
+        assignGroup(regularBySeniority[i].id, nurseGroups[gIdx], 1)
+      }
+    }
+  } else {
+    // 無小組長：資深→資淺，對應最輕→最重
+    const nursesBySeniority = [...regularNurses].sort(
+      (a, b) => (SENIORITY_RANK[seniorityKey(b)] ?? 2) - (SENIORITY_RANK[seniorityKey(a)] ?? 2),
+    )
+    for (let i = 0; i < nursesBySeniority.length; i++) {
+      const gIdx = sortedGroupIndices[i]
+      if (gIdx !== undefined && nurseGroups[gIdx]?.length > 0) {
+        assignGroup(nursesBySeniority[i].id, nurseGroups[gIdx], 1)
+      }
     }
   }
 
-  // ── Phase 2b：溢出病人（病人數 > 護理師容量）──
-  // 優先分配給有鄰近床位的護理師，確保盡量維持 ±2
+  // ── Phase 5：溢出病人（±2 無法滿足配額時仍未分配的病人）──
   const overflow = allAdmissions.filter((p) => !assigned.has(p.admissionId))
   for (const patient of overflow.sort((a, b) => b.score - a.score)) {
     const patBed = bedNo(patient.bedLabel)
-    const eligible = allNurses.filter((n) => {
-      const max = n.role === 'charge_nurse' ? MAX_CHARGE_BEDS : MAX_NURSE_BEDS
-      return assignments.get(n.id).length < max
-    })
-    const pool = eligible.length > 0 ? eligible : allNurses.filter((n) => n.role !== 'charge_nurse')
-    if (pool.length === 0) continue
-
+    const pool = nurseOrder
     const nearbySet = new Set(
       pool
         .filter((n) => assignments.get(n.id).some((p) => Math.abs(bedNo(p.bedLabel) - patBed) <= MAX_BED_GAP))
         .map((n) => n.id),
     )
     const candidates = nearbySet.size > 0 ? pool.filter((n) => nearbySet.has(n.id)) : pool
+    if (candidates.length === 0) continue
 
     const selected = [...candidates].sort(
       (a, b) =>
@@ -653,7 +675,6 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
         assignments.get(b.id).reduce((s, p) => s + p.score, 0),
     )[0]
 
-    const poolLoads = pool.map((n) => currentLoads.get(n.id) ?? 0)
     decisionLogMap.set(patient.admissionId, {
       admissionId: patient.admissionId,
       bedLabel: patient.bedLabel,
@@ -661,38 +682,13 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
       score: patient.score,
       isHighBurden: patient.score >= avgScore,
       phase: 2,
-      minLoad: poolLoads.length > 0 ? Math.min(...poolLoads) : 0,
+      minLoad: Math.min(...pool.map((n) => currentLoads.get(n.id) ?? 0)),
       candidates: pool.map((n) => nurseSnapshot(n, nearbySet.has(n.id))),
     })
 
     assignments.get(selected.id).push(patient)
     assigned.add(patient.admissionId)
     currentLoads.set(selected.id, (currentLoads.get(selected.id) ?? 0) + patient.score)
-  }
-
-  // ── Phase 3：複雜度衝突修正（交換整組分配）──
-  // 規則：年資較淺的護理師總分應 >= 年資較深的護理師
-  // 交換整組（非單一病人）以維持床位鄰近性
-  let changed = true
-  let iterations = 0
-  while (changed && iterations < 100) {
-    changed = false
-    iterations++
-    for (let i = 0; i < regularNurses.length - 1; i++) {
-      for (let j = i + 1; j < regularNurses.length; j++) {
-        const junior = regularNurses[i]
-        const senior = regularNurses[j]
-        const juniorTotal = assignments.get(junior.id).reduce((s, p) => s + p.score, 0)
-        const seniorTotal = assignments.get(senior.id).reduce((s, p) => s + p.score, 0)
-        if (juniorTotal < seniorTotal) {
-          const jPatients = [...assignments.get(junior.id)]
-          const sPatients = [...assignments.get(senior.id)]
-          assignments.set(junior.id, sPatients)
-          assignments.set(senior.id, jPatients)
-          changed = true
-        }
-      }
-    }
   }
 
   // 整理 decision logs（Phase 3 可能調換 chosenNurseId，以 assignments 最終結果為準）
@@ -724,7 +720,7 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   const sortOrders = new Map(allNurses.map((n) => [n.id, 0]))
   await withTransaction(async (client) => {
     await client.query(
-      `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','bed-proximity-v2')`,
+      `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','bed-proximity-v4')`,
       [runId, shiftId, targetShiftId ?? shiftId, user.id],
     )
     for (const log of decisionLogs) {
