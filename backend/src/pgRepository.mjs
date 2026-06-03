@@ -537,44 +537,81 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     hasNearbyBed,
   })
 
-  // ── Phase 1：每位護理師分配第一個病人（複雜度優先）──
-  // 最年輕的護理師分到最高分病人，依序配對
-  for (const nurse of nursesByJuniority) {
-    const topPatient = patientsByScore.find((p) => !assigned.has(p.admissionId))
-    if (!topPatient) break
+  // ── Phase 1：床位鄰近分組（±MAX_BED_GAP 以內成一組）──
+  // 按床號排序，貪婪地把相鄰病人配對成最多 MAX_NURSE_BEDS 人的組
+  const sortedByBed = [...allAdmissions].sort((a, b) => bedNo(a.bedLabel) - bedNo(b.bedLabel))
+  const bedGroups = []
+  const groupedIdx = new Set()
 
-    const loadValues = [...currentLoads.values()]
-    decisionLogMap.set(topPatient.admissionId, {
-      admissionId: topPatient.admissionId,
-      bedLabel: topPatient.bedLabel,
-      patientName: topPatient.patientName,
-      score: topPatient.score,
-      isHighBurden: topPatient.score >= avgScore,
-      phase: 1,
-      minLoad: loadValues.length > 0 ? Math.min(...loadValues) : 0,
-      candidates: allNurses.map((n) => nurseSnapshot(n, false)),
-    })
+  for (let i = 0; i < sortedByBed.length; i++) {
+    if (groupedIdx.has(i)) continue
+    const group = [sortedByBed[i]]
+    groupedIdx.add(i)
 
-    assignments.get(nurse.id).push(topPatient)
-    assigned.add(topPatient.admissionId)
-    currentLoads.set(nurse.id, (currentLoads.get(nurse.id) ?? 0) + topPatient.score)
+    for (let j = i + 1; j < sortedByBed.length && group.length < MAX_NURSE_BEDS; j++) {
+      if (groupedIdx.has(j)) continue
+      const allBeds = [...group.map((p) => bedNo(p.bedLabel)), bedNo(sortedByBed[j].bedLabel)]
+      if (Math.max(...allBeds) - Math.min(...allBeds) <= MAX_BED_GAP) {
+        group.push(sortedByBed[j])
+        groupedIdx.add(j)
+      }
+    }
+
+    bedGroups.push(group)
   }
 
-  // ── Phase 2：剩餘病人依床位遠近分配（±2 床）──
-  // 小組長已達上限(1)，不參與此輪
-  const remaining = patientsByScore.filter((p) => !assigned.has(p.admissionId))
-  for (const patient of remaining) {
+  // ── Phase 2：依總分降序分配整組給護理師 ──
+  // 年資最淺的護理師分到總分最高的分組
+  const groupTotalScore = (g) => g.reduce((s, p) => s + p.score, 0)
+  bedGroups.sort((a, b) => groupTotalScore(b) - groupTotalScore(a))
+
+  const regularNurses = nursesByJuniority.filter((n) => n.role !== 'charge_nurse')
+  const chargeNurse = allNurses.find((n) => n.role === 'charge_nurse')
+
+  const assignGroup = (nurseId, group, phase) => {
+    const loadValues = [...currentLoads.values()]
+    for (const patient of group) {
+      decisionLogMap.set(patient.admissionId, {
+        admissionId: patient.admissionId,
+        bedLabel: patient.bedLabel,
+        patientName: patient.patientName,
+        score: patient.score,
+        isHighBurden: patient.score >= avgScore,
+        phase,
+        minLoad: loadValues.length > 0 ? Math.min(...loadValues) : 0,
+        candidates: allNurses.map((n) => nurseSnapshot(n, false)),
+      })
+      assignments.get(nurseId).push(patient)
+      assigned.add(patient.admissionId)
+      currentLoads.set(nurseId, (currentLoads.get(nurseId) ?? 0) + patient.score)
+    }
+  }
+
+  let gi = 0
+  for (const nurse of regularNurses) {
+    if (gi >= bedGroups.length) break
+    assignGroup(nurse.id, bedGroups[gi], 1)
+    gi++
+  }
+
+  // 小組長：最多 MAX_CHARGE_BEDS 個病人，從剩餘分組中取第一個病人
+  if (chargeNurse && gi < bedGroups.length) {
+    assignGroup(chargeNurse.id, bedGroups[gi].slice(0, MAX_CHARGE_BEDS), 1)
+    gi++
+  }
+
+  // ── Phase 2b：溢出病人（病人數 > 護理師容量）──
+  // 優先分配給有鄰近床位的護理師，確保盡量維持 ±2
+  const overflow = allAdmissions.filter((p) => !assigned.has(p.admissionId))
+  for (const patient of overflow.sort((a, b) => b.score - a.score)) {
     const patBed = bedNo(patient.bedLabel)
     const eligible = allNurses.filter((n) => {
       const max = n.role === 'charge_nurse' ? MAX_CHARGE_BEDS : MAX_NURSE_BEDS
       return assignments.get(n.id).length < max
     })
-
-    // 全員都到上限時放寬床數限制，確保所有病人都能被分配
     const pool = eligible.length > 0 ? eligible : allNurses.filter((n) => n.role !== 'charge_nurse')
-    if (pool.length === 0) break
+    if (pool.length === 0) continue
 
-    // 優先選擇已有床位在 ±2 範圍內的護理師
     const nearbySet = new Set(
       pool
         .filter((n) => assignments.get(n.id).some((p) => Math.abs(bedNo(p.bedLabel) - patBed) <= MAX_BED_GAP))
@@ -582,7 +619,6 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     )
     const candidates = nearbySet.size > 0 ? pool.filter((n) => nearbySet.has(n.id)) : pool
 
-    // 候選人中選負擔最低的（維持整體平衡）
     const selected = [...candidates].sort(
       (a, b) =>
         assignments.get(a.id).reduce((s, p) => s + p.score, 0) -
@@ -606,10 +642,9 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     currentLoads.set(selected.id, (currentLoads.get(selected.id) ?? 0) + patient.score)
   }
 
-  // ── Phase 3：複雜度衝突修正（交換 Phase 1 病人）──
+  // ── Phase 3：複雜度衝突修正（交換整組分配）──
   // 規則：年資較淺的護理師總分應 >= 年資較深的護理師
-  // 若違反，交換兩人的第一個（Phase 1）病人直到沒有衝突
-  const regularNurses = nursesByJuniority.filter((n) => n.role !== 'charge_nurse')
+  // 交換整組（非單一病人）以維持床位鄰近性
   let changed = true
   let iterations = 0
   while (changed && iterations < 100) {
@@ -622,14 +657,11 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
         const juniorTotal = assignments.get(junior.id).reduce((s, p) => s + p.score, 0)
         const seniorTotal = assignments.get(senior.id).reduce((s, p) => s + p.score, 0)
         if (juniorTotal < seniorTotal) {
-          const jList = assignments.get(junior.id)
-          const sList = assignments.get(senior.id)
-          if (jList.length > 0 && sList.length > 0) {
-            const tmp = jList[0]
-            jList[0] = sList[0]
-            sList[0] = tmp
-            changed = true
-          }
+          const jPatients = [...assignments.get(junior.id)]
+          const sPatients = [...assignments.get(senior.id)]
+          assignments.set(junior.id, sPatients)
+          assignments.set(senior.id, jPatients)
+          changed = true
         }
       }
     }
@@ -664,7 +696,7 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   const sortOrders = new Map(allNurses.map((n) => [n.id, 0]))
   await withTransaction(async (client) => {
     await client.query(
-      `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','proximity-seniority-v1')`,
+      `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','bed-proximity-v2')`,
       [runId, shiftId, targetShiftId ?? shiftId, user.id],
     )
     for (const log of decisionLogs) {
@@ -936,6 +968,7 @@ function formatShift(row) {
     endsAt: row.ends_at,
     chargeNurse: { id: row.charge_nurse_id, shortName: row.charge_short_name },
     status: row.status,
+    hidden: row.hidden ?? false,
     nurseIds: row.nurse_ids || [],
   }
 }

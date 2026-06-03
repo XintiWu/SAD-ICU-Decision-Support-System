@@ -24,6 +24,7 @@ create table shifts (
   ends_at timestamptz not null,
   charge_nurse_id uuid references nurses(id),
   status varchar(20) not null default 'open' check (status in ('open', 'allocating', 'confirmed', 'closed')),
+  hidden boolean not null default false,
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now(),
   check (starts_at < ends_at)

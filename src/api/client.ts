@@ -35,6 +35,7 @@ export type ApiShift = {
   startsAt: string
   endsAt: string
   status: string
+  hidden?: boolean
   chargeNurse: { id: string; shortName: string } | null
   nurseIds?: string[]
 }

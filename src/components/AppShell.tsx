@@ -57,7 +57,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                 <button
                   type="button"
                   id="shift-select"
-                  disabled={loading || shifts.length === 0}
+                  disabled={loading || shifts.filter((s) => !s.hidden).length === 0}
                   onClick={() => setDropdownOpen((prev) => !prev)}
                   className="flex items-center justify-between gap-2 max-w-[min(100vw-12rem,18rem)] truncate rounded-full border-0 bg-white px-3.5 py-1 text-xs font-semibold text-[#1E2533] shadow-sm ring-1 ring-black/10 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-[#38BDF8]/50 disabled:opacity-60 cursor-pointer active:scale-[0.98] transition-all"
                   title={selectedShift?.label ?? error ?? undefined}
@@ -65,7 +65,7 @@ export function AppShell({ children }: { children: ReactNode }) {
                   <span className="truncate">
                     {loading
                       ? '載入班別…'
-                      : shifts.length === 0
+                      : shifts.filter((s) => !s.hidden).length === 0
                         ? '無班別資料'
                         : selectedShift
                           ? formatShiftOption(selectedShift, userId)
@@ -76,7 +76,7 @@ export function AppShell({ children }: { children: ReactNode }) {
 
                 {dropdownOpen && (
                   <div className="absolute right-0 mt-2 w-80 rounded-2xl bg-white text-slate-800 shadow-xl ring-1 ring-black/10 z-50 p-2 py-1.5 max-h-80 overflow-y-auto">
-                    {shifts.map((s) => {
+                    {shifts.filter((s) => !s.hidden).map((s) => {
                       const isSelected = s.id === shiftId
                       return (
                         <button
