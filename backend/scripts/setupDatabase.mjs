@@ -43,12 +43,16 @@ async function main() {
   await app.end()
   console.log(`Database ready: ${appUrl}`)
 
-  const { confirmAllocationRun } = await import('../src/pgRepository.mjs')
-  await confirmAllocationRun({
-    allocationRunId: '00000000-0000-0000-0000-000000000901',
-    userId: '00000000-0000-0000-0000-000000000110',
+  const { confirmAllocationRun, suggestAllocationRun } = await import('../src/pgRepository.mjs')
+  const firstRun = await suggestAllocationRun({
+    shiftId: '00000000-0000-0000-0000-000000000201',
+    userId: ids.chargeNurse,
   })
-  console.log('Demo handoff snapshot ready for allocation run 901')
+  await confirmAllocationRun({
+    allocationRunId: firstRun.allocationRunId,
+    userId: ids.chargeNurse,
+  })
+  console.log('第一班（5/19 白班）的預分配資料已就緒，後續班次均保持未分配狀態！')
 }
 
 function quoteIdent(value) {

@@ -6,6 +6,7 @@ import { confirmAllocationRun, suggestAllocationRun } from '../src/pgRepository.
 import { ids } from '../src/step1Data.mjs'
 
 const SIX_SHIFTS = [
+  '00000000-0000-0000-0000-000000000201',
   '00000000-0000-0000-0000-000000000202',
   '00000000-0000-0000-0000-000000000203',
   '00000000-0000-0000-0000-000000000204',
