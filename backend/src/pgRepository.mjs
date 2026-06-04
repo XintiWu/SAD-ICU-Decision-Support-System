@@ -1558,7 +1558,6 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
   if (existing.rows[0]) return existing.rows[0].id
 
   const shiftId = run.shiftId
-  const targetShiftId = run.targetShiftId ?? shiftId
   const admissions = await listAdmissions({ shiftId, status: 'active' })
   const burdens = await listBurdenAssessments({ shiftId, scope: 'all' })
   const statOrders = await listStatOrders({ shiftId })
@@ -1578,7 +1577,7 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
     `,
     [
       allocationRunId,
-      targetShiftId,
+      shiftId,
       userId ?? null,
       patientCount,
       run.byNurse.length,

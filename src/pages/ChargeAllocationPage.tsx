@@ -73,7 +73,7 @@ export function ChargeAllocationPage() {
 
 function ChargeAllocationPageBody() {
   const navigate = useNavigate()
-  const { shiftId, selectedShift, shifts, setShiftId } = useShift()
+  const { shiftId, selectedShift, shifts } = useShift()
 
   const targetShiftId = useMemo(() => {
     const currentShift = shifts.find(s => s.id === shiftId)
@@ -405,9 +405,6 @@ function ChargeAllocationPageBody() {
     try {
       await apiPost<AllocationRun>(`/allocation-runs/${allocationRunId}/confirm`, {}, leaderOpts)
       setConfirmOpen(false)
-      if (targetShiftId) {
-        setShiftId(targetShiftId)
-      }
       navigate('/leader/allocation-result', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : '確認分床失敗')
