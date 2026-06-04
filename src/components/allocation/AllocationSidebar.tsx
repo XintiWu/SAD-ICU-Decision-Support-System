@@ -22,6 +22,7 @@ type Props = {
   onConfirm: () => void
   confirmDisabled?: boolean
   readonly?: boolean
+  onRevertToDraft?: () => void
 }
 
 export function AllocationSidebar({
@@ -34,6 +35,7 @@ export function AllocationSidebar({
   onConfirm,
   confirmDisabled,
   readonly,
+  onRevertToDraft,
 }: Props) {
   const maxBar = Math.max(stats.max, 1)
 
@@ -104,16 +106,35 @@ export function AllocationSidebar({
       ) : null}
 
       <div className="shrink-0 space-y-2 border-t border-black/5 pt-4">
-        <button
-          type="button"
-          onClick={onConfirm}
-          disabled={confirmDisabled || readonly}
-          className="w-full rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-50"
-        >
-          確認送出分床
-        </button>
+        {readonly ? (
+          <>
+            <button
+              type="button"
+              disabled
+              className="w-full rounded-xl bg-slate-100 px-4 py-2.5 text-sm font-semibold text-slate-400 cursor-not-allowed border border-black/5"
+            >
+              已送出
+            </button>
+            <button
+              type="button"
+              onClick={onRevertToDraft}
+              className="w-full rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/90 transition"
+            >
+              修改分床
+            </button>
+          </>
+        ) : (
+          <button
+            type="button"
+            onClick={onConfirm}
+            disabled={confirmDisabled}
+            className="w-full rounded-xl bg-black px-4 py-2.5 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-50"
+          >
+            確認送出分床
+          </button>
+        )}
         <p className="text-[11px] leading-relaxed text-slate-500">
-          送出後寫入資料庫並更新「查看分床結果」與戰情室。
+          {readonly ? '此分床已發布確認。點擊「修改分床」以重新編輯與發布。' : '送出後寫入資料庫並更新「查看分床結果」與戰情室。'}
         </p>
       </div>
     </aside>

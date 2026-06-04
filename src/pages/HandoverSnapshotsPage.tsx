@@ -19,7 +19,7 @@ function HandoverSnapshotsPageBody({ shiftId }: { shiftId: string }) {
 
   useEffect(() => {
     let alive = true
-    apiGet<HandoffSnapshotListItem[]>(`/handoff-snapshots?shiftId=${shiftId}`)
+    apiGet<HandoffSnapshotListItem[]>(`/handoff-snapshots`)
       .then((data) => {
         if (!alive) return
         setItems(data)
@@ -63,7 +63,7 @@ function HandoverSnapshotsPageBody({ shiftId }: { shiftId: string }) {
               <div className="text-[11px] font-semibold tracking-wide text-slate-600">HANDOVER ARCHIVE</div>
               <h1 className="mt-1 text-lg font-extrabold tracking-tight text-slate-900">交班快照紀錄</h1>
               <p className="mt-1 text-sm text-slate-600">
-                依右上角<strong className="font-bold text-slate-800">班別</strong>顯示該班已封存的交班快照。若要新增，請至{' '}
+                顯示所有班別已封存的交班快照。若要新增，請至{' '}
                 <Link to="/leader/allocation" className="font-semibold text-slate-900 underline underline-offset-2">
                   指派分床配對
                 </Link>{' '}

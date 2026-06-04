@@ -743,7 +743,7 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
 export async function getLatestAllocationRun({ shiftId } = {}) {
   if (!shiftId) throw new ApiError(400, 'VALIDATION_ERROR', 'shiftId 為必填', { field: 'shiftId' })
   const result = await query(
-    `select id from allocation_runs where shift_id = $1 order by (status = 'draft') desc, suggested_at desc limit 1`,
+    `select id from allocation_runs where shift_id = $1 order by (status = 'confirmed') desc, suggested_at desc limit 1`,
     [shiftId],
   )
   if (!result.rows[0]) return null
@@ -816,6 +816,20 @@ export async function confirmAllocationRun({ allocationRunId, userId } = {}) {
       [allocationRunId, userId ?? null],
     )
     await persistHandoffSnapshot(client, { allocationRunId, userId, run })
+  })
+  return getAllocationRun({ allocationRunId })
+}
+
+export async function revertAllocationRunToDraft({ allocationRunId } = {}) {
+  await withTransaction(async (client) => {
+    await client.query(
+      `update allocation_runs set status = 'draft', confirmed_at = null where id = $1`,
+      [allocationRunId],
+    )
+    await client.query(
+      `delete from handoff_snapshots where allocation_run_id = $1`,
+      [allocationRunId],
+    )
   })
   return getAllocationRun({ allocationRunId })
 }

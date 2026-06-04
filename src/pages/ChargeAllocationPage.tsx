@@ -73,7 +73,7 @@ export function ChargeAllocationPage() {
 
 function ChargeAllocationPageBody() {
   const navigate = useNavigate()
-  const { shiftId, selectedShift, shifts } = useShift()
+  const { shiftId, selectedShift, shifts, setShiftId } = useShift()
 
   const targetShiftId = useMemo(() => {
     const currentShift = shifts.find(s => s.id === shiftId)
@@ -405,11 +405,25 @@ function ChargeAllocationPageBody() {
     try {
       await apiPost<AllocationRun>(`/allocation-runs/${allocationRunId}/confirm`, {}, leaderOpts)
       setConfirmOpen(false)
+      if (targetShiftId) {
+        setShiftId(targetShiftId)
+      }
       navigate('/leader/allocation-result', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : '確認分床失敗')
     } finally {
       setConfirming(false)
+    }
+  }
+
+  async function handleRevertToDraft() {
+    if (!allocationRunId) return
+    try {
+      await apiPost(`/allocation-runs/${allocationRunId}/revert-to-draft`, {})
+      setRunStatus('draft')
+      setError(null)
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '撤回分床至草稿失敗')
     }
   }
 
@@ -539,6 +553,7 @@ function ChargeAllocationPageBody() {
             onConfirm={() => setConfirmOpen(true)}
             confirmDisabled={!allocationRunId || confirming || unassigned.length > 0}
             readonly={readonly}
+            onRevertToDraft={handleRevertToDraft}
           />
         </div>
       </div>

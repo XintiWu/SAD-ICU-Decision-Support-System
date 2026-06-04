@@ -19,6 +19,7 @@ async function withFallback(pgFn, memFn) {
 
 export const ApiError = pg.ApiError
 export const confirmAllocationRun = pg.confirmAllocationRun
+export const revertAllocationRunToDraft = pg.revertAllocationRunToDraft
 export const getAllocationRun = pg.getAllocationRun
 export const getCurrentUser = pg.getCurrentUser
 export const getHandoffSheet = pg.getHandoffSheet

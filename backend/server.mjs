@@ -2,6 +2,7 @@ import http from 'node:http'
 import {
   ApiError,
   confirmAllocationRun,
+  revertAllocationRunToDraft,
   getAllocationRun,
   getLatestAllocationRun,
   getCurrentShift,
@@ -328,6 +329,17 @@ async function handleRequest(req, res) {
       data: await confirmAllocationRun({
         allocationRunId: decodeURIComponent(allocationConfirmMatch[1]),
         userId: getUserId(req, url) ?? body.confirmedBy,
+      }),
+    })
+    return
+  }
+
+  const allocationRevertMatch = url.pathname.match(/^\/api\/v1\/allocation-runs\/([^/]+)\/revert-to-draft$/)
+  if (allocationRevertMatch) {
+    assertMethod(req, 'POST')
+    sendJson(res, {
+      data: await revertAllocationRunToDraft({
+        allocationRunId: decodeURIComponent(allocationRevertMatch[1]),
       }),
     })
     return
