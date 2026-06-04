@@ -69,13 +69,27 @@ export function emptyBoardState(admissionIds: string[], nurseIds: string[]): Boa
 
 export function runToBoardState(run: AllocationRun, nurseIds: string[]): BoardState {
   const byNurse = Object.fromEntries(nurseIds.map((id) => [id, [] as string[]]))
+  const assignedInLanes = new Set<string>()
   for (const row of run.byNurse) {
     if (byNurse[row.nurseId]) {
-      byNurse[row.nurseId] = row.patients.map((p: AllocationPatient) => p.admissionId)
+      byNurse[row.nurseId] = row.patients.map((p: AllocationPatient) => {
+        assignedInLanes.add(p.admissionId)
+        return p.admissionId
+      })
     }
   }
+
+  // Gather any patients in the run who didn't end up in one of the displayed nurse lanes
+  const allPatientsInRun: AllocationPatient[] = [
+    ...run.unassigned,
+    ...run.byNurse.flatMap((row) => row.patients),
+  ]
+  const unassigned = allPatientsInRun
+    .filter((p) => !assignedInLanes.has(p.admissionId))
+    .map((p) => p.admissionId)
+
   return {
-    unassigned: run.unassigned.map((p: AllocationPatient) => p.admissionId),
+    unassigned,
     byNurse,
   }
 }

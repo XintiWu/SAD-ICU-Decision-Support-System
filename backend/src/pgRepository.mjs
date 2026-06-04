@@ -68,7 +68,7 @@ export async function listStatOrders({ shiftId, includeCompleted = false, assign
         select ai.admission_id
         from allocation_items ai
         join allocation_runs ar on ar.id = ai.allocation_run_id
-        where ar.shift_id = $1 and ai.nurse_id = $${params.length}
+        where coalesce(ar.target_shift_id, ar.shift_id) = $1 and ai.nurse_id = $${params.length}
       )
     `
   }
@@ -265,7 +265,7 @@ export async function getNurseOverview({ shiftId, userId = ids.currentNurse } = 
     select ai.admission_id
     from allocation_items ai
     join allocation_runs ar on ar.id = ai.allocation_run_id
-    where ar.shift_id = $1 and ai.nurse_id = $2
+    where coalesce(ar.target_shift_id, ar.shift_id) = $1 and ai.nurse_id = $2
     order by ai.sort_order
     `,
     [shift.id, user.id],
@@ -350,7 +350,7 @@ export async function listBurdenAssessments({ shiftId, scope = 'all', userId = i
         where ai.nurse_id = $2
           and ai.allocation_run_id = (
             select id from allocation_runs
-            where shift_id = $1
+            where coalesce(target_shift_id, shift_id) = $1
             order by (status = 'draft') desc, suggested_at desc
             limit 1
           )
@@ -499,8 +499,9 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   const user = await getCurrentUser(userId)
   if (!['charge_nurse', 'admin'].includes(user.role)) throw new ApiError(403, 'FORBIDDEN', '只有小組長或管理者可以產生分床建議')
 
+  const nextShiftId = targetShiftId || await getNextShiftId(shiftId) || shiftId
   const allAdmissions = await admissionsWithScores(shiftId)
-  const allNurses = (await listNurses({ shiftId })).filter((n) => ['nurse', 'charge_nurse'].includes(n.role) && n.isActive)
+  const allNurses = (await listNurses({ shiftId: nextShiftId })).filter((n) => ['nurse', 'charge_nurse'].includes(n.role) && n.isActive)
 
   const shiftRow = await query('select shift_key from shifts where id = $1', [shiftId])
   const isNightShift = shiftRow.rows[0]?.shift_key === 'night'
@@ -721,7 +722,7 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   await withTransaction(async (client) => {
     await client.query(
       `insert into allocation_runs (id, shift_id, target_shift_id, created_by, status, algorithm_version) values ($1,$2,$3,$4,'draft','bed-proximity-v4')`,
-      [runId, shiftId, targetShiftId ?? shiftId, user.id],
+      [runId, shiftId, nextShiftId, user.id],
     )
     for (const log of decisionLogs) {
       const sortOrder = (sortOrders.get(log.chosenNurseId) ?? 0) + 1
@@ -751,7 +752,7 @@ export async function getLatestAllocationRun({ shiftId } = {}) {
 
 export async function getAllocationRun({ allocationRunId } = {}) {
   const run = await allocationRunRow(allocationRunId)
-  const nurses = (await listNurses({ shiftId: run.shift_id })).filter((nurse) => ['nurse', 'charge_nurse'].includes(nurse.role))
+  const nurses = (await listNurses({ shiftId: run.target_shift_id ?? run.shift_id })).filter((nurse) => ['nurse', 'charge_nurse'].includes(nurse.role))
   const admissions = await listAdmissions({ shiftId: run.shift_id, status: 'active' })
   const admissionMap = new Map(admissions.map((admission) => [admission.admissionId, admission]))
   const items = await query('select * from allocation_items where allocation_run_id = $1 order by nurse_id, sort_order', [run.id])
@@ -970,6 +971,25 @@ async function currentShiftRow(unitName = 'ICU') {
   return result.rows[0]
 }
 
+async function getNextShiftId(shiftId) {
+  const result = await query(
+    `
+    select s.id
+    from shifts s
+    join shifts cur on cur.id = $1
+    where s.unit_name = cur.unit_name
+      and s.starts_at >= cur.ends_at
+      and s.status <> 'closed'
+      and s.hidden = false
+    order by s.starts_at asc
+    limit 1
+    `,
+    [shiftId],
+  )
+  return result.rows[0]?.id ?? null
+}
+
+
 async function ensureShift(shiftId) {
   const result = await query(
     `select s.*, n.short_name as charge_short_name,
@@ -1187,7 +1207,7 @@ async function latestAllocationForWarRoom(shiftId) {
     `
     select id
     from allocation_runs
-    where shift_id = $1 and status = 'confirmed'
+    where coalesce(target_shift_id, shift_id) = $1 and status = 'confirmed'
     order by confirmed_at desc nulls last, suggested_at desc
     limit 1
     `,
@@ -1202,7 +1222,7 @@ async function latestAllocationForWarRoom(shiftId) {
     select ar.id
     from allocation_runs ar
     join allocation_items ai on ai.allocation_run_id = ar.id
-    where ar.shift_id = $1 and ar.status = 'draft'
+    where coalesce(ar.target_shift_id, ar.shift_id) = $1 and ar.status = 'draft'
     group by ar.id
     having count(ai.id) > 0
     order by max(ar.suggested_at) desc
@@ -1223,7 +1243,7 @@ async function latestConfirmedAllocation(shiftId) {
 
 async function latestAllocation(shiftId) {
   const result = await query(
-    `select id from allocation_runs where shift_id = $1 order by (status = 'draft') desc, suggested_at desc limit 1`,
+    `select id from allocation_runs where coalesce(target_shift_id, shift_id) = $1 order by (status = 'draft') desc, suggested_at desc limit 1`,
     [shiftId],
   )
   if (!result.rows[0]) return emptyAllocationForShift(shiftId)
@@ -1265,7 +1285,7 @@ async function admissionOwner(shiftId, admissionId) {
     select ai.nurse_id
     from allocation_items ai
     join allocation_runs ar on ar.id = ai.allocation_run_id
-    where ar.shift_id = $1 and ai.admission_id = $2
+    where coalesce(ar.target_shift_id, ar.shift_id) = $1 and ai.admission_id = $2
     order by ar.confirmed_at desc nulls last, ar.suggested_at desc
     limit 1
     `,
@@ -1524,6 +1544,7 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
   if (existing.rows[0]) return existing.rows[0].id
 
   const shiftId = run.shiftId
+  const targetShiftId = run.targetShiftId ?? shiftId
   const admissions = await listAdmissions({ shiftId, status: 'active' })
   const burdens = await listBurdenAssessments({ shiftId, scope: 'all' })
   const statOrders = await listStatOrders({ shiftId })
@@ -1543,7 +1564,7 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
     `,
     [
       allocationRunId,
-      shiftId,
+      targetShiftId,
       userId ?? null,
       patientCount,
       run.byNurse.length,
@@ -1558,34 +1579,30 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
   )
   const snapshotId = snapshotResult.rows[0].id
 
-  // look up next shift's confirmed allocation to fill next_nurse
-  const nextShiftResult = await client.query(
+  // Look up current shift's confirmed allocation (created in previous shift targeting current shift) to fill current_nurse
+  const currentShiftResult = await client.query(
     `
     select ar.id as run_id
     from allocation_runs ar
-    join shifts s on s.id = ar.shift_id
-    join shifts cur on cur.id = $1
-    where s.unit_name = cur.unit_name
-      and s.starts_at >= cur.ends_at
-      and ar.status = 'confirmed'
-    order by s.starts_at asc
+    where ar.target_shift_id = $1 and ar.status = 'confirmed'
+    order by ar.confirmed_at desc nulls last, ar.suggested_at desc
     limit 1
     `,
     [shiftId],
   )
-  const nextRunId = nextShiftResult.rows[0]?.run_id ?? null
-  const nextNurseMap = new Map()
-  if (nextRunId) {
-    const nextItems = await client.query(
+  const currentRunId = currentShiftResult.rows[0]?.run_id ?? null
+  const currentNurseMap = new Map()
+  if (currentRunId) {
+    const currentItems = await client.query(
       `
       select ai.admission_id, n.short_name
       from allocation_items ai
       join nurses n on n.id = ai.nurse_id
       where ai.allocation_run_id = $1
       `,
-      [nextRunId],
+      [currentRunId],
     )
-    for (const row of nextItems.rows) nextNurseMap.set(row.admission_id, row.short_name)
+    for (const row of currentItems.rows) currentNurseMap.set(row.admission_id, row.short_name)
   }
 
   let sortOrder = 0
@@ -1616,8 +1633,8 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
           admission.age,
           admission.admittedAt,
           admission.attendingPhysician,
+          currentNurseMap.get(patient.admissionId) ?? '—',
           nurseRow.shortName,
-          nextNurseMap.get(patient.admissionId) ?? '—',
           patient.score,
           objectiveScore,
           subjectiveScore,

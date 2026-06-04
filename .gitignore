@@ -27,3 +27,4 @@ frontend-v2-dist-*.zip
 *.njsproj
 *.sln
 *.sw?
+.vercel

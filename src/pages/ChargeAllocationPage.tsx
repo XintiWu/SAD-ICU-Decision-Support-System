@@ -73,7 +73,26 @@ export function ChargeAllocationPage() {
 
 function ChargeAllocationPageBody() {
   const navigate = useNavigate()
-  const { shiftId, selectedShift } = useShift()
+  const { shiftId, selectedShift, shifts } = useShift()
+
+  const targetShiftId = useMemo(() => {
+    const currentShift = shifts.find(s => s.id === shiftId)
+    if (!currentShift) return shiftId
+    
+    // Sort shifts chronologically (startsAt asc)
+    const sorted = [...shifts]
+      .filter(s => !s.hidden)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      
+    const currentIndex = sorted.findIndex(s => s.id === shiftId)
+    if (currentIndex === -1 || currentIndex === sorted.length - 1) return shiftId
+    
+    return sorted[currentIndex + 1].id
+  }, [shifts, shiftId])
+
+  const targetShift = useMemo(() => {
+    return shifts.find(s => s.id === targetShiftId) || null
+  }, [shifts, targetShiftId])
 
   const [nurses, setNurses] = useState<ApiNurse[]>([])
   const [admissions, setAdmissions] = useState<ApiAdmission[]>([])
@@ -156,7 +175,7 @@ function ChargeAllocationPageBody() {
     void (async () => {
       try {
         const [nurseRows, admissionRows, latestRun, burdenRows, statRows] = await Promise.all([
-          apiGet<ApiNurse[]>(`/nurses?shiftId=${shiftId}`),
+          apiGet<ApiNurse[]>(`/nurses?shiftId=${targetShiftId}`),
           apiGet<ApiAdmission[]>(`/admissions?shiftId=${shiftId}&status=active`),
           apiGet<AllocationRun | null>(`/allocation-runs/current?shiftId=${shiftId}`),
           apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${shiftId}&scope=all`),
@@ -208,7 +227,7 @@ function ChargeAllocationPageBody() {
     return () => {
       alive = false
     }
-  }, [shiftId])
+  }, [shiftId, targetShiftId])
 
   function pushUndoFromRef() {
     const { unassigned: u, byNurse: b, allocationRunId: runId } = allocationRef.current
@@ -309,7 +328,7 @@ function ChargeAllocationPageBody() {
         try {
           const run = await apiPost<AllocationRun>(
             '/allocation-runs/suggest',
-            { shiftId, targetShiftId: shiftId },
+            { shiftId, targetShiftId },
             leaderOpts,
           )
           setAllocationRunId(run.allocationRunId)
@@ -344,7 +363,7 @@ function ChargeAllocationPageBody() {
       pushUndoFromRef()
       const run = await apiPost<AllocationRun>(
         '/allocation-runs/suggest',
-        { shiftId, targetShiftId: shiftId },
+        { shiftId, targetShiftId },
         leaderOpts,
       )
       const board = runToBoardState(run, nurseIds)
@@ -404,7 +423,7 @@ function ChargeAllocationPageBody() {
     try {
       const res = await apiPost<{ decisionLogs: DecisionLog[] }>(
         '/allocation-runs/suggest',
-        { shiftId, targetShiftId: shiftId, dryRun: true },
+        { shiftId, targetShiftId, dryRun: true },
         leaderOpts,
       )
       if (res.decisionLogs && res.decisionLogs.length > 0) {
@@ -431,8 +450,18 @@ function ChargeAllocationPageBody() {
     <AllocationCatalogProvider catalog={catalog}>
       <div className="grid gap-4">
         {selectedShift ? (
-          <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700 ring-1 ring-black/10">
-            目前班別：<span className="font-semibold text-slate-900">{selectedShift.label}</span>
+          <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700 ring-1 ring-black/10 flex flex-wrap items-center gap-2">
+            <div>
+              評估班別：<span className="font-semibold text-slate-900">{selectedShift.label}</span>
+            </div>
+            {targetShift && targetShift.id !== selectedShift.id && (
+              <div className="mx-1 text-slate-400">➔</div>
+            )}
+            {targetShift && targetShift.id !== selectedShift.id && (
+              <div>
+                分床對象：<span className="font-semibold text-sky-600">{targetShift.label}</span>
+              </div>
+            )}
             {runStatus === 'confirmed' ? (
               <span className="ml-2 rounded-full bg-[#eaf7ee] px-2 py-0.5 text-xs font-semibold text-[#1e6c3a]">已確認（僅供檢視，可重新套用產生新草稿）</span>
             ) : runStatus === 'draft' ? (

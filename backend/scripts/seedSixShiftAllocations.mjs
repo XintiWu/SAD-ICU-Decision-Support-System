@@ -18,7 +18,6 @@ async function main() {
   for (const shiftId of SIX_SHIFTS) {
     const run = await suggestAllocationRun({
       shiftId,
-      targetShiftId: shiftId,
       userId: ids.chargeNurse,
     })
     const confirmed = await confirmAllocationRun({ allocationRunId: run.allocationRunId })
