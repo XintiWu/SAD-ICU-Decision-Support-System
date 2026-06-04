@@ -5,6 +5,9 @@ export const objectiveFactorDefinitions = [
   { code: 'highVentilatorDemand', label: '高呼吸器需求', valueType: 'number' },
   { code: 'medicationTypeCount', label: '藥物種類數', valueType: 'number' },
   { code: 'medicationFrequency', label: '藥物使用頻率', valueType: 'number' },
+  { code: 'frequentMonitoring', label: '需頻繁監測生理狀態', valueType: 'number' },
+  { code: 'specialTube', label: '特殊管路', valueType: 'number' },
+  { code: 'pendingExaminations', label: '待執行特殊檢查', valueType: 'number' },
   { code: 'crrtContinuousA', label: 'CRRT（持續型 A）', valueType: 'number' },
   { code: 'iabpContinuousB', label: 'IABP（持續型 B）', valueType: 'number' },
   { code: 'ecmoContinuousB', label: 'ECMO（持續型 B）', valueType: 'number' },
@@ -12,6 +15,7 @@ export const objectiveFactorDefinitions = [
   { code: 'hypothermiaContinuousB', label: '低溫治療（持續性 B）', valueType: 'number' },
   { code: 'massiveTransfusionSingleC', label: '大量輸血（單次 C）', valueType: 'number' },
   { code: 'plasmaSingleC', label: '跟Plasma（單次C）', valueType: 'number' },
+  { code: 'otherSpecialTreatment', label: '其他特殊處置', valueType: 'number' },
 ]
 
 export const subjectiveFactorDefinitions = [

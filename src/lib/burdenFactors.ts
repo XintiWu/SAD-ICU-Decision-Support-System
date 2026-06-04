@@ -5,6 +5,9 @@ export type ObjectiveFactorKey =
   | 'highVentilatorDemand'
   | 'medicationTypeCount'
   | 'medicationFrequency'
+  | 'frequentMonitoring'
+  | 'specialTube'
+  | 'pendingExaminations'
   | 'crrtContinuousA'
   | 'iabpContinuousB'
   | 'ecmoContinuousB'
@@ -12,12 +15,16 @@ export type ObjectiveFactorKey =
   | 'hypothermiaContinuousB'
   | 'massiveTransfusionSingleC'
   | 'plasmaSingleC'
+  | 'otherSpecialTreatment'
 
 export const OBJECTIVE_FACTOR_LABELS: Record<ObjectiveFactorKey, string> = {
   negativePressureIsolation: '負壓隔離病房',
   highVentilatorDemand: '高呼吸器需求',
   medicationTypeCount: '藥物種類數',
   medicationFrequency: '藥物使用頻率',
+  frequentMonitoring: '需頻繁監測生理狀態',
+  specialTube: '特殊管路',
+  pendingExaminations: '待執行特殊檢查',
   crrtContinuousA: 'CRRT',
   iabpContinuousB: 'IABP',
   ecmoContinuousB: 'ECMO',
@@ -25,6 +32,7 @@ export const OBJECTIVE_FACTOR_LABELS: Record<ObjectiveFactorKey, string> = {
   hypothermiaContinuousB: '低溫治療',
   massiveTransfusionSingleC: '大量輸血',
   plasmaSingleC: 'Plasma',
+  otherSpecialTreatment: '其他特殊處置',
 }
 
 export const OBJECTIVE_LAYOUT = [
@@ -54,7 +62,24 @@ export const OBJECTIVE_LAYOUT = [
   },
   {
     no: 4,
-    title: '特殊檢查項目',
+    title: '需頻繁監測生理狀態',
+    compactTitle: '頻繁監測',
+    hint: undefined,
+    rows: [{ key: 'frequentMonitoring' as ObjectiveFactorKey, label: '需頻繁監測生理狀態' }],
+  },
+  {
+    no: 5,
+    title: '特殊管路 / 待執行檢查',
+    compactTitle: '管路・檢查',
+    hint: undefined,
+    rows: [
+      { key: 'specialTube' as ObjectiveFactorKey, label: '特殊管路' },
+      { key: 'pendingExaminations' as ObjectiveFactorKey, label: '待執行特殊檢查' },
+    ],
+  },
+  {
+    no: 6,
+    title: '特殊處置',
     compactTitle: '特殊檢查',
     hint: undefined,
     rows: [
@@ -65,6 +90,7 @@ export const OBJECTIVE_LAYOUT = [
       { key: 'hypothermiaContinuousB' as ObjectiveFactorKey, label: '低溫治療', hint: '持續型 B' },
       { key: 'massiveTransfusionSingleC' as ObjectiveFactorKey, label: '大量輸血', hint: '單次 C' },
       { key: 'plasmaSingleC' as ObjectiveFactorKey, label: 'Plasma', hint: '單次 C' },
+      { key: 'otherSpecialTreatment' as ObjectiveFactorKey, label: '其他特殊處置', hint: 'HD・EVD・TCP・VAC 等' },
     ],
   },
 ] as const

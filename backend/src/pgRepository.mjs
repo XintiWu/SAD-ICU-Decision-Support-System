@@ -1291,6 +1291,9 @@ function getMockBurdenDataForBed(bedLabel) {
       highVentilatorDemand: Number(objData['高呼吸器需求']?.['分數'] ?? 0),
       medicationTypeCount: Number(objData['藥物計數']?.['分數'] ?? 0),
       medicationFrequency: 0,
+      frequentMonitoring: Number(objData['需頻繁監測生理狀態']?.['分數'] ?? 0),
+      specialTube: Number(objData['是否具特殊管路']?.['分數'] ?? 0),
+      pendingExaminations: Number(objData['待執行的特殊檢查項目']?.['分數'] ?? 0),
       crrtContinuousA: 0,
       iabpContinuousB: 0,
       ecmoContinuousB: 0,
@@ -1298,21 +1301,26 @@ function getMockBurdenDataForBed(bedLabel) {
       hypothermiaContinuousB: 0,
       massiveTransfusionSingleC: 0,
       plasmaSingleC: 0,
+      otherSpecialTreatment: 0,
     }
 
     // Map特殊處置
     const specialDispositions = objData['特殊處置']?.['系統帶入項目'] || []
+    let recognizedSpecialTotal = 0
     for (const item of specialDispositions) {
       const name = item['項目'] || ''
       const score = Number(item['分數'] ?? 0)
-      if (name.includes('CRRT')) objective.crrtContinuousA = score
-      if (name.includes('IABP')) objective.iabpContinuousB = score
-      if (name.includes('ECMO')) objective.ecmoContinuousB = score
-      if (name.includes('PRONE')) objective.proneContinuousB = score
-      if (name.includes('Cooling') || name.includes('低溫')) objective.hypothermiaContinuousB = score
-      if (name.includes('Plasma') || name.includes('血漿')) objective.plasmaSingleC = score
-      if (name.includes('Transfusion') || name.includes('輸血')) objective.massiveTransfusionSingleC = score
+      if (name.includes('CRRT')) { objective.crrtContinuousA = score; recognizedSpecialTotal += score }
+      if (name.includes('IABP')) { objective.iabpContinuousB = score; recognizedSpecialTotal += score }
+      if (name.includes('ECMO')) { objective.ecmoContinuousB = score; recognizedSpecialTotal += score }
+      if (name.includes('PRONE')) { objective.proneContinuousB = score; recognizedSpecialTotal += score }
+      if (name.includes('Cooling') || name.includes('低溫')) { objective.hypothermiaContinuousB = score; recognizedSpecialTotal += score }
+      if (name.includes('Plasma') || name.includes('血漿')) { objective.plasmaSingleC = score; recognizedSpecialTotal += score }
+      if (name.includes('Transfusion') || name.includes('輸血')) { objective.massiveTransfusionSingleC = score; recognizedSpecialTotal += score }
     }
+    // 未被識別的特殊處置（Regular HD、EVD、TCP、VAC 等）→ 承接到 otherSpecialTreatment
+    const specialCatScore = Number(objData['特殊處置']?.['分數'] ?? 0)
+    objective.otherSpecialTreatment = Math.max(0, specialCatScore - recognizedSpecialTotal)
 
     // Map subjective factors
     let rassScore = null
