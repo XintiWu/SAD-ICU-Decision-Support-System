@@ -6,7 +6,9 @@
   "scripts": {
     "dev": "vite",
     "api:dev": "node backend/server.mjs",
+    "api:start": "node backend/server.mjs",
     "db:setup": "node backend/scripts/setupDatabase.mjs",
+    "db:setup:cloud": "DATABASE_SETUP_MODE=schema node backend/scripts/setupDatabase.mjs",
     "db:seed-allocations": "node backend/scripts/seedSixShiftAllocations.mjs",
     "build": "tsc -b && vite build",
     "lint": "eslint .",

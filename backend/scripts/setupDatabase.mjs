@@ -14,16 +14,24 @@ const { Client } = pg
 const adminUrl = process.env.DATABASE_ADMIN_URL ?? 'postgresql://postgres@%2Ftmp/postgres'
 const databaseName = process.env.POSTGRES_DB ?? 'sad_frontend_v2'
 const appUrl = process.env.DATABASE_URL ?? `postgresql://postgres@%2Ftmp/${databaseName}`
+const setupMode = process.env.DATABASE_SETUP_MODE ?? 'database'
 
 async function main() {
-  const admin = new Client({ connectionString: adminUrl })
-  await admin.connect()
-  await admin.query(`drop database if exists ${quoteIdent(databaseName)} with (force)`)
-  await admin.query(`create database ${quoteIdent(databaseName)}`)
-  await admin.end()
-
   const app = new Client({ connectionString: appUrl })
+  if (setupMode === 'database') {
+    const admin = new Client({ connectionString: adminUrl })
+    await admin.connect()
+    await admin.query(`drop database if exists ${quoteIdent(databaseName)} with (force)`)
+    await admin.query(`create database ${quoteIdent(databaseName)}`)
+    await admin.end()
+  }
+
   await app.connect()
+  if (setupMode === 'schema') {
+    await app.query('drop schema if exists public cascade')
+    await app.query('create schema public')
+  }
+
   for (const file of [
     'backend/db/migrations/001_core_schema.sql',
     'backend/db/migrations/002_burden_tasks_schema.sql',
