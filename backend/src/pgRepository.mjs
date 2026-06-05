@@ -1557,7 +1557,7 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
   const existing = await client.query('select id from handoff_snapshots where allocation_run_id = $1', [allocationRunId])
   if (existing.rows[0]) return existing.rows[0].id
 
-  const shiftId = run.shiftId
+  const shiftId = run.targetShiftId ?? run.shiftId
   const admissions = await listAdmissions({ shiftId, status: 'active' })
   const burdens = await listBurdenAssessments({ shiftId, scope: 'all' })
   const statOrders = await listStatOrders({ shiftId })
