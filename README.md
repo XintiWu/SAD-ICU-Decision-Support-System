@@ -1,6 +1,6 @@
 # ICU 護理分配決策支援系統
 
-本系統協助 ICU 護理長在每班班前，依據病患麻煩度評估快速完成護理師分床，並提供即時戰情室與交班單。
+本系統協助 ICU 護理長在每班班前，依據病患麻煩度評估、床位鄰近性與護理師班表快速完成護理師分床，並提供 STAT 醫囑追蹤、即時戰情室與交班快照。
 
 ## 技術架構
 
@@ -32,9 +32,11 @@ npm run dev
 ## 主要功能
 
 - **麻煩度評估**：護理師填寫每位病患的客觀與主觀負荷因素
-- **系統建議分床**：依負荷分數自動產生護理師分床建議，護理長可調整後確認
-- **戰情室**：即時顯示全區床位與護理師負荷狀態
-- **交班單**：自動彙整當班摘要
+- **系統建議分床**：依病患負荷、床位鄰近性與護理師班表產生分床建議，護理長可拖曳調整後確認
+- **STAT 醫囑**：支援突發醫囑建立、匯入與完成狀態追蹤
+- **戰情室**：依已確認分床即時彙整各護理師病患、任務、STAT 醫囑與剩餘負荷
+- **交班快照**：分床確認後封存交班資料，保留當下分床與病患摘要
+- **班表匯入**：支援 xlsx 護理師班表匯入，建立班別與出勤護理師
 
 ## 文件索引
 
@@ -45,7 +47,7 @@ npm run dev
 | 2 | [BPMN 流程圖](docs/02_BPMN/02_bpmn.md) | 業務流程模型 |
 | 4 | [Tests](docs/04_tests/04a_tests.md) | 測試報告 |
 | 5 | [Project Tracking](docs/05_Project_Tracking/05_project-tracking.md) | 專案管理追蹤 |
-| 6 | [API Documentation](docs/06_api-docs/06_api-docs.md) | Open API 文件 |
+| 6 | [API Documentation](docs/06_API_docs/06_api-docs.md) | Open API 文件 |
 | 8 | [EER Diagram](docs/08_ER_Diagram/08_er-diagram.md) | 資料庫關係圖 |
 | — | [開發記錄](docs/00_develop_record/NOTES.md) | 後端開發進度與實作紀錄 |
 | — | [領域知識](docs/09_Domain_info/STAT519.md) | ICU 護理領域資訊 |
