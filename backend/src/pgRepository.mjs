@@ -578,8 +578,8 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     const group = []
     while (group.length < quota && bedIdx < sortedByBed.length) {
       const candidate = sortedByBed[bedIdx]
-      const testBeds = [...group.map((p) => bedNo(p.bedLabel)), bedNo(candidate.bedLabel)]
-      if (group.length === 0 || Math.max(...testBeds) - Math.min(...testBeds) <= MAX_BED_GAP) {
+      const testLabels = [...group.map((p) => p.bedLabel), candidate.bedLabel]
+      if (group.length === 0 || maxPairWalkDist(testLabels) <= MAX_BED_GAP) {
         group.push(candidate)
         bedIdx++
       } else {
@@ -596,8 +596,7 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
     g.length <= 1 || (g.some((p) => p.score >= avgScore) && g.some((p) => p.score < avgScore))
   const groupBedValid = (g) => {
     if (g.length <= 1) return true
-    const beds = g.map((p) => bedNo(p.bedLabel))
-    return Math.max(...beds) - Math.min(...beds) <= MAX_BED_GAP
+    return maxPairWalkDist(g.map((p) => p.bedLabel)) <= MAX_BED_GAP
   }
 
   for (let i = 0; i < nurseGroups.length - 1; i++) {
@@ -660,11 +659,10 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   // ── Phase 5：溢出病人（±2 無法滿足配額時仍未分配的病人）──
   const overflow = allAdmissions.filter((p) => !assigned.has(p.admissionId))
   for (const patient of overflow.sort((a, b) => b.score - a.score)) {
-    const patBed = bedNo(patient.bedLabel)
     const pool = nurseOrder
     const nearbySet = new Set(
       pool
-        .filter((n) => assignments.get(n.id).some((p) => Math.abs(bedNo(p.bedLabel) - patBed) <= MAX_BED_GAP))
+        .filter((n) => assignments.get(n.id).some((p) => walkDist(p.bedLabel, patient.bedLabel) <= MAX_BED_GAP))
         .map((n) => n.id),
     )
     const candidates = nearbySet.size > 0 ? pool.filter((n) => nearbySet.has(n.id)) : pool
@@ -1789,6 +1787,30 @@ function levelDetailLabel(value) {
 function bedNo(label) {
   const match = label.match(/\d+/)
   return match ? Number(match[0]) : Number.POSITIVE_INFINITY
+}
+
+// 依實體病房繞行順序定義（環狀）：下排→左側→上排→右側→回起點
+const BED_WALK_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+
+function walkDist(labelA, labelB) {
+  const a = bedNo(labelA)
+  const b = bedNo(labelB)
+  const i = BED_WALK_ORDER.indexOf(a)
+  const j = BED_WALK_ORDER.indexOf(b)
+  if (i === -1 || j === -1) return Math.abs(a - b)
+  const n = BED_WALK_ORDER.length
+  const diff = Math.abs(i - j)
+  return Math.min(diff, n - diff)
+}
+
+function maxPairWalkDist(labels) {
+  let max = 0
+  for (let i = 0; i < labels.length; i++) {
+    for (let j = i + 1; j < labels.length; j++) {
+      max = Math.max(max, walkDist(labels[i], labels[j]))
+    }
+  }
+  return max
 }
 
 const DEMO_TEMPLATES = [
