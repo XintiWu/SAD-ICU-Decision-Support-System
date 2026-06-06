@@ -1,0 +1,98 @@
+// ── 床位距離工具 ──
+BED_WALK_ORDER = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]
+// 環狀：17 的下一位是 1
+
+walkDist(bedA, bedB):
+  i = BED_WALK_ORDER.indexOf(bedNo(bedA))
+  j = BED_WALK_ORDER.indexOf(bedNo(bedB))
+  diff = |i - j|
+  return min(diff, 17 - diff)   // 取順/逆時針短邊
+
+maxPairWalkDist(beds):
+  return max walkDist(a, b) for all pairs (a, b) in beds
+
+
+function suggestAllocationRun(shiftId):
+
+  // ── 前置資料 ──
+  patients = 所有在院病人 + 各自的 burden 總分
+  nurses   = 本班所有 nurse / charge_nurse (is_active = true)
+  avgScore = mean(patients.score)
+  MAX_BED_GAP = 2   // 同一護理師的床位最大走廊距離
+
+  regularNurses = nurses where role != 'charge_nurse'
+                  排序：年資由淺→深 (rank 升冪)
+  chargeNurse   = nurses.find(role == 'charge_nurse')
+  nurseOrder    = [...regularNurses, chargeNurse]
+
+  // ── Phase 1：計算各護理師床位配額 ──
+  totalNurses = nurseOrder.length
+  baseQuota   = floor(patients.length / totalNurses)
+  extraCount  = patients.length % totalNurses
+  quota(i)    = baseQuota + (i < extraCount ? 1 : 0)
+  // 前 extraCount 位護理師（regularNurses 先）多分一床
+
+  // ── Phase 2：依走廊順序貪婪形成床位組 ──
+  sortedByBed = patients 按 BED_WALK_ORDER 排序
+  nurseGroups = []
+
+  for i = 0 to totalNurses - 1:
+    group = []
+    while group.length < quota(i) and 還有剩餘病人:
+      candidate = sortedByBed.next()
+      testBeds  = group 的 bedLabel + candidate.bedLabel
+      if group 為空 or maxPairWalkDist(testBeds) <= MAX_BED_GAP:
+        group.push(candidate)
+      else:
+        break   // 走廊距離超限，停止本組
+    nurseGroups.push(group)
+
+  // ── Phase 3：鄰組單一病人交換，改善輕重混配 ──
+  hasMix(g)      = g.length <= 1
+                   or (g 有 score >= avgScore) and (g 有 score < avgScore)
+  bedValid(g)    = g.length <= 1
+                   or maxPairWalkDist(g.床位) <= MAX_BED_GAP  // ← 同樣用走廊距離
+
+  repeat:
+    for i = 0 to nurseGroups.length - 2:
+      if hasMix(nurseGroups[i]) and hasMix(nurseGroups[i+1]): continue
+      for pa in nurseGroups[i]:
+        for pb in nurseGroups[i+1]:
+          if pa 和 pb 同屬高分或同屬低分: continue
+          newGa = nurseGroups[i] 換掉 pa 換入 pb
+          newGb = nurseGroups[i+1] 換掉 pb 換入 pa
+          if bedValid(newGa) and bedValid(newGb):
+            mixBefore = hasMix(nurseGroups[i]) + hasMix(nurseGroups[i+1])
+            mixAfter  = hasMix(newGa) + hasMix(newGb)
+            if mixAfter > mixBefore:
+              執行交換，重新從 i-1 繼續掃描
+
+  // ── Phase 4：依負擔重新對應護理師 ──
+  groupScores        = nurseGroups.map(g => sum(g.score))
+  sortedGroupIndices = nurseGroups 依 groupScores 升冪排序的 index 列表
+
+  if chargeNurse exists:
+    chargeNurse 取 sortedGroupIndices[0]（最輕的組）
+    remainingIndices = sortedGroupIndices[1:]
+    regularBySeniority = regularNurses 依年資降冪
+    for i = 0 to regularBySeniority.length - 1:
+      regularBySeniority[i] 取 remainingIndices[i]
+
+  else:
+    nursesBySeniority = regularNurses 依年資降冪
+    for i = 0 to nursesBySeniority.length - 1:
+      nursesBySeniority[i] 取 sortedGroupIndices[i]
+
+  // ── Phase 5：溢出病人（走廊距離超限而未分配者）──
+  overflow = patients - assigned
+
+  for patient in overflow 依 score 降冪:
+    nearbyNurses = nurses where
+                   walkDist(已有任一床位, patient.床位) <= MAX_BED_GAP  // ← 走廊距離
+    candidates   = nearbyNurses if !empty else allNurses
+    winner       = candidates.minBy(currentLoad)
+    assign(winner, patient)
+
+  // ── 寫入 DB ──
+  save to allocation_runs (algorithm_version = 'bed-proximity-v4')
+  save all assignments to allocation_items
