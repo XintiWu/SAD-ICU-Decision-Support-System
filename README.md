@@ -40,6 +40,7 @@ npm run dev
 
 | # | 文件 | 說明 |
 |---|------|------|
+| — | [System Design Document](docs/system_design_doc/system_design.md) | 系統架構、資料庫設計、API 設計 |
 | 1 | [User Stories Mapping](docs/01_user-stories/01_user-stories.md) | 使用者故事對照表 |
 | 2 | [BPMN 流程圖](docs/02_BPMN/02_bpmn.md) | 業務流程模型 |
 | 4 | [Tests](docs/04_tests/04a_tests.md) | 測試報告 |
