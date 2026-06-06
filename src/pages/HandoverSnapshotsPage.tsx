@@ -1,10 +1,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { createPortal } from 'react-dom'
-import { apiGet, type HandoffSnapshotDetail, type HandoffSnapshotListItem } from '../api/client'
+import { apiGet, type HandoffSnapshotDetail, type HandoffSnapshotListItem, type ApiAdmission, type BurdenAssessment, type ApiStatOrder } from '../api/client'
 import { useShift } from '../context/useShift'
 import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
+import { buildPatientCatalog, mergeBurdenIntoCatalog, mergeStatIntoCatalog, type CatalogEntry } from '../components/allocation/allocationApiState'
+import { AllocationCatalogProvider } from '../components/allocation/allocationCatalog'
+import { AllocationPatientHoverHost } from '../components/allocation/AllocationPatientHoverHost'
 
 export function HandoverSnapshotsPage() {
   const { shiftId } = useShift()
@@ -170,13 +173,33 @@ function HandoverSnapshotDetailSection({
 }) {
   const [selected, setSelected] = useState<HandoffSnapshotDetail | null>(null)
   const [detailLoading, setDetailLoading] = useState(true)
+  const [catalog, setCatalog] = useState<Map<string, CatalogEntry>>(new Map())
 
   useEffect(() => {
     let alive = true
+    setDetailLoading(true)
+
     apiGet<HandoffSnapshotDetail>(`/handoff-snapshots/${activeId}`)
-      .then((data) => {
+      .then(async (snapshotData) => {
         if (!alive) return
-        setSelected(data)
+
+        try {
+          const [admissionsData, burdenData, statData] = await Promise.all([
+            apiGet<ApiAdmission[]>(`/admissions?shiftId=${snapshotData.shiftId}&status=active`),
+            apiGet<BurdenAssessment[]>(`/burden-assessments?shiftId=${snapshotData.shiftId}&scope=all`),
+            apiGet<ApiStatOrder[]>(`/stat-orders?shiftId=${snapshotData.shiftId}`).catch(() => [] as ApiStatOrder[]),
+          ])
+
+          if (!alive) return
+          const nextCatalog = buildPatientCatalog(admissionsData)
+          mergeBurdenIntoCatalog(nextCatalog, burdenData)
+          mergeStatIntoCatalog(nextCatalog, statData)
+          setCatalog(nextCatalog)
+        } catch (err) {
+          console.error('Failed to load snapshot patient details:', err)
+        }
+
+        setSelected(snapshotData)
       })
       .catch(() => {
         if (!alive) return
@@ -210,12 +233,14 @@ function HandoverSnapshotDetailSection({
 
   if (selected) {
     return (
-      <SnapshotDetail
-        snapshot={selected}
-        snapshotIndex={selectedIndex}
-        snapshotTotal={items.length}
-        duplicateSnapshotLabels={duplicateSnapshotLabels}
-      />
+      <AllocationCatalogProvider catalog={catalog}>
+        <SnapshotDetail
+          snapshot={selected}
+          snapshotIndex={selectedIndex}
+          snapshotTotal={items.length}
+          duplicateSnapshotLabels={duplicateSnapshotLabels}
+        />
+      </AllocationCatalogProvider>
     )
   }
 
@@ -335,15 +360,16 @@ function SnapshotDetail({
               </div>
               <ul className="mt-3 grid min-w-0 gap-2">
                 {block.beds.map((bed) => (
-                  <li
-                    key={bed.admissionId}
-                    className="flex min-w-0 items-center gap-2 overflow-hidden rounded-xl bg-white px-3 py-2 ring-1 ring-black/5"
-                  >
-                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800" title={bed.label}>
-                      {bed.label}
-                    </span>
-                    <TonePill tone={bed.tone} score={bed.score} />
-                  </li>
+                  <AllocationPatientHoverHost key={bed.admissionId} patientId={bed.admissionId}>
+                    <li
+                      className="flex min-w-0 items-center gap-2 overflow-hidden rounded-xl bg-white px-3 py-2 ring-1 ring-black/5 cursor-pointer hover:ring-black/15 transition-all duration-150"
+                    >
+                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800" title={bed.label}>
+                        {bed.label}
+                      </span>
+                      <TonePill tone={bed.tone} score={bed.score} />
+                    </li>
+                  </AllocationPatientHoverHost>
                 ))}
               </ul>
             </article>
@@ -453,6 +479,7 @@ function HandoffVisualMapModal({
   onClose: () => void
 }) {
   const chargeNurseId = useChargeNurseId(snapshot.shiftId)
+  const [hoveredNurseId, setHoveredNurseId] = useState<string | null>(null)
 
   const nurseThemeMap = useMemo(() => {
     const map = new Map<string, typeof NURSE_THEMES[number]>()
@@ -485,13 +512,22 @@ function HandoffVisualMapModal({
     return map
   }, [snapshot.nurseBlocks])
 
+  const isAnyNurseHovered = hoveredNurseId !== null
+
   const renderBedCell = (bedNum: number) => {
     const bedNumStr = String(bedNum).padStart(2, '0')
     const assigned = bedMap.get(bedNum)
+    const isTarget = assigned && assigned.nurseId === hoveredNurseId
+    const highlightCls = isAnyNurseHovered
+      ? isTarget
+        ? 'ring-4 ring-blue-600 ring-offset-2 scale-[1.04] z-10 shadow-lg'
+        : 'opacity-30 blur-[0.3px] scale-[0.97] transition-all duration-200'
+      : ''
 
     if (!assigned) {
+      const dimCls = isAnyNurseHovered ? 'opacity-30 blur-[0.3px] scale-[0.97] transition-all duration-200' : ''
       return (
-        <div className="flex flex-col justify-between p-3 h-full min-h-[110px] rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70 text-slate-400 select-none">
+        <div className={`flex flex-col justify-between p-3 h-full min-h-[110px] rounded-2xl border-2 border-dashed border-slate-200 bg-slate-50/70 text-slate-400 select-none transition-all duration-200 ${dimCls}`}>
           <div className="flex justify-between items-start">
             <span className="bg-slate-300 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md">
               {bedNumStr}
@@ -516,27 +552,29 @@ function HandoffVisualMapModal({
           : 'bg-emerald-100 text-emerald-800 border-emerald-200'
 
     return (
-      <div className={`flex flex-col justify-between p-3 h-full min-h-[110px] rounded-2xl border-2 ${theme.border} ${theme.bg} shadow-sm hover:shadow-md hover:scale-[1.02] transition-all duration-150`}>
-        <div className="flex justify-between items-start gap-1">
-          <span className="bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0">
-            {bedNumStr}
-          </span>
-          <span className="text-[11px] font-bold text-slate-900 truncate flex-1 text-right" title={diagnosis}>
-            {diagnosis}
-          </span>
-        </div>
-
-        <div className="my-1.5 flex flex-col gap-1 items-stretch">
-          <div className="flex justify-between items-center gap-1.5">
-            <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold truncate max-w-[90px] ${theme.pill}`}>
-              {formatNurseDisplay(assigned.nurseName, { nurseId: assigned.nurseId, chargeNurseId })}
+      <AllocationPatientHoverHost patientId={assigned.admissionId}>
+        <div className={`flex flex-col justify-between p-3 h-full min-h-[110px] rounded-2xl border-2 ${theme.border} ${theme.bg} shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer ${highlightCls}`}>
+          <div className="flex justify-between items-start gap-1">
+            <span className="bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0">
+              {bedNumStr}
             </span>
-            <span className={`text-[10px] font-extrabold px-1.5 py-px rounded-full border shrink-0 ${toneCls}`}>
-              {assigned.score}分
+            <span className="text-[11px] font-bold text-slate-900 truncate flex-1 text-right" title={diagnosis}>
+              {diagnosis}
             </span>
           </div>
+
+          <div className="my-1.5 flex flex-col gap-1 items-stretch">
+            <div className="flex justify-between items-center gap-1.5">
+              <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold truncate max-w-[90px] ${theme.pill}`}>
+                {formatNurseDisplay(assigned.nurseName, { nurseId: assigned.nurseId, chargeNurseId })}
+              </span>
+              <span className={`text-[10px] font-extrabold px-1.5 py-px rounded-full border shrink-0 ${toneCls}`}>
+                {assigned.score}分
+              </span>
+            </div>
+          </div>
         </div>
-      </div>
+      </AllocationPatientHoverHost>
     )
   }
 
@@ -576,10 +614,15 @@ function HandoffVisualMapModal({
             <div className="flex flex-wrap gap-2">
               {snapshot.nurseBlocks.map((block) => {
                 const theme = nurseThemeMap.get(block.nurseId) || NURSE_THEMES[0]
+                const isHovered = hoveredNurseId === block.nurseId
                 return (
                   <div
                     key={block.nurseId}
-                    className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-xl shadow-sm ring-1 ring-black/5"
+                    onMouseEnter={() => setHoveredNurseId(block.nurseId)}
+                    onMouseLeave={() => setHoveredNurseId(null)}
+                    className={`flex items-center gap-1.5 text-xs font-semibold text-slate-700 bg-white px-3 py-1.5 rounded-xl shadow-sm ring-1 ring-black/5 transition-all duration-200 cursor-pointer select-none ${
+                      isHovered ? 'ring-slate-950 bg-slate-100 scale-105 shadow-md' : 'hover:scale-103'
+                    }`}
                   >
                     <span className={`h-3 w-3 rounded-full ${theme.pill.split(' ')[0]}`} />
                     <span>護理師 {formatNurseDisplay(block.nurseName, { nurseId: block.nurseId, chargeNurseId })}</span>

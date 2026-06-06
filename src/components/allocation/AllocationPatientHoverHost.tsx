@@ -1,78 +1,46 @@
-import { useCallback, useRef, useState, type ReactNode, type CSSProperties } from 'react'
-import { createPortal } from 'react-dom'
-import { AllocationPatientHoverDetail } from './AllocationPatientHoverDetail'
+import React, { useState, type ReactElement } from 'react'
+import { PatientDetailModal } from './PatientDetailModal'
 import { useOptionalAllocationCatalog } from './useAllocationCatalog'
 
 type Props = {
   patientId: string
-  children: ReactNode
+  children: ReactElement<{ onClick?: (e: React.MouseEvent) => void; style?: React.CSSProperties }>
   disabled?: boolean
 }
 
 export function AllocationPatientHoverHost({ patientId, children, disabled }: Props) {
-  const anchorRef = useRef<HTMLDivElement>(null)
-  const [open, setOpen] = useState(false)
-  const [posStyle, setPosStyle] = useState<CSSProperties | null>(null)
+  const [modalOpen, setModalOpen] = useState(false)
   const catalogCtx = useOptionalAllocationCatalog()
-
-  const updatePosition = useCallback(() => {
-    const el = anchorRef.current
-    if (!el) return
-    const rect = el.getBoundingClientRect()
-    
-    const estimatedHeight = 480 // Estimated height of hover card detail
-    const spaceBelow = window.innerHeight - rect.bottom
-
-    if (spaceBelow < estimatedHeight && rect.top > spaceBelow) {
-      // Place above the card
-      setPosStyle({
-        left: rect.left,
-        bottom: window.innerHeight - rect.top + 8,
-      })
-    } else {
-      // Place below the card
-      setPosStyle({
-        left: rect.left,
-        top: rect.bottom + 8,
-      })
-    }
-  }, [])
-
   const patient = catalogCtx?.getBed(patientId) ?? null
 
-  function handleEnter() {
-    if (disabled || !patient) return
-    updatePosition()
-    setOpen(true)
+  if (disabled || !patient) {
+    return children
   }
 
-  function handleLeave() {
-    setOpen(false)
+  const handleClick = (e: React.MouseEvent) => {
+    e.preventDefault()
+    e.stopPropagation()
+    setModalOpen(true)
   }
 
   return (
-    <div
-      ref={anchorRef}
-      className="relative"
-      onMouseEnter={handleEnter}
-      onMouseLeave={handleLeave}
-      onFocus={handleEnter}
-      onBlur={handleLeave}
-    >
-      {children}
-      {open && posStyle && patient && !disabled
-        ? createPortal(
-            <div
-              className="pointer-events-none fixed z-[100]"
-              style={posStyle}
-              role="tooltip"
-            >
-              <AllocationPatientHoverDetail patient={patient} className="!static !mt-0 shadow-xl" />
-            </div>,
-            document.body,
-          )
-        : null}
-    </div>
+    <>
+      {React.cloneElement(children, {
+        onClick: (e: React.MouseEvent) => {
+          children.props.onClick?.(e)
+          handleClick(e)
+        },
+        style: {
+          ...children.props.style,
+          cursor: 'pointer',
+        },
+      })}
+      {modalOpen && (
+        <PatientDetailModal patient={patient} onClose={() => setModalOpen(false)} />
+      )}
+    </>
   )
 }
+
+
 
