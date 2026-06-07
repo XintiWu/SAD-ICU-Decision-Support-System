@@ -359,11 +359,26 @@ function BurdenFormPageBody() {
                   incompleteFields={incompleteByAdmission.get(row.admissionId)}
                   onChange={(patch) => {
                     setRows((prev) =>
-                      prev.map((x) =>
-                        x.admissionId === row.admissionId
-                          ? { ...x, subjective: { ...x.subjective, ...patch } }
-                          : x,
-                      ),
+                      prev.map((x) => {
+                        if (x.admissionId === row.admissionId) {
+                          const nextSubj = { ...x.subjective, ...patch }
+                          const sTotal = subjectiveTotal(nextSubj)
+                          const oTotal = objectiveTotal(x.objective)
+                          const total = sTotal + oTotal
+                          const level = total >= 22 ? '高' : total >= 14 ? '中' : '低'
+                          return {
+                            ...x,
+                            subjective: nextSubj,
+                            score: {
+                              ...x.score,
+                              subjectiveTotal: sTotal,
+                              totalScore: total,
+                              level,
+                            },
+                          }
+                        }
+                        return x
+                      }),
                     )
                   }}
                 />
@@ -379,11 +394,26 @@ function BurdenFormPageBody() {
                   incompleteFields={incompleteByAdmission.get(row.admissionId)}
                   onChange={(patch) => {
                     setRows((prev) =>
-                      prev.map((x) =>
-                        x.admissionId === row.admissionId
-                          ? { ...x, subjective: { ...x.subjective, ...patch } }
-                          : x,
-                      ),
+                      prev.map((x) => {
+                        if (x.admissionId === row.admissionId) {
+                          const nextSubj = { ...x.subjective, ...patch }
+                          const sTotal = subjectiveTotal(nextSubj)
+                          const oTotal = objectiveTotal(x.objective)
+                          const total = sTotal + oTotal
+                          const level = total >= 22 ? '高' : total >= 14 ? '中' : '低'
+                          return {
+                            ...x,
+                            subjective: nextSubj,
+                            score: {
+                              ...x.score,
+                              subjectiveTotal: sTotal,
+                              totalScore: total,
+                              level,
+                            },
+                          }
+                        }
+                        return x
+                      }),
                     )
                   }}
                 />

@@ -14,11 +14,6 @@ function resolveName(nurseNames: Record<string, string> | undefined, nurseId: st
 }
 
 export function ConfirmAllocationDialog({ stats, totalBeds, nurseNames, onConfirm, onCancel }: Props) {
-  const warnings: string[] = []
-  if (stats.unassignedCount > 0) warnings.push(`仍有 ${stats.unassignedCount} 床未分配`)
-  if (stats.spread > 10) warnings.push(`負荷差距達 ${stats.spread} 分，建議再平衡`)
-  else if (stats.spread > 6) warnings.push(`負荷差距 ${stats.spread} 分，請確認是否符合班表期待`)
-
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true">
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-black/10">
@@ -38,13 +33,6 @@ export function ConfirmAllocationDialog({ stats, totalBeds, nurseNames, onConfir
             </li>
           ) : null}
         </ul>
-        {warnings.length ? (
-          <div className="mt-3 rounded-xl bg-amber-50 p-3 text-xs text-amber-900 ring-1 ring-amber-200">
-            {warnings.map((w) => (
-              <p key={w}>⚠ {w}</p>
-            ))}
-          </div>
-        ) : null}
         <div className="mt-5 flex gap-2">
           <button
             type="button"
