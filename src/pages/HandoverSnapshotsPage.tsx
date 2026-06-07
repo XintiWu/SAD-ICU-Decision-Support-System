@@ -177,9 +177,12 @@ function HandoverSnapshotDetailSection({
 
   useEffect(() => {
     let alive = true
-    setDetailLoading(true)
 
-    apiGet<HandoffSnapshotDetail>(`/handoff-snapshots/${activeId}`)
+    void Promise.resolve().then(() => {
+      if (alive) setDetailLoading(true)
+  })
+
+  apiGet<HandoffSnapshotDetail>(`/handoff-snapshots/${activeId}`)
       .then(async (snapshotData) => {
         if (!alive) return
 
