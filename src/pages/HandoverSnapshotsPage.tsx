@@ -7,7 +7,8 @@ import { useChargeNurseId } from '../hooks/useChargeNurseId'
 import { formatNurseDisplay } from '../lib/nurseLabel'
 import { buildPatientCatalog, mergeBurdenIntoCatalog, mergeStatIntoCatalog, type CatalogEntry } from '../components/allocation/allocationApiState'
 import { AllocationCatalogProvider } from '../components/allocation/allocationCatalog'
-import { AllocationPatientHoverHost } from '../components/allocation/AllocationPatientHoverHost'
+import { useOptionalAllocationCatalog } from '../components/allocation/useAllocationCatalog'
+import { PatientDetailModal } from '../components/allocation/PatientDetailModal'
 
 export function HandoverSnapshotsPage() {
   const { shiftId } = useShift()
@@ -287,6 +288,10 @@ function SnapshotDetail({
   const chargeNurseId = useChargeNurseId(snapshot.shiftId)
   const versionNo = snapshotIndex >= 0 ? snapshotIndex + 1 : null
   const [showVisualMap, setShowVisualMap] = useState(false)
+  const [modalPatientId, setModalPatientId] = useState<string | null>(null)
+
+  const catalogCtx = useOptionalAllocationCatalog()
+  const modalPatient = modalPatientId && catalogCtx ? catalogCtx.getBed(modalPatientId) : null
 
   return (
     <div className="grid gap-4">
@@ -363,16 +368,16 @@ function SnapshotDetail({
               </div>
               <ul className="mt-3 grid min-w-0 gap-2">
                 {block.beds.map((bed) => (
-                  <AllocationPatientHoverHost key={bed.admissionId} patientId={bed.admissionId}>
-                    <li
-                      className="flex min-w-0 items-center gap-2 overflow-hidden rounded-xl bg-white px-3 py-2 ring-1 ring-black/5 cursor-pointer hover:ring-black/15 transition-all duration-150"
-                    >
-                      <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800" title={bed.label}>
-                        {bed.label}
-                      </span>
-                      <TonePill tone={bed.tone} score={bed.score} />
-                    </li>
-                  </AllocationPatientHoverHost>
+                  <li
+                    key={bed.admissionId}
+                    onClick={() => setModalPatientId(bed.admissionId)}
+                    className="flex min-w-0 items-center gap-2 overflow-hidden rounded-xl bg-white px-3 py-2 ring-1 ring-black/5 cursor-pointer hover:ring-black/15 transition-all duration-150"
+                  >
+                    <span className="min-w-0 flex-1 truncate text-xs font-semibold text-slate-800" title={bed.label}>
+                      {bed.label}
+                    </span>
+                    <TonePill tone={bed.tone} score={bed.score} />
+                  </li>
                 ))}
               </ul>
             </article>
@@ -390,6 +395,9 @@ function SnapshotDetail({
           snapshot={snapshot}
           onClose={() => setShowVisualMap(false)}
         />
+      )}
+      {modalPatient && (
+        <PatientDetailModal patient={modalPatient} onClose={() => setModalPatientId(null)} />
       )}
     </div>
   )
@@ -483,6 +491,10 @@ function HandoffVisualMapModal({
 }) {
   const chargeNurseId = useChargeNurseId(snapshot.shiftId)
   const [hoveredNurseId, setHoveredNurseId] = useState<string | null>(null)
+  const [modalPatientId, setModalPatientId] = useState<string | null>(null)
+
+  const catalogCtx = useOptionalAllocationCatalog()
+  const modalPatient = modalPatientId && catalogCtx ? catalogCtx.getBed(modalPatientId) : null
 
   const nurseThemeMap = useMemo(() => {
     const map = new Map<string, typeof NURSE_THEMES[number]>()
@@ -555,29 +567,30 @@ function HandoffVisualMapModal({
           : 'bg-emerald-100 text-emerald-800 border-emerald-200'
 
     return (
-      <AllocationPatientHoverHost patientId={assigned.admissionId}>
-        <div className={`flex flex-col justify-between p-3 h-full min-h-[110px] rounded-2xl border-2 ${theme.border} ${theme.bg} shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer ${highlightCls}`}>
-          <div className="flex justify-between items-start gap-1">
-            <span className="bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0">
-              {bedNumStr}
-            </span>
-            <span className="text-[11px] font-bold text-slate-900 truncate flex-1 text-right" title={diagnosis}>
-              {diagnosis}
-            </span>
-          </div>
+      <div
+        onClick={() => setModalPatientId(assigned.admissionId)}
+        className={`flex flex-col justify-between p-3 h-full min-h-[110px] rounded-2xl border-2 ${theme.border} ${theme.bg} shadow-sm hover:shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 cursor-pointer ${highlightCls}`}
+      >
+        <div className="flex justify-between items-start gap-1">
+          <span className="bg-slate-900 text-white text-[10px] font-black px-1.5 py-0.5 rounded-md shrink-0">
+            {bedNumStr}
+          </span>
+          <span className="text-[11px] font-bold text-slate-900 truncate flex-1 text-right" title={diagnosis}>
+            {diagnosis}
+          </span>
+        </div>
 
-          <div className="my-1.5 flex flex-col gap-1 items-stretch">
-            <div className="flex justify-between items-center gap-1.5">
-              <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold truncate max-w-[90px] ${theme.pill}`}>
-                {formatNurseDisplay(assigned.nurseName, { nurseId: assigned.nurseId, chargeNurseId })}
-              </span>
-              <span className={`text-[10px] font-extrabold px-1.5 py-px rounded-full border shrink-0 ${toneCls}`}>
-                {assigned.score}分
-              </span>
-            </div>
+        <div className="my-1.5 flex flex-col gap-1 items-stretch">
+          <div className="flex justify-between items-center gap-1.5">
+            <span className={`inline-flex items-center rounded px-2 py-0.5 text-[10px] font-bold truncate max-w-[90px] ${theme.pill}`}>
+              {formatNurseDisplay(assigned.nurseName, { nurseId: assigned.nurseId, chargeNurseId })}
+            </span>
+            <span className={`text-[10px] font-extrabold px-1.5 py-px rounded-full border shrink-0 ${toneCls}`}>
+              {assigned.score}分
+            </span>
           </div>
         </div>
-      </AllocationPatientHoverHost>
+      </div>
     )
   }
 
@@ -694,6 +707,9 @@ function HandoffVisualMapModal({
           </button>
         </div>
       </div>
+      {modalPatient && (
+        <PatientDetailModal patient={modalPatient} onClose={() => setModalPatientId(null)} />
+      )}
     </div>,
     document.body,
   )
