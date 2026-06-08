@@ -387,7 +387,19 @@ function ChargeAllocationPageBody() {
 
   function handleUndo() {
     const prev = undoStack[undoStack.length - 1]
-    if (!prev) return
+    if (!prev) {
+      pushUndoFromRef()
+      const resetBoard = emptyBoardState(
+        admissions.map((a) => a.admissionId),
+        nurseIds,
+      )
+      setUnassigned(resetBoard.unassigned)
+      setByNurse(resetBoard.byNurse)
+      if (allocationRunId && runStatus === 'draft') {
+        void persistDraft(resetBoard.byNurse, allocationRunId)
+      }
+      return
+    }
     applySnapshot(prev)
     setUndoStack((s) => s.slice(0, -1))
     if (prev.allocationRunId && runStatus === 'draft') {
@@ -545,7 +557,7 @@ function ChargeAllocationPageBody() {
             stats={stats}
             loadRows={loadRows}
             nurseNames={nurseNames}
-            canUndo={undoStack.length > 0 && !readonly}
+            canUndo={(undoStack.length > 0 || unassigned.length < totalBeds) && !readonly}
             onUndo={handleUndo}
             onConfirm={() => setConfirmOpen(true)}
             confirmDisabled={!allocationRunId || confirming || unassigned.length > 0}
