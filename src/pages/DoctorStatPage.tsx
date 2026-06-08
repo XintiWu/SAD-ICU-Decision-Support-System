@@ -21,8 +21,7 @@ export function DoctorStatPage() {
   const [kind, setKind] = useState<Kind>('給藥')
   const [title, setTitle] = useState('')
   const [reason, setReason] = useState('')
-
-
+  const [severity, setSeverity] = useState<'高' | '中' | '低'>('中')
 
   const mutation = useMutation({
     mutationFn: createStatOrder,
@@ -33,6 +32,7 @@ export function DoctorStatPage() {
       setTitle('')
       setReason('')
       setAdmissionId('')
+      setSeverity('中')
     },
     onError: (err: Error) => {
       alert(`發布失敗: ${err.message}`)
@@ -62,6 +62,7 @@ export function DoctorStatPage() {
       kind,
       title,
       reason,
+      severity,
       orderedBy: '醫師 (模擬)',
     })
   }
@@ -160,6 +161,36 @@ export function DoctorStatPage() {
                     }`}
                 >
                   {k}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Severity Selection */}
+        <div>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">嚴重度</label>
+          <div className="grid grid-cols-3 gap-3 sm:max-w-xs">
+            {(['高', '中', '低'] as const).map(s => {
+              const isActive = severity === s
+              const activeClass =
+                s === '高'
+                  ? 'bg-[#b3341f] text-white shadow-md shadow-[#b3341f]/30 ring-2 ring-[#b3341f] ring-offset-1'
+                  : s === '中'
+                    ? 'bg-[#1e4ea7] text-white shadow-md shadow-[#1e4ea7]/30 ring-2 ring-[#1e4ea7] ring-offset-1'
+                    : 'bg-slate-600 text-white shadow-md shadow-slate-600/30 ring-2 ring-slate-600 ring-offset-1'
+
+              return (
+                <button
+                  key={s}
+                  type="button"
+                  onClick={() => setSeverity(s)}
+                  className={`rounded-xl px-3 py-2.5 text-sm font-semibold transition-all duration-200 ${isActive
+                    ? activeClass
+                    : 'bg-slate-50 text-slate-600 ring-1 ring-inset ring-slate-200 hover:bg-slate-100 hover:text-slate-900'
+                    }`}
+                >
+                  {s}
                 </button>
               )
             })}

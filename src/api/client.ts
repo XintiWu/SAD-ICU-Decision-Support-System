@@ -94,6 +94,7 @@ export type ApiTask = {
   points: number
   source: string
   assignedNurseId?: string
+  severity?: '高' | '中' | '低'
 }
 
 export type ApiStatOrder = {
@@ -107,6 +108,7 @@ export type ApiStatOrder = {
   orderedAt: string
   reason?: string
   status: 'pending' | 'done' | 'cancelled'
+  severity: '高' | '中' | '低'
 }
 
 export type HandoffSnapshotListItem = {
@@ -241,6 +243,7 @@ export async function createStatOrder(payload: {
   kind: '給藥' | '檢查' | '監測' | '治療' | '其他'
   orderedBy: string
   reason?: string
+  severity?: '高' | '中' | '低'
 }): Promise<ApiStatOrder> {
   return apiPost<ApiStatOrder>('/stat-orders', payload)
 }

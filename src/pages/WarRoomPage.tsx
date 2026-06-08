@@ -17,6 +17,7 @@ type WarRoomTask = {
   stat: boolean
   newbie: boolean
   points: number
+  severity?: '高' | '中' | '低'
 }
 
 type PatientInfo = {
@@ -330,6 +331,7 @@ function toNurseCard(row: WarRoomData['nurses'][number], chargeNurseId: string |
         stat: task.source === 'STAT',
         newbie: task.source === '新病人',
         points: task.points,
+        severity: task.severity,
       }
     })
   const remainingFromTasks = tasks.filter((task) => !task.done).reduce((sum, task) => sum + task.points, 0)
@@ -362,9 +364,20 @@ function formatTaskBedLabel(label: string) {
   return num ? `床${num[0]}` : label
 }
 
+function getSeverityRank(task: WarRoomTask): number {
+  if (task.severity === '高') return 3
+  if (task.severity === '中') return 2
+  if (task.severity === '低') return 1
+  if (task.urgent) return 2
+  return 0
+}
+
 function sortTasks(tasks: WarRoomTask[]) {
   return tasks.slice().sort((a, b) => {
     if (a.done !== b.done) return Number(a.done) - Number(b.done)
+    const rankA = getSeverityRank(a)
+    const rankB = getSeverityRank(b)
+    if (rankA !== rankB) return rankB - rankA
     const bed = a.bedLabel.localeCompare(b.bedLabel, 'zh-Hant')
     if (bed !== 0) return bed
     const title = a.title.localeCompare(b.title, 'zh-Hant')
@@ -517,7 +530,22 @@ function TaskRow({
           {task.title}
         </div>
         <div className="mt-1 flex flex-wrap items-center gap-1.5 text-[11px]">
-          {task.stat && !task.done ? <span className="rounded-full bg-red-100 px-2 py-0.5 font-bold text-red-800">STAT</span> : null}
+          {task.stat && !task.done ? (
+            <>
+              <span className="rounded-full bg-red-100 px-2 py-0.5 font-bold text-red-800">STAT</span>
+              {task.severity ? (
+                <span className={`rounded-full px-2 py-0.5 font-semibold ${
+                  task.severity === '高'
+                    ? 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f2b3a6]'
+                    : task.severity === '中'
+                      ? 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]'
+                      : 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10'
+                }`}>
+                  {task.severity}
+                </span>
+              ) : null}
+            </>
+          ) : null}
           {task.urgent && !task.stat && !task.done ? <span className="rounded-full bg-[#ffe8e1] px-2 py-0.5 font-semibold text-[#b3341f]">急</span> : null}
           {task.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
           <span className={task.done ? 'font-semibold text-[#1e6c3a]' : 'text-slate-500'}>{task.done ? '已完成' : '待處理'}</span>

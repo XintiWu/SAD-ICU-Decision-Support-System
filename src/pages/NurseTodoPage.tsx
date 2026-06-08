@@ -191,7 +191,10 @@ function NurseTodoPageBody({ shiftId }: { shiftId: string }) {
                             <div className="mt-1 text-xs text-[#9a3412]">{o.reason}</div>
                           ) : null}
                         </div>
-                        <KindPill kind={o.kind} />
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          <KindPill kind={o.kind} />
+                          <SeverityPill severity={o.severity} />
+                        </div>
                       </div>
                     </li>
                   ))}
@@ -307,6 +310,19 @@ function KindPill({ kind }: { kind: StatOrderKind }) {
   )
 }
 
+function SeverityPill({ severity }: { severity: ApiStatOrder['severity'] }) {
+  const map: Record<ApiStatOrder['severity'], string> = {
+    高: 'bg-[#ffe8e1] text-[#b3341f] ring-1 ring-[#f2b3a6]',
+    中: 'bg-[#fff7ed] text-[#9a5b1a] ring-1 ring-[#f1d7b8]',
+    低: 'bg-[#f1f5f9] text-[#334155] ring-1 ring-black/10',
+  }
+  return (
+    <span className={`shrink-0 rounded-full px-2 py-0.5 text-[10px] font-semibold ${map[severity]}`}>
+      {severity}
+    </span>
+  )
+}
+
 function KindFilterPill({
   kind,
   active,
@@ -354,7 +370,9 @@ function KindFilterPill({
 }
 
 function statOrderWeight(o: ApiStatOrder) {
-  return KIND_WEIGHT[o.kind] ?? 1
+  const base = KIND_WEIGHT[o.kind] ?? 1
+  const severityOffset = o.severity === '高' ? 2 : o.severity === '低' ? -1 : 0
+  return Math.max(1, base + severityOffset)
 }
 
 function buildPatientStats(orders: ApiStatOrder[]) {

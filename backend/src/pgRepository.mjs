@@ -75,7 +75,7 @@ export async function listStatOrders({ shiftId, includeCompleted = false, assign
   const result = await query(
     `
     select so.id, so.admission_id, so.title, so.kind,
-           so.ordered_by, so.ordered_at_display, so.reason, so.status,
+           so.ordered_by, so.ordered_at_display, so.reason, so.status, so.severity,
            b.label as bed_label, a.diagnosis
     from stat_orders so
     join admissions a on a.id = so.admission_id
@@ -96,6 +96,7 @@ export async function listStatOrders({ shiftId, includeCompleted = false, assign
     orderedAt: r.ordered_at_display,
     reason: r.reason ?? undefined,
     status: r.status,
+    severity: r.severity || '中',
   }))
 }
 
@@ -109,7 +110,7 @@ export async function updateStatOrder({ orderId, patch, userId = ids.currentNurs
     update stat_orders
     set status = $2::varchar
     where id = $1
-    returning id, admission_id, title, kind, ordered_by, ordered_at_display, reason, status
+    returning id, admission_id, title, kind, ordered_by, ordered_at_display, reason, status, severity
     `,
     [orderId, patch.status],
   )
@@ -135,14 +136,20 @@ export async function updateStatOrder({ orderId, patch, userId = ids.currentNurs
     orderedAt: row.ordered_at_display,
     reason: row.reason ?? undefined,
     status: row.status,
+    severity: row.severity || '中',
   }
 }
 
-export async function createStatOrder({ shiftId, admissionId, title, kind, orderedBy, reason, userId = ids.currentNurse } = {}) {
+export async function createStatOrder({ shiftId, admissionId, title, kind, orderedBy, reason, severity, userId = ids.currentNurse } = {}) {
   await getCurrentUser(userId)
   
   if (!['給藥', '檢查', '監測', '治療', '其他'].includes(kind)) {
     throw new ApiError(400, 'VALIDATION_ERROR', 'kind 參數不合法', { kind })
+  }
+
+  const sev = severity || '中'
+  if (!['高', '中', '低'].includes(sev)) {
+    throw new ApiError(400, 'VALIDATION_ERROR', 'severity 參數不合法', { severity: sev })
   }
 
   const now = new Date()
@@ -150,11 +157,11 @@ export async function createStatOrder({ shiftId, admissionId, title, kind, order
 
   const result = await query(
     `
-    insert into stat_orders (shift_id, admission_id, title, kind, ordered_by, ordered_at_display, reason)
-    values ($1, $2, $3, $4, $5, $6, $7)
-    returning id, admission_id, title, kind, ordered_by, ordered_at_display, reason, status
+    insert into stat_orders (shift_id, admission_id, title, kind, ordered_by, ordered_at_display, reason, severity)
+    values ($1, $2, $3, $4, $5, $6, $7, $8)
+    returning id, admission_id, title, kind, ordered_by, ordered_at_display, reason, status, severity
     `,
-    [shiftId, admissionId, title, kind, orderedBy ?? '醫師', orderedAtDisplay, reason || null]
+    [shiftId, admissionId, title, kind, orderedBy ?? '醫師', orderedAtDisplay, reason || null, sev]
   )
   
   const row = result.rows[0]
@@ -178,6 +185,7 @@ export async function createStatOrder({ shiftId, admissionId, title, kind, order
     orderedAt: row.ordered_at_display,
     reason: row.reason ?? undefined,
     status: row.status,
+    severity: row.severity,
   }
 }
 
@@ -1166,6 +1174,9 @@ function statOrderKindToTaskKind(kind) {
 
 function formatStatOrderAsTask(order) {
   const kind = statOrderKindToTaskKind(order.kind)
+  const basePoints = taskPoints({ kind, urgent: true })
+  const severityPointsOffset = order.severity === '高' ? 2 : order.severity === '低' ? -1 : 0
+  const points = Math.max(1, basePoints + severityPointsOffset)
   return {
     id: `stat:${order.id}`,
     admissionId: order.admissionId,
@@ -1177,8 +1188,9 @@ function formatStatOrderAsTask(order) {
     status: order.status,
     done: order.status !== 'pending',
     completedAt: null,
-    points: taskPoints({ kind, urgent: true }),
+    points,
     source: 'STAT',
+    severity: order.severity,
   }
 }
 
@@ -1187,10 +1199,22 @@ function warRoomBedNo(label) {
   return match ? Number(match[0]) : Number.POSITIVE_INFINITY
 }
 
+function getSeverityRank(task) {
+  if (task.severity === '高') return 3
+  if (task.severity === '中') return 2
+  if (task.severity === '低') return 1
+  if (task.urgent) return 2
+  return 0
+}
+
 function warRoomTaskSort(a, b) {
   if (a.done !== b.done) return Number(a.done) - Number(b.done)
-  if (a.urgent !== b.urgent) return Number(b.urgent) - Number(a.urgent)
-  return warRoomBedNo(a.bedLabel) - warRoomBedNo(b.bedLabel)
+  const rankA = getSeverityRank(a)
+  const rankB = getSeverityRank(b)
+  if (rankA !== rankB) return rankB - rankA
+  const bedDiff = warRoomBedNo(a.bedLabel) - warRoomBedNo(b.bedLabel)
+  if (bedDiff !== 0) return bedDiff
+  return (a.title || '').localeCompare(b.title || '', 'zh-Hant') || a.id.localeCompare(b.id)
 }
 
 async function admissionsWithScores(shiftId) {
@@ -1814,39 +1838,39 @@ function maxPairWalkDist(labels) {
 }
 
 const DEMO_TEMPLATES = [
-  { admissionBedNo: 1, title: 'ABG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 1, title: 'Lactate STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 1, title: 'Blood cultures x2 STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 1, title: 'Bedside echo STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 1, title: 'NS 250 mL IV bolus STAT', kind: '給藥', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 2, title: 'ECG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 2, title: 'Troponin-I STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 3, title: 'ABG STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 3, title: 'Portable CXR STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 3, title: 'Lactate STAT', kind: '檢查', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 3, title: 'Propofol 10mL IV STAT', kind: '給藥', orderedBy: '彭OO醫師' },
-  { admissionBedNo: 6, title: 'Bedside echo STAT', kind: '檢查', orderedBy: '胡OO醫師' },
-  { admissionBedNo: 8, title: 'Furosemide 1amp IV STAT', kind: '給藥', orderedBy: '胡OO醫師' },
-  { admissionBedNo: 9, title: 'CBC STAT', kind: '檢查', orderedBy: '胡OO醫師' },
-  { admissionBedNo: 9, title: 'check blood type STAT', kind: '檢查', orderedBy: '胡OO醫師' },
-  { admissionBedNo: 9, title: 'Pantoprazole 1vial IV STAT', kind: '給藥', orderedBy: '胡OO醫師' },
-  { admissionBedNo: 9, title: 'Lorazepam 0.5 mg PO STAT', kind: '給藥', orderedBy: '胡OO醫師' },
-  { admissionBedNo: 12, title: 'Serum Na/osmolality STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 12, title: 'Urine osmolality STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 12, title: 'Urine specific gravity STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 12, title: 'DDAVP PO STAT', kind: '給藥', orderedBy: '李OO醫師' },
-  { admissionBedNo: 13, title: 'Ammonia STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 13, title: 'PT/INR STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 13, title: '會診肝臟科', kind: '其他', orderedBy: '李OO醫師' },
-  { admissionBedNo: 13, title: '召開家庭會議', kind: '其他', orderedBy: '李OO醫師' },
-  { admissionBedNo: 15, title: 'Serum ketone STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 17, title: 'check CBC', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 17, title: 'check U/A', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 17, title: 'check U/C', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 17, title: 'Blood cultures x2 STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 17, title: 'Sputum culture STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 17, title: 'Portable CXR STAT', kind: '檢查', orderedBy: '李OO醫師' },
-  { admissionBedNo: 17, title: 'ACT 1 tab PO', kind: '給藥', orderedBy: '李OO醫師' }
+  { admissionBedNo: 1, title: 'ABG STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 1, title: 'Lactate STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 1, title: 'Blood cultures x2 STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 1, title: 'Bedside echo STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 1, title: 'NS 250 mL IV bolus STAT', kind: '給藥', orderedBy: '彭OO醫師', severity: '中' },
+  { admissionBedNo: 2, title: 'ECG STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 2, title: 'Troponin-I STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 3, title: 'ABG STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 3, title: 'Portable CXR STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 3, title: 'Lactate STAT', kind: '檢查', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 3, title: 'Propofol 10mL IV STAT', kind: '給藥', orderedBy: '彭OO醫師', severity: '高' },
+  { admissionBedNo: 6, title: 'Bedside echo STAT', kind: '檢查', orderedBy: '胡OO醫師', severity: '高' },
+  { admissionBedNo: 8, title: 'Furosemide 1amp IV STAT', kind: '給藥', orderedBy: '胡OO醫師', severity: '高' },
+  { admissionBedNo: 9, title: 'CBC STAT', kind: '檢查', orderedBy: '胡OO醫師', severity: '中' },
+  { admissionBedNo: 9, title: 'check blood type STAT', kind: '檢查', orderedBy: '胡OO醫師', severity: '高' },
+  { admissionBedNo: 9, title: 'Pantoprazole 1vial IV STAT', kind: '給藥', orderedBy: '胡OO醫師', severity: '高' },
+  { admissionBedNo: 9, title: 'Lorazepam 0.5 mg PO STAT', kind: '給藥', orderedBy: '胡OO醫師', severity: '中' },
+  { admissionBedNo: 12, title: 'Serum Na/osmolality STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '高' },
+  { admissionBedNo: 12, title: 'Urine osmolality STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '中' },
+  { admissionBedNo: 12, title: 'Urine specific gravity STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '中' },
+  { admissionBedNo: 12, title: 'DDAVP PO STAT', kind: '給藥', orderedBy: '李OO醫師', severity: '中' },
+  { admissionBedNo: 13, title: 'Ammonia STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '高' },
+  { admissionBedNo: 13, title: 'PT/INR STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '高' },
+  { admissionBedNo: 13, title: '會診肝臟科', kind: '其他', orderedBy: '李OO醫師', severity: '低' },
+  { admissionBedNo: 13, title: '召開家庭會議', kind: '其他', orderedBy: '李OO醫師', severity: '低' },
+  { admissionBedNo: 15, title: 'Serum ketone STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '高' },
+  { admissionBedNo: 17, title: 'check CBC', kind: '檢查', orderedBy: '李OO醫師', severity: '中' },
+  { admissionBedNo: 17, title: 'check U/A', kind: '檢查', orderedBy: '李OO醫師', severity: '中' },
+  { admissionBedNo: 17, title: 'check U/C', kind: '檢查', orderedBy: '李OO醫師', severity: '中' },
+  { admissionBedNo: 17, title: 'Blood cultures x2 STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '高' },
+  { admissionBedNo: 17, title: 'Sputum culture STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '高' },
+  { admissionBedNo: 17, title: 'Portable CXR STAT', kind: '檢查', orderedBy: '李OO醫師', severity: '高' },
+  { admissionBedNo: 17, title: 'ACT 1 tab PO', kind: '給藥', orderedBy: '李OO醫師', severity: '低' }
 ]
 
 export async function importDemoStatOrders({ shiftId }) {
@@ -1872,11 +1896,11 @@ export async function importDemoStatOrders({ shiftId }) {
     if (admissionId) {
       const result = await query(
         `
-        insert into stat_orders (shift_id, admission_id, title, kind, ordered_by, ordered_at_display)
-        values ($1, $2, $3, $4, $5, $6)
-        returning id, admission_id, title, kind, ordered_by, ordered_at_display, status
+        insert into stat_orders (shift_id, admission_id, title, kind, ordered_by, ordered_at_display, severity)
+        values ($1, $2, $3, $4, $5, $6, $7)
+        returning id, admission_id, title, kind, ordered_by, ordered_at_display, status, severity
         `,
-        [shiftId, admissionId, t.title, t.kind, t.orderedBy, orderedAtDisplay]
+        [shiftId, admissionId, t.title, t.kind, t.orderedBy, orderedAtDisplay, t.severity || '中']
       )
       inserted.push(result.rows[0])
     }

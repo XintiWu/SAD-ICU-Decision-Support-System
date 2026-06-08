@@ -136,6 +136,7 @@ async function handleRequest(req, res) {
           kind: body.kind,
           orderedBy: body.orderedBy,
           reason: body.reason,
+          severity: body.severity,
           userId: getUserId(req, url),
         }),
       }, 201)

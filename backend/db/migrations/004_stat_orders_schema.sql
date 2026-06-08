@@ -8,6 +8,7 @@ create table stat_orders (
   ordered_at_display varchar(10) not null,
   reason text,
   status varchar(20) not null default 'pending' check (status in ('pending', 'done', 'cancelled')),
+  severity varchar(10) not null default '中' check (severity in ('高', '中', '低')),
   created_at timestamptz not null default now()
 );
 
