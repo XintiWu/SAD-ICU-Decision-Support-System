@@ -7,9 +7,10 @@ type Props = {
   patientId: string
   children: ReactNode
   disabled?: boolean
+  className?: string
 }
 
-export function AllocationPatientHoverHost({ patientId, children, disabled }: Props) {
+export function AllocationPatientHoverHost({ patientId, children, disabled, className = '' }: Props) {
   const anchorRef = useRef<HTMLDivElement>(null)
   const [open, setOpen] = useState(false)
   const [posStyle, setPosStyle] = useState<CSSProperties | null>(null)
@@ -53,7 +54,7 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
   return (
     <div
       ref={anchorRef}
-      className="relative min-w-0 w-full"
+      className={`relative ${className}`}
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}
       onFocus={handleEnter}

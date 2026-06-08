@@ -88,7 +88,11 @@ export function AllocationBedChip({ bed, dragging, overlay, fill }: Props) {
   if (overlay) return chip
 
   return (
-    <AllocationPatientHoverHost patientId={bed.id} disabled={isDragging || dragging}>
+    <AllocationPatientHoverHost
+      patientId={bed.id}
+      disabled={isDragging || dragging}
+      className={fill ? 'min-w-0 w-full' : 'min-w-0 shrink-0'}
+    >
       {chip}
     </AllocationPatientHoverHost>
   )

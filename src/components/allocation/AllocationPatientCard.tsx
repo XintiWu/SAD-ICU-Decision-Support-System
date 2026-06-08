@@ -83,7 +83,7 @@ export function AllocationPatientCard({ bed, dragging, overlay }: Props) {
   if (overlay) return card
 
   return (
-    <AllocationPatientHoverHost patientId={bed.id} disabled={isDragging || dragging}>
+    <AllocationPatientHoverHost patientId={bed.id} disabled={isDragging || dragging} className="min-w-0 w-full">
       {card}
     </AllocationPatientHoverHost>
   )
