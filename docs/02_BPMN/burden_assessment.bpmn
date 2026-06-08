@@ -1,0 +1,215 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Definitions_BurdenAssessment"
+  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:collaboration id="Collab_BA">
+    <bpmn:participant id="Pool_BA" name="ICU 護理分配系統 — 麻煩度評估" processRef="Process_BA" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_BA" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_BA">
+      <bpmn:lane id="Lane_Nurse" name="護理師">
+        <bpmn:flowNodeRef>Start_BA</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_EnterPage</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_FillForm</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>GW_SaveType</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SaveDraft</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_Submit</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_System_BA" name="系統">
+        <bpmn:flowNodeRef>Task_LoadData</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_UpdateScore</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_BA</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="Start_BA" name="班前準備">
+      <bpmn:outgoing>Flow_BA_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Task_EnterPage" name="進入麻煩度評估頁&#10;/nurse/burden-form">
+      <bpmn:incoming>Flow_BA_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_BA_2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_LoadData" name="載入本班評估資料&#10;GET /burden-assessments">
+      <bpmn:incoming>Flow_BA_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_BA_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Task_FillForm" name="填寫主觀評估因素&#10;RASS / Boolean / Level">
+      <bpmn:incoming>Flow_BA_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_BA_4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="GW_SaveType" name="儲存方式">
+      <bpmn:incoming>Flow_BA_4</bpmn:incoming>
+      <bpmn:outgoing>Flow_BA_Draft</bpmn:outgoing>
+      <bpmn:outgoing>Flow_BA_Submit</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_SaveDraft" name="儲存草稿&#10;status = draft">
+      <bpmn:incoming>Flow_BA_Draft</bpmn:incoming>
+      <bpmn:outgoing>Flow_BA_5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Task_Submit" name="提交評估&#10;status = submitted">
+      <bpmn:incoming>Flow_BA_Submit</bpmn:incoming>
+      <bpmn:outgoing>Flow_BA_6</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_UpdateScore" name="重新計算 subjective_total&#10;與 total_score&#10;PATCH /burden-assessments/{id}">
+      <bpmn:incoming>Flow_BA_5</bpmn:incoming>
+      <bpmn:incoming>Flow_BA_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_BA_7</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End_BA" name="評估完成&#10;total_score 可供分床使用">
+      <bpmn:incoming>Flow_BA_7</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_BA_1" sourceRef="Start_BA" targetRef="Task_EnterPage" />
+    <bpmn:sequenceFlow id="Flow_BA_2" sourceRef="Task_EnterPage" targetRef="Task_LoadData" />
+    <bpmn:sequenceFlow id="Flow_BA_3" sourceRef="Task_LoadData" targetRef="Task_FillForm" />
+    <bpmn:sequenceFlow id="Flow_BA_4" sourceRef="Task_FillForm" targetRef="GW_SaveType" />
+    <bpmn:sequenceFlow id="Flow_BA_Draft" name="存草稿" sourceRef="GW_SaveType" targetRef="Task_SaveDraft" />
+    <bpmn:sequenceFlow id="Flow_BA_Submit" name="提交" sourceRef="GW_SaveType" targetRef="Task_Submit" />
+    <bpmn:sequenceFlow id="Flow_BA_5" sourceRef="Task_SaveDraft" targetRef="Task_UpdateScore" />
+    <bpmn:sequenceFlow id="Flow_BA_6" sourceRef="Task_Submit" targetRef="Task_UpdateScore" />
+    <bpmn:sequenceFlow id="Flow_BA_7" sourceRef="Task_UpdateScore" targetRef="End_BA" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_BA">
+    <bpmndi:BPMNPlane id="BPMNPlane_BA" bpmnElement="Collab_BA">
+
+      <bpmndi:BPMNShape id="Pool_BA_di" bpmnElement="Pool_BA" isHorizontal="true">
+        <dc:Bounds x="150" y="80" width="1100" height="480" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Lane_Nurse_di" bpmnElement="Lane_Nurse" isHorizontal="true">
+        <dc:Bounds x="180" y="80" width="1070" height="240" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Lane_System_BA_di" bpmnElement="Lane_System_BA" isHorizontal="true">
+        <dc:Bounds x="180" y="320" width="1070" height="240" />
+      </bpmndi:BPMNShape>
+
+      <!-- Start Event: center (252, 200) -->
+      <bpmndi:BPMNShape id="Start_BA_di" bpmnElement="Start_BA">
+        <dc:Bounds x="234" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="220" y="225" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Task_EnterPage: center (390, 200) -->
+      <bpmndi:BPMNShape id="Task_EnterPage_di" bpmnElement="Task_EnterPage">
+        <dc:Bounds x="330" y="160" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_LoadData (System): center (390, 440) -->
+      <bpmndi:BPMNShape id="Task_LoadData_di" bpmnElement="Task_LoadData">
+        <dc:Bounds x="330" y="400" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_FillForm: center (570, 200) -->
+      <bpmndi:BPMNShape id="Task_FillForm_di" bpmnElement="Task_FillForm">
+        <dc:Bounds x="510" y="160" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- GW_SaveType: center (740, 200) -->
+      <bpmndi:BPMNShape id="GW_SaveType_di" bpmnElement="GW_SaveType" isMarkerVisible="true">
+        <dc:Bounds x="715" y="175" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="706" y="232" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Task_SaveDraft: center (870, 155) -->
+      <bpmndi:BPMNShape id="Task_SaveDraft_di" bpmnElement="Task_SaveDraft">
+        <dc:Bounds x="810" y="115" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_Submit: center (870, 250) -->
+      <bpmndi:BPMNShape id="Task_Submit_di" bpmnElement="Task_Submit">
+        <dc:Bounds x="810" y="210" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_UpdateScore (System): center (1020, 440) -->
+      <bpmndi:BPMNShape id="Task_UpdateScore_di" bpmnElement="Task_UpdateScore">
+        <dc:Bounds x="960" y="400" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End_BA (System): center (1182, 440) -->
+      <bpmndi:BPMNShape id="End_BA_di" bpmnElement="End_BA">
+        <dc:Bounds x="1164" y="422" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1140" y="465" width="84" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_BA_1_di" bpmnElement="Flow_BA_1">
+        <di:waypoint x="270" y="200" />
+        <di:waypoint x="330" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_BA_2_di" bpmnElement="Flow_BA_2">
+        <di:waypoint x="390" y="240" />
+        <di:waypoint x="390" y="400" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_BA_3_di" bpmnElement="Flow_BA_3">
+        <di:waypoint x="450" y="440" />
+        <di:waypoint x="570" y="440" />
+        <di:waypoint x="570" y="240" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_BA_4_di" bpmnElement="Flow_BA_4">
+        <di:waypoint x="630" y="200" />
+        <di:waypoint x="715" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_BA_Draft_di" bpmnElement="Flow_BA_Draft">
+        <di:waypoint x="740" y="175" />
+        <di:waypoint x="740" y="155" />
+        <di:waypoint x="810" y="155" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="750" y="138" width="42" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_BA_Submit_di" bpmnElement="Flow_BA_Submit">
+        <di:waypoint x="740" y="225" />
+        <di:waypoint x="740" y="250" />
+        <di:waypoint x="810" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="752" y="258" width="24" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_BA_5_di" bpmnElement="Flow_BA_5">
+        <di:waypoint x="930" y="155" />
+        <di:waypoint x="1020" y="155" />
+        <di:waypoint x="1020" y="400" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_BA_6_di" bpmnElement="Flow_BA_6">
+        <di:waypoint x="930" y="250" />
+        <di:waypoint x="1020" y="250" />
+        <di:waypoint x="1020" y="400" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_BA_7_di" bpmnElement="Flow_BA_7">
+        <di:waypoint x="1080" y="440" />
+        <di:waypoint x="1164" y="440" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
