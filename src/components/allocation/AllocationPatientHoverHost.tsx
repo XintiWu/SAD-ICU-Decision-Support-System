@@ -53,7 +53,7 @@ export function AllocationPatientHoverHost({ patientId, children, disabled }: Pr
   return (
     <div
       ref={anchorRef}
-      className="relative"
+      className="relative min-w-0 w-full"
       onMouseEnter={handleEnter}
       onMouseLeave={handleLeave}
       onFocus={handleEnter}
