@@ -8,6 +8,7 @@ export type ShiftContextValue = {
   shiftId: string
   selectedShift: ApiShift | null
   setShiftId: (id: string) => void
+  refreshShifts: () => Promise<void>
   loading: boolean
   error: string | null
 }

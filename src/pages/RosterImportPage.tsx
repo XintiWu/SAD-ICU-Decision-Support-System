@@ -1,6 +1,7 @@
 import { useState, useRef, type DragEvent, type ChangeEvent } from 'react'
 import * as XLSX from 'xlsx'
 import { apiPost } from '../api/client'
+import { useShift } from '../context/useShift'
 
 type SeniorityGroups = {
   '15年以上': string[]
@@ -18,6 +19,7 @@ type RosterItem = {
 }
 
 export function RosterImportPage() {
+  const { refreshShifts } = useShift()
   const [startDate, setStartDate] = useState('2026-05-19')
   const [file, setFile] = useState<File | null>(null)
   const [parsedData, setParsedData] = useState<RosterItem[]>([])
@@ -26,6 +28,7 @@ export function RosterImportPage() {
   const [error, setError] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [isDragActive, setIsDragActive] = useState(false)
+  const [reverting, setReverting] = useState(false)
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -148,10 +151,29 @@ export function RosterImportPage() {
       setSuccess(`成功匯入 7 天共 ${response.length} 個班別！資料已寫入資料庫。`)
       setFile(null)
       setParsedData([])
+      await refreshShifts()
     } catch (err) {
       setError(err instanceof Error ? err.message : '匯入班表失敗，請重試')
     } finally {
       setImporting(false)
+    }
+  }
+
+  const handleRevert = async () => {
+    if (!window.confirm('確定要復原為預設示範資料嗎？這會清除所有已匯入的班表。')) return
+    setReverting(true)
+    setError(null)
+    setSuccess(null)
+    try {
+      await apiPost('/roster/reset', {})
+      setSuccess('已成功復原為預設示範資料！')
+      setFile(null)
+      setParsedData([])
+      await refreshShifts()
+    } catch (err) {
+      setError(err instanceof Error ? err.message : '復原失敗')
+    } finally {
+      setReverting(false)
     }
   }
 
@@ -162,6 +184,14 @@ export function RosterImportPage() {
           <h1 className="text-2xl font-bold tracking-tight text-slate-900">匯入護理師班表</h1>
           <p className="text-sm text-slate-600">上傳 ICU 護理師 7 日排班表 Excel 檔案，建立並分配當班護理師與組長。</p>
         </div>
+        <button
+          type="button"
+          onClick={handleRevert}
+          disabled={reverting}
+          className="rounded-lg border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-500 hover:text-slate-700 hover:bg-slate-50 active:scale-[0.98] transition-all cursor-pointer shadow-2xs disabled:opacity-50"
+        >
+          {reverting ? '復原中...' : '↩️ 復原預設資料 (取消匯入)'}
+        </button>
       </div>
 
       <div className="grid gap-6 md:grid-cols-3">

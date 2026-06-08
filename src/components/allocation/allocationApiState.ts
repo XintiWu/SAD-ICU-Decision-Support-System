@@ -16,13 +16,15 @@ export function buildPatientCatalog(admissions: ApiAdmission[]): Map<string, Cat
 export function mergeRunPatients(catalog: Map<string, CatalogEntry>, patients: AllocationPatient[]) {
   for (const patient of patients) {
     const prev = catalog.get(patient.admissionId)
+    const score = patient.score || prev?.score || 0
+    const tone = patient.score ? patient.tone : (prev?.tone || 'low')
     catalog.set(patient.admissionId, {
       id: patient.admissionId,
       bedLabel: patient.bedLabel,
       bedShort: formatBedShort(patient.bedLabel),
       diagnosis: patient.diagnosis,
-      score: patient.score,
-      tone: patient.tone,
+      score,
+      tone,
       badges: prev?.badges ?? [],
       patientName: patient.patientName,
       sex: prev?.sex ?? '男',

@@ -49,6 +49,7 @@ function WarRoomPageBody({ shiftId }: { shiftId: string }) {
   const chargeNurseId = useChargeNurseId()
   const actorId = chargeNurseId ?? CURRENT_NURSE_USER_ID
   const [data, setData] = useState<WarRoomData | null>(null)
+  const [nurseOrder, setNurseOrder] = useState<string[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
   const [togglingKey, setTogglingKey] = useState<string | null>(null)
@@ -69,10 +70,20 @@ function WarRoomPageBody({ shiftId }: { shiftId: string }) {
     return apiGet<WarRoomData>(`/war-room?shiftId=${shiftId}`)
       .then((nextData) => {
         setData((prev) => (prev && !opts?.initial ? mergeWarRoomData(prev, nextData) : nextData))
+        if (opts?.initial) {
+          const list = nextData.nurses.map((row) => toNurseCard(row, chargeNurseId))
+          const sorted = list.sort((a, b) => {
+            if (b.remaining !== a.remaining) return b.remaining - a.remaining
+            const scoreA = a.patients.reduce((sum, p) => sum + p.score, 0)
+            const scoreB = b.patients.reduce((sum, p) => sum + p.score, 0)
+            return scoreB - scoreA
+          })
+          setNurseOrder(sorted.map((n) => n.nurseId))
+        }
         setError(null)
       })
       .catch((err: Error) => setError(err.message))
-  }, [shiftId])
+  }, [shiftId, chargeNurseId])
 
   useEffect(() => {
     suppressPollUntilRef.current = 0
@@ -132,13 +143,25 @@ function WarRoomPageBody({ shiftId }: { shiftId: string }) {
 
   const nurses: NurseCardModel[] = useMemo(() => {
     const list = (data?.nurses ?? []).map((row) => toNurseCard(row, chargeNurseId))
+    if (nurseOrder.length > 0) {
+      const orderMap = new Map(nurseOrder.map((id, index) => [id, index]))
+      return list.sort((a, b) => {
+        const indexA = orderMap.has(a.nurseId) ? orderMap.get(a.nurseId)! : 9999
+        const indexB = orderMap.has(b.nurseId) ? orderMap.get(b.nurseId)! : 9999
+        if (indexA !== indexB) return indexA - indexB
+        if (b.remaining !== a.remaining) return b.remaining - a.remaining
+        const scoreA = a.patients.reduce((sum, p) => sum + p.score, 0)
+        const scoreB = b.patients.reduce((sum, p) => sum + p.score, 0)
+        return scoreB - scoreA
+      })
+    }
     return list.sort((a, b) => {
       if (b.remaining !== a.remaining) return b.remaining - a.remaining
       const scoreA = a.patients.reduce((sum, p) => sum + p.score, 0)
       const scoreB = b.patients.reduce((sum, p) => sum + p.score, 0)
       return scoreB - scoreA
     })
-  }, [data, chargeNurseId])
+  }, [data, chargeNurseId, nurseOrder])
 
   if (loading) return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入戰情室...</div>
   if (error && !data) return <div className="rounded-2xl bg-[#ffe8e1] p-5 text-sm font-semibold text-[#b3341f] ring-1 ring-[#f2b3a6]">{error}</div>
@@ -420,7 +443,25 @@ function NurseLoadCard({
   const totalCount = tasks.length
   const urgentOpen = tasks.filter((t) => t.urgent && !t.done).length
   const burdenLabel = tone === 'high' ? '高' : tone === 'mid' ? '中' : '低'
-  const sortedTasks = useMemo(() => sortTasks(tasks), [tasks])
+
+  const taskIdsKey = tasks.map((t) => t.id).sort().join(',')
+  const [prevTaskIdsKey, setPrevTaskIdsKey] = useState(taskIdsKey)
+  const [taskOrder, setTaskOrder] = useState(() => sortTasks(tasks).map((t) => t.id))
+
+  if (taskIdsKey !== prevTaskIdsKey) {
+    setPrevTaskIdsKey(taskIdsKey)
+    setTaskOrder(sortTasks(tasks).map((t) => t.id))
+  }
+
+  const sortedTasks = useMemo(() => {
+    const orderMap = new Map(taskOrder.map((id, index) => [id, index]))
+    return tasks.slice().sort((a, b) => {
+      const indexA = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999
+      const indexB = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999
+      if (indexA !== indexB) return indexA - indexB
+      return a.id.localeCompare(b.id)
+    })
+  }, [tasks, taskOrder])
 
   const pendingByAdmission = useMemo(() => {
     const map = new Map<string, number>()
@@ -454,7 +495,7 @@ function NurseLoadCard({
         </div>
 
         <div className="shrink-0 text-right">
-          <div className="text-[11px] font-semibold text-slate-500">剩餘</div>
+          <div className="text-[11px] font-semibold text-slate-500">剩餘麻煩度</div>
           <div className="mt-0.5 text-2xl font-extrabold tracking-tight text-slate-900">{remaining}</div>
         </div>
       </div>
@@ -524,7 +565,10 @@ function TaskRow({
         disabled ? 'opacity-60' : '',
       ].join(' ')}
     >
-      <div className="min-w-0 flex-1 overflow-hidden">
+      <label
+        htmlFor={inputId}
+        className="min-w-0 flex-1 overflow-hidden cursor-pointer select-none"
+      >
         <div className={`break-words text-xs font-semibold leading-snug ${task.done ? 'text-slate-400 line-through decoration-slate-400' : 'text-slate-900'}`}>
           <span className={`mr-1.5 text-[10px] font-bold tracking-wide ${task.done ? 'text-slate-400' : 'text-slate-500'}`}>{formatTaskBedLabel(task.bedLabel)}</span>
           {task.title}
@@ -550,7 +594,7 @@ function TaskRow({
           {task.newbie ? <span className="rounded-full bg-[#fff7ed] px-2 py-0.5 font-semibold text-[#9a5b1a]">新人</span> : null}
           <span className={task.done ? 'font-semibold text-[#1e6c3a]' : 'text-slate-500'}>{task.done ? '已完成' : '待處理'}</span>
         </div>
-      </div>
+      </label>
       <input
         id={inputId}
         type="checkbox"
@@ -588,7 +632,25 @@ function PatientDetailModal({
         ? 'bg-[#fff7ed] text-[#9a5b1a] ring-[#f1d7b8]'
         : 'bg-[#eaf7ee] text-[#1e6c3a] ring-[#b7e0c5]'
 
-  const sortedTasks = sortTasks(tasks)
+  const taskIdsKey = tasks.map((t) => t.id).sort().join(',')
+  const [prevTaskIdsKey, setPrevTaskIdsKey] = useState(taskIdsKey)
+  const [taskOrder, setTaskOrder] = useState(() => sortTasks(tasks).map((t) => t.id))
+
+  if (taskIdsKey !== prevTaskIdsKey) {
+    setPrevTaskIdsKey(taskIdsKey)
+    setTaskOrder(sortTasks(tasks).map((t) => t.id))
+  }
+
+  const sortedTasks = useMemo(() => {
+    const orderMap = new Map(taskOrder.map((id, index) => [id, index]))
+    return tasks.slice().sort((a, b) => {
+      const indexA = orderMap.has(a.id) ? orderMap.get(a.id)! : 9999
+      const indexB = orderMap.has(b.id) ? orderMap.get(b.id)! : 9999
+      if (indexA !== indexB) return indexA - indexB
+      return a.id.localeCompare(b.id)
+    })
+  }, [tasks, taskOrder])
+
   const openCount = tasks.filter((t) => !t.done).length
 
   return createPortal(

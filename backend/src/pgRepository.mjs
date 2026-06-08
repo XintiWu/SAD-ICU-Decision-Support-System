@@ -3,7 +3,7 @@ import { readFileSync } from 'node:fs'
 import { resolve } from 'node:path'
 import { query, withTransaction } from './db.mjs'
 import { ids } from './step1Data.mjs'
-import { objectiveFactorDefinitions, subjectiveFactorDefinitions } from './step2Data.mjs'
+import { objectiveFactorDefinitions, subjectiveFactorDefinitions, burdenAssessments, tasks } from './step2Data.mjs'
 
 export class ApiError extends Error {
   constructor(status, code, message, details = {}) {
@@ -770,7 +770,14 @@ export async function getAllocationRun({ allocationRunId } = {}) {
       .filter(Boolean)
     return { nurseId: nurse.id, shortName: nurse.shortName, load: patients.reduce((sum, p) => sum + p.score, 0), patients }
   })
-  const unassigned = admissions.filter((admission) => !assigned.has(admission.admissionId)).map((admission) => allocationPatient(admission, 0, false))
+  const unassigned = await Promise.all(
+    admissions
+      .filter((admission) => !assigned.has(admission.admissionId))
+      .map(async (admission) => {
+        const score = await scoreForAdmission(admission.admissionId, run.shift_id)
+        return allocationPatient(admission, score, false)
+      })
+  )
   const loads = byNurse.map((row) => row.load)
   return {
     allocationRunId: run.id,
@@ -801,7 +808,7 @@ export async function updateAllocationItems({ allocationRunId, items } = {}) {
     for (const [index, item] of items.entries()) {
       if (seen.has(item.admissionId)) throw new ApiError(400, 'VALIDATION_ERROR', '同一位病患不可重複分配', { admissionId: item.admissionId })
       seen.add(item.admissionId)
-      const score = await scoreForAdmission(item.admissionId)
+      const score = await scoreForAdmission(item.admissionId, run.shift_id)
       await client.query(
         `insert into allocation_items (allocation_run_id, admission_id, nurse_id, score, sort_order, is_manual_override) values ($1,$2,$3,$4,$5,$6)`,
         [allocationRunId, item.admissionId, item.nurseId, score, item.sortOrder ?? index + 1, Boolean(item.isManualOverride)],
@@ -1219,11 +1226,16 @@ function warRoomTaskSort(a, b) {
 
 async function admissionsWithScores(shiftId) {
   const rows = await listAdmissions({ shiftId, status: 'active' })
-  return Promise.all(rows.map(async (admission) => ({ ...admission, score: await scoreForAdmission(admission.admissionId) })))
+  return Promise.all(rows.map(async (admission) => ({ ...admission, score: await scoreForAdmission(admission.admissionId, shiftId) })))
 }
 
-async function scoreForAdmission(admissionId) {
-  const result = await query('select total_score from burden_assessments where admission_id = $1', [admissionId])
+async function scoreForAdmission(admissionId, shiftId) {
+  let result
+  if (shiftId) {
+    result = await query('select total_score from burden_assessments where admission_id = $1 and shift_id = $2', [admissionId, shiftId])
+  } else {
+    result = await query('select total_score from burden_assessments where admission_id = $1 order by updated_at desc limit 1', [admissionId])
+  }
   return Number(result.rows[0]?.total_score ?? 0)
 }
 
@@ -2063,4 +2075,144 @@ export async function importRoster({ startDate, schedule }) {
   });
 
   return results;
+}
+
+export async function resetDatabaseToDemo() {
+  await withTransaction(async (client) => {
+    await client.query(`
+      truncate table
+        allocation_items,
+        allocation_runs,
+        tasks,
+        burden_values,
+        burden_assessments,
+        stat_orders,
+        shift_nurses,
+        shifts,
+        nurses,
+        users,
+        admissions,
+        patients,
+        beds,
+        handoff_snapshots,
+        burden_factors
+      cascade
+    `)
+
+    const seedFiles = [
+      'backend/db/seeds/001_demo_core_data.sql',
+      'backend/db/seeds/002_demo_burden_tasks_data.sql',
+      'backend/db/seeds/003_demo_allocation_data.sql',
+      'backend/db/seeds/004_demo_stat_orders_data.sql',
+    ]
+
+    for (const file of seedFiles) {
+      const sql = readFileSync(resolve(file), 'utf8')
+      await client.query(sql)
+    }
+
+    await seedCompleteDemoData(client)
+  })
+
+  const firstRun = await suggestAllocationRun({
+    shiftId: '00000000-0000-0000-0000-000000000201',
+    userId: ids.chargeNurse,
+  })
+  await confirmAllocationRun({
+    allocationRunId: firstRun.allocationRunId,
+    userId: ids.chargeNurse,
+  })
+}
+
+async function seedCompleteDemoData(client) {
+  const factors = await client.query('select id, code from burden_factors')
+  const factorId = new Map(factors.rows.map((row) => [row.code, row.id]))
+
+  for (const assessment of burdenAssessments) {
+    const objectiveTotal = Object.values(assessment.objective).reduce((sum, value) => sum + Number(value ?? 0), 0)
+    const subjectiveTotal = assessment.subjective ? subjectiveScore(assessment.subjective) : 0
+    const assessmentResult = await client.query(
+      `
+      insert into burden_assessments (
+        id, shift_id, admission_id, submitted_by, status,
+        objective_total, subjective_total, total_score, submitted_at, updated_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)
+      on conflict (shift_id, admission_id) do nothing
+      returning id
+      `,
+      [
+        assessment.id,
+        assessment.shiftId,
+        assessment.admissionId,
+        assessment.submittedBy,
+        assessment.status,
+        objectiveTotal,
+        subjectiveTotal,
+        objectiveTotal + subjectiveTotal,
+        assessment.submittedAt,
+        assessment.updatedAt,
+      ],
+    )
+    if (assessmentResult.rowCount === 0) continue
+
+    for (const factor of objectiveFactorDefinitions) {
+      const value = Number(assessment.objective[factor.code] ?? 0)
+      await upsertBurdenValue(client, assessment.id, factorId.get(factor.code), value, null, null, value)
+    }
+    if (assessment.subjective) {
+      for (const factor of subjectiveFactorDefinitions) {
+        const value = assessment.subjective[factor.code]
+        await upsertSubjectiveValue(client, assessment.id, factorId.get(factor.code), factor.code, factor.valueType, value)
+      }
+    }
+  }
+
+  for (const task of tasks) {
+    await client.query(
+      `
+      insert into tasks (
+        id, shift_id, admission_id, assigned_nurse_id, title, kind,
+        urgent, source, status, completed_at, completed_by, created_at
+      ) values ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
+      on conflict (id) do update set
+        status = excluded.status,
+        completed_at = excluded.completed_at,
+        completed_by = excluded.completed_by
+      `,
+      [
+        task.id,
+        task.shiftId,
+        task.admissionId,
+        task.assignedNurseId,
+        task.title,
+        task.kind,
+        task.urgent,
+        task.source,
+        task.status,
+        task.completedAt ?? null,
+        task.completedBy ?? null,
+        task.createdAt,
+      ],
+    )
+  }
+}
+
+async function upsertBurdenValue(client, assessmentId, factorId, numberValue, booleanValue, levelValue, points) {
+  const assessmentExists = await client.query(
+    'select 1 from burden_assessments where id = $1',
+    [assessmentId],
+  )
+  if (assessmentExists.rowCount === 0) return
+  await client.query(
+    `
+    insert into burden_values (assessment_id, factor_id, number_value, boolean_value, level_value, points)
+    values ($1,$2,$3,$4,$5,$6)
+    on conflict (assessment_id, factor_id) do update set
+      number_value = excluded.number_value,
+      boolean_value = excluded.boolean_value,
+      level_value = excluded.level_value,
+      points = excluded.points
+    `,
+    [assessmentId, factorId, numberValue, booleanValue, levelValue, points],
+  )
 }

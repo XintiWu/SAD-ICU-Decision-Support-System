@@ -186,6 +186,9 @@ function ChargeAllocationPageBody() {
         const allocatable = nurseRows.filter((n) => n.role === 'nurse' || n.role === 'charge_nurse')
         const ids = allocatable.map((n) => n.id)
         const nextCatalog = buildPatientCatalog(admissionRows)
+        if (latestRun?.allocationRunId) {
+          applyRunToCatalog(nextCatalog, latestRun)
+        }
         mergeBurdenIntoCatalog(nextCatalog, burdenRows)
         mergeStatIntoCatalog(nextCatalog, statRows)
         setNurses(allocatable)
@@ -195,7 +198,6 @@ function ChargeAllocationPageBody() {
         setError(null)
 
         if (latestRun?.allocationRunId) {
-          applyRunToCatalog(nextCatalog, latestRun)
           const board = runToBoardState(latestRun, ids)
           setCatalog(new Map(nextCatalog))
           setUnassigned(board.unassigned)

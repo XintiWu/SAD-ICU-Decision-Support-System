@@ -40,6 +40,7 @@ export const updateStatOrder = pg.updateStatOrder
 export const createStatOrder = pg.createStatOrder
 export const importDemoStatOrders = pg.importDemoStatOrders
 export const updateTask = pg.updateTask
+export const resetDatabaseToDemo = pg.resetDatabaseToDemo
 
 export async function getCurrentShift(unitName = 'ICU') {
   return withFallback(

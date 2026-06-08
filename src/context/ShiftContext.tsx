@@ -11,36 +11,38 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
 
+  const refreshShifts = useCallback(async () => {
+    try {
+      const [list, current] = await Promise.all([
+        apiGet<ApiShift[]>('/shifts'),
+        apiGet<ApiShift>('/shifts/current'),
+      ])
+      setShifts(list)
+      const stored = localStorage.getItem(SHIFT_STORAGE_KEY)
+      const nextId =
+        stored && list.some((s) => s.id === stored)
+          ? stored
+          : (current?.id ?? list[0]?.id ?? CURRENT_SHIFT_ID)
+      setShiftIdState(nextId)
+      localStorage.setItem(SHIFT_STORAGE_KEY, nextId)
+      setError(null)
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : '載入班別失敗'
+      setError(message)
+      setShifts([])
+    }
+  }, [])
+
   useEffect(() => {
     let alive = true
-
-    Promise.all([apiGet<ApiShift[]>('/shifts'), apiGet<ApiShift>('/shifts/current')])
-      .then(([list, current]) => {
-        if (!alive) return
-        setShifts(list)
-        const stored = localStorage.getItem(SHIFT_STORAGE_KEY)
-        const nextId =
-          stored && list.some((s) => s.id === stored)
-            ? stored
-            : (current?.id ?? list[0]?.id ?? CURRENT_SHIFT_ID)
-        setShiftIdState(nextId)
-        localStorage.setItem(SHIFT_STORAGE_KEY, nextId)
-        setError(null)
-      })
-      .catch((err: unknown) => {
-        if (!alive) return
-        const message = err instanceof Error ? err.message : '載入班別失敗'
-        setError(message)
-        setShifts([])
-      })
-      .finally(() => {
-        if (alive) setLoading(false)
-      })
-
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    refreshShifts().finally(() => {
+      if (alive) setLoading(false)
+    })
     return () => {
       alive = false
     }
-  }, [])
+  }, [refreshShifts])
 
   const setShiftId = useCallback((id: string) => {
     setShiftIdState(id)
@@ -53,8 +55,8 @@ export function ShiftProvider({ children }: { children: ReactNode }) {
   )
 
   const value = useMemo(
-    () => ({ shifts, shiftId, selectedShift, setShiftId, loading, error }),
-    [shifts, shiftId, selectedShift, setShiftId, loading, error],
+    () => ({ shifts, shiftId, selectedShift, setShiftId, refreshShifts, loading, error }),
+    [shifts, shiftId, selectedShift, setShiftId, refreshShifts, loading, error],
   )
 
   return <ShiftContext.Provider value={value}>{children}</ShiftContext.Provider>

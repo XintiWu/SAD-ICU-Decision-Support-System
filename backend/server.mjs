@@ -26,6 +26,7 @@ import {
   importDemoStatOrders,
   updateTask,
   importRoster,
+  resetDatabaseToDemo,
 } from './src/runtimeRepository.mjs'
 
 const port = Number(process.env.PORT ?? 8787)
@@ -177,6 +178,15 @@ async function handleRequest(req, res) {
     sendJson(res, {
       data: await importRoster({ startDate, schedule }),
     }, 201)
+    return
+  }
+
+  if (url.pathname === '/api/v1/roster/reset') {
+    assertMethod(req, 'POST')
+    await resetDatabaseToDemo()
+    sendJson(res, {
+      message: 'Database reset to default demo state successfully',
+    }, 200)
     return
   }
 
