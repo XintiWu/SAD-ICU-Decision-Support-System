@@ -424,6 +424,7 @@ function sendJson(res, payload, status = 200) {
 }
 
 function sendError(res, error) {
+  console.error('[API Error]:', error)
   const status = error instanceof ApiError ? error.status : 500
   const code = error instanceof ApiError ? error.code : 'INTERNAL_SERVER_ERROR'
   const message = error instanceof Error ? error.message : '伺服器發生未知錯誤'

@@ -67,8 +67,13 @@ export async function listStatOrders({ shiftId, includeCompleted = false, assign
       and so.admission_id in (
         select ai.admission_id
         from allocation_items ai
-        join allocation_runs ar on ar.id = ai.allocation_run_id
-        where coalesce(ar.target_shift_id, ar.shift_id) = $1 and ai.nurse_id = $${params.length}
+        where ai.nurse_id = $2
+          and ai.allocation_run_id = (
+            select id from allocation_runs
+            where coalesce(target_shift_id, shift_id) = $1
+            order by (status = 'draft') desc, suggested_at desc
+            limit 1
+          )
       )
     `
   }
@@ -272,8 +277,13 @@ export async function getNurseOverview({ shiftId, userId = ids.currentNurse } = 
     `
     select ai.admission_id
     from allocation_items ai
-    join allocation_runs ar on ar.id = ai.allocation_run_id
-    where coalesce(ar.target_shift_id, ar.shift_id) = $1 and ai.nurse_id = $2
+    where ai.nurse_id = $2
+      and ai.allocation_run_id = (
+        select id from allocation_runs
+        where coalesce(target_shift_id, shift_id) = $1
+        order by (status = 'draft') desc, suggested_at desc
+        limit 1
+      )
     order by ai.sort_order
     `,
     [shift.id, user.id],
@@ -508,6 +518,9 @@ export async function suggestAllocationRun({ shiftId, targetShiftId, userId = id
   if (!['charge_nurse', 'admin'].includes(user.role)) throw new ApiError(403, 'FORBIDDEN', '只有小組長或管理者可以產生分床建議')
 
   const nextShiftId = targetShiftId || await getNextShiftId(shiftId) || shiftId
+  if (nextShiftId === shiftId) {
+    throw new ApiError(400, 'VALIDATION_ERROR', '無法產生對本班的分床建議，目標班別必須為下一班')
+  }
   const allAdmissions = await admissionsWithScores(shiftId)
   const allNurses = (await listNurses({ shiftId: nextShiftId })).filter((n) => ['nurse', 'charge_nurse'].includes(n.role) && n.isActive)
 
@@ -1635,7 +1648,7 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
     order by ar.confirmed_at desc nulls last, ar.suggested_at desc
     limit 1
     `,
-    [shiftId],
+    [run.shiftId],
   )
   const currentRunId = currentShiftResult.rows[0]?.run_id ?? null
   const currentNurseMap = new Map()
