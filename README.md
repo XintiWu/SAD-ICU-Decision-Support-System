@@ -43,8 +43,9 @@ npm run dev
 | # | 文件 | 說明 |
 |---|------|------|
 | — | [System Design Document](docs/system_design_doc/system_design.md) | 系統架構、資料庫設計、API 設計 |
-| 1 | [User Stories Mapping](docs/01_user-stories/01_user-stories.md) | 使用者故事對照表 |
+| 1 | [User Stories Mapping](docs/01_user-stories/01_user-stories.md) | 使用者故事對照表（29 stories，7 epics） |
 | 2 | [BPMN 流程圖](docs/02_BPMN/02_bpmn.md) | 業務流程模型 |
+| 3 | [使用者分析](docs/03_user-analysis/03_user-analysis.md) | 使用者角色、痛點分析、使用者旅程 |
 | 4 | [Tests](docs/04_tests/04a_tests.md) | 測試報告 |
 | 5 | [Project Tracking](docs/05_Project_Tracking/05_project-tracking.md) | 專案管理追蹤 |
 | 6 | [API Documentation](docs/06_API_docs/06_api-docs.md) | Open API 文件 |

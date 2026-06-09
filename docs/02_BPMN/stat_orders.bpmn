@@ -1,0 +1,265 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Definitions_StatOrders"
+  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:collaboration id="Collab_SO">
+    <bpmn:participant id="Pool_SO" name="ICU 護理分配系統 — STAT 突發醫囑" processRef="Process_SO" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_SO" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_SO">
+      <bpmn:lane id="Lane_Doctor" name="醫師">
+        <bpmn:flowNodeRef>Start_SO</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CreateStat</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_System_SO" name="系統">
+        <bpmn:flowNodeRef>Task_WriteStat</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>GW_Split</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>GW_Join</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_UpdateDB</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_SO</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Nurse" name="護理師">
+        <bpmn:flowNodeRef>Task_NurseTodo</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_NurseAct</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_Charge_SO" name="小組長">
+        <bpmn:flowNodeRef>Task_ChargeWarRoom</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ChargeAct</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="Start_SO" name="班中突發事件">
+      <bpmn:outgoing>Flow_SO_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Task_CreateStat" name="建立 STAT 醫囑&#10;/doctor/stat">
+      <bpmn:incoming>Flow_SO_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_WriteStat" name="寫入 stat_orders&#10;status = pending">
+      <bpmn:incoming>Flow_SO_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:parallelGateway id="GW_Split" name="並行通知">
+      <bpmn:incoming>Flow_SO_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_Nurse</bpmn:outgoing>
+      <bpmn:outgoing>Flow_SO_Charge</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <bpmn:userTask id="Task_NurseTodo" name="待辦頁查看 STAT 醫囑&#10;/nurse/todo">
+      <bpmn:incoming>Flow_SO_Nurse</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_NurseAct</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Task_NurseAct" name="護理師標記完成/取消">
+      <bpmn:incoming>Flow_SO_NurseAct</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_4</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Task_ChargeWarRoom" name="戰情室查看 STAT 醫囑&#10;/leader/war-room">
+      <bpmn:incoming>Flow_SO_Charge</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_ChargeAct</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:userTask id="Task_ChargeAct" name="小組長標記完成/取消">
+      <bpmn:incoming>Flow_SO_ChargeAct</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:parallelGateway id="GW_Join" name="">
+      <bpmn:incoming>Flow_SO_4</bpmn:incoming>
+      <bpmn:incoming>Flow_SO_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_6</bpmn:outgoing>
+    </bpmn:parallelGateway>
+
+    <bpmn:serviceTask id="Task_UpdateDB" name="更新 stat_orders.status&#10;done / cancelled&#10;PATCH /stat-orders/{id}">
+      <bpmn:incoming>Flow_SO_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_SO_7</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:endEvent id="End_SO" name="STAT 醫囑已處理">
+      <bpmn:incoming>Flow_SO_7</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_SO_1" sourceRef="Start_SO" targetRef="Task_CreateStat" />
+    <bpmn:sequenceFlow id="Flow_SO_2" sourceRef="Task_CreateStat" targetRef="Task_WriteStat" />
+    <bpmn:sequenceFlow id="Flow_SO_3" sourceRef="Task_WriteStat" targetRef="GW_Split" />
+    <bpmn:sequenceFlow id="Flow_SO_Nurse" sourceRef="GW_Split" targetRef="Task_NurseTodo" />
+    <bpmn:sequenceFlow id="Flow_SO_Charge" sourceRef="GW_Split" targetRef="Task_ChargeWarRoom" />
+    <bpmn:sequenceFlow id="Flow_SO_NurseAct" sourceRef="Task_NurseTodo" targetRef="Task_NurseAct" />
+    <bpmn:sequenceFlow id="Flow_SO_ChargeAct" sourceRef="Task_ChargeWarRoom" targetRef="Task_ChargeAct" />
+    <bpmn:sequenceFlow id="Flow_SO_4" sourceRef="Task_NurseAct" targetRef="GW_Join" />
+    <bpmn:sequenceFlow id="Flow_SO_5" sourceRef="Task_ChargeAct" targetRef="GW_Join" />
+    <bpmn:sequenceFlow id="Flow_SO_6" sourceRef="GW_Join" targetRef="Task_UpdateDB" />
+    <bpmn:sequenceFlow id="Flow_SO_7" sourceRef="Task_UpdateDB" targetRef="End_SO" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_SO">
+    <bpmndi:BPMNPlane id="BPMNPlane_SO" bpmnElement="Collab_SO">
+
+      <bpmndi:BPMNShape id="Pool_SO_di" bpmnElement="Pool_SO" isHorizontal="true">
+        <dc:Bounds x="150" y="80" width="1200" height="560" />
+      </bpmndi:BPMNShape>
+
+      <!-- Lane_Doctor: y=80, h=140 → center y=150 -->
+      <bpmndi:BPMNShape id="Lane_Doctor_di" bpmnElement="Lane_Doctor" isHorizontal="true">
+        <dc:Bounds x="180" y="80" width="1170" height="140" />
+      </bpmndi:BPMNShape>
+
+      <!-- Lane_System_SO: y=220, h=140 → center y=290 -->
+      <bpmndi:BPMNShape id="Lane_System_SO_di" bpmnElement="Lane_System_SO" isHorizontal="true">
+        <dc:Bounds x="180" y="220" width="1170" height="140" />
+      </bpmndi:BPMNShape>
+
+      <!-- Lane_Nurse: y=360, h=140 → center y=430 -->
+      <bpmndi:BPMNShape id="Lane_Nurse_SO_di" bpmnElement="Lane_Nurse" isHorizontal="true">
+        <dc:Bounds x="180" y="360" width="1170" height="140" />
+      </bpmndi:BPMNShape>
+
+      <!-- Lane_Charge_SO: y=500, h=140 → center y=570 -->
+      <bpmndi:BPMNShape id="Lane_Charge_SO_di" bpmnElement="Lane_Charge_SO" isHorizontal="true">
+        <dc:Bounds x="180" y="500" width="1170" height="140" />
+      </bpmndi:BPMNShape>
+
+      <!-- Start_SO (Doctor): center (252, 150) -->
+      <bpmndi:BPMNShape id="Start_SO_di" bpmnElement="Start_SO">
+        <dc:Bounds x="234" y="132" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="210" y="175" width="84" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Task_CreateStat (Doctor): center (390, 150) -->
+      <bpmndi:BPMNShape id="Task_CreateStat_di" bpmnElement="Task_CreateStat">
+        <dc:Bounds x="330" y="110" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_WriteStat (System): center (530, 290) -->
+      <bpmndi:BPMNShape id="Task_WriteStat_di" bpmnElement="Task_WriteStat">
+        <dc:Bounds x="470" y="250" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- GW_Split (System): center (680, 290) -->
+      <bpmndi:BPMNShape id="GW_Split_di" bpmnElement="GW_Split">
+        <dc:Bounds x="655" y="265" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="646" y="322" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Task_NurseTodo (Nurse): center (830, 430) -->
+      <bpmndi:BPMNShape id="Task_NurseTodo_di" bpmnElement="Task_NurseTodo">
+        <dc:Bounds x="770" y="390" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_NurseAct (Nurse): center (1010, 430) -->
+      <bpmndi:BPMNShape id="Task_NurseAct_di" bpmnElement="Task_NurseAct">
+        <dc:Bounds x="950" y="390" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_ChargeWarRoom (Charge): center (830, 570) -->
+      <bpmndi:BPMNShape id="Task_ChargeWarRoom_di" bpmnElement="Task_ChargeWarRoom">
+        <dc:Bounds x="770" y="530" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_ChargeAct (Charge): center (1010, 570) -->
+      <bpmndi:BPMNShape id="Task_ChargeAct_di" bpmnElement="Task_ChargeAct">
+        <dc:Bounds x="950" y="530" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- GW_Join (System): center (1160, 290) -->
+      <bpmndi:BPMNShape id="GW_Join_di" bpmnElement="GW_Join">
+        <dc:Bounds x="1135" y="265" width="50" height="50" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_UpdateDB (System): center (1300, 290) -->
+      <!-- Note: pool right edge = 150+1200=1350, task ends at 1300+60=1360 — extend pool slightly -->
+      <bpmndi:BPMNShape id="Task_UpdateDB_di" bpmnElement="Task_UpdateDB">
+        <dc:Bounds x="1240" y="250" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End_SO (System): center (1420, 290) -->
+      <!-- Pool needs to be wider; adjust pool width to 1300 total in DI above if needed -->
+      <bpmndi:BPMNShape id="End_SO_di" bpmnElement="End_SO">
+        <dc:Bounds x="1382" y="272" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1358" y="315" width="84" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_SO_1_di" bpmnElement="Flow_SO_1">
+        <di:waypoint x="270" y="150" />
+        <di:waypoint x="330" y="150" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SO_2_di" bpmnElement="Flow_SO_2">
+        <di:waypoint x="390" y="190" />
+        <di:waypoint x="390" y="290" />
+        <di:waypoint x="470" y="290" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SO_3_di" bpmnElement="Flow_SO_3">
+        <di:waypoint x="590" y="290" />
+        <di:waypoint x="655" y="290" />
+      </bpmndi:BPMNEdge>
+
+      <!-- GW_Split → NurseTodo (down to Nurse lane) -->
+      <bpmndi:BPMNEdge id="Flow_SO_Nurse_di" bpmnElement="Flow_SO_Nurse">
+        <di:waypoint x="680" y="315" />
+        <di:waypoint x="680" y="430" />
+        <di:waypoint x="770" y="430" />
+      </bpmndi:BPMNEdge>
+
+      <!-- GW_Split → ChargeWarRoom (down to Charge lane) -->
+      <bpmndi:BPMNEdge id="Flow_SO_Charge_di" bpmnElement="Flow_SO_Charge">
+        <di:waypoint x="680" y="315" />
+        <di:waypoint x="680" y="570" />
+        <di:waypoint x="770" y="570" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SO_NurseAct_di" bpmnElement="Flow_SO_NurseAct">
+        <di:waypoint x="890" y="430" />
+        <di:waypoint x="950" y="430" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SO_ChargeAct_di" bpmnElement="Flow_SO_ChargeAct">
+        <di:waypoint x="890" y="570" />
+        <di:waypoint x="950" y="570" />
+      </bpmndi:BPMNEdge>
+
+      <!-- NurseAct → GW_Join -->
+      <bpmndi:BPMNEdge id="Flow_SO_4_di" bpmnElement="Flow_SO_4">
+        <di:waypoint x="1070" y="430" />
+        <di:waypoint x="1160" y="430" />
+        <di:waypoint x="1160" y="315" />
+      </bpmndi:BPMNEdge>
+
+      <!-- ChargeAct → GW_Join -->
+      <bpmndi:BPMNEdge id="Flow_SO_5_di" bpmnElement="Flow_SO_5">
+        <di:waypoint x="1070" y="570" />
+        <di:waypoint x="1160" y="570" />
+        <di:waypoint x="1160" y="315" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SO_6_di" bpmnElement="Flow_SO_6">
+        <di:waypoint x="1185" y="290" />
+        <di:waypoint x="1240" y="290" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_SO_7_di" bpmnElement="Flow_SO_7">
+        <di:waypoint x="1360" y="290" />
+        <di:waypoint x="1382" y="290" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

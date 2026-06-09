@@ -1,0 +1,325 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions
+  xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+  id="Definitions_AllocationHandover"
+  targetNamespace="http://bpmn.io/schema/bpmn">
+
+  <bpmn:collaboration id="Collab_AH">
+    <bpmn:participant id="Pool_AH" name="ICU 護理分配系統 — 分床與交班" processRef="Process_AH" />
+  </bpmn:collaboration>
+
+  <bpmn:process id="Process_AH" isExecutable="false">
+    <bpmn:laneSet id="LaneSet_AH">
+      <bpmn:lane id="Lane_Charge" name="小組長">
+        <bpmn:flowNodeRef>Start_AH</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_EnterAlloc</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ViewAdjust</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>GW_AdjOrConfirm</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_DragAdjust</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ConfirmAlloc</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_ViewResult</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>End_AH</bpmn:flowNodeRef>
+      </bpmn:lane>
+      <bpmn:lane id="Lane_System_AH" name="系統">
+        <bpmn:flowNodeRef>Task_LoadAll</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_GenSuggest</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_SaveDraftAlloc</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_Validate</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>GW_Unassigned</bpmn:flowNodeRef>
+        <bpmn:flowNodeRef>Task_CreateSnapshot</bpmn:flowNodeRef>
+      </bpmn:lane>
+    </bpmn:laneSet>
+
+    <bpmn:startEvent id="Start_AH" name="班前分床">
+      <bpmn:outgoing>Flow_AH_1</bpmn:outgoing>
+    </bpmn:startEvent>
+
+    <bpmn:userTask id="Task_EnterAlloc" name="進入分床頁&#10;/leader/allocation">
+      <bpmn:incoming>Flow_AH_1</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_2</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_LoadAll" name="載入護理師、病患、評估、STAT 資料">
+      <bpmn:incoming>Flow_AH_2</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_3</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:serviceTask id="Task_GenSuggest" name="執行分床演算法&#10;POST /allocation-runs/suggest&#10;bed-proximity-v4">
+      <bpmn:incoming>Flow_AH_3</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_4</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Task_ViewAdjust" name="檢視分床建議">
+      <bpmn:incoming>Flow_AH_4</bpmn:incoming>
+      <bpmn:incoming>Flow_AH_AdjLoop</bpmn:incoming>
+      <bpmn:incoming>Flow_AH_UnassignedLoop</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_5</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:exclusiveGateway id="GW_AdjOrConfirm" name="需要調整?">
+      <bpmn:incoming>Flow_AH_5</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_Adj</bpmn:outgoing>
+      <bpmn:outgoing>Flow_AH_Confirm</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:userTask id="Task_DragAdjust" name="拖曳調整分配">
+      <bpmn:incoming>Flow_AH_Adj</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_6</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_SaveDraftAlloc" name="儲存調整草稿&#10;PUT /allocation-runs/{id}/items">
+      <bpmn:incoming>Flow_AH_6</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_AdjLoop</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Task_ConfirmAlloc" name="確認分床&#10;POST /allocation-runs/{id}/confirm">
+      <bpmn:incoming>Flow_AH_Confirm</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_7</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:serviceTask id="Task_Validate" name="檢查未分配病患">
+      <bpmn:incoming>Flow_AH_7</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_8</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:exclusiveGateway id="GW_Unassigned" name="仍有未分配病患?">
+      <bpmn:incoming>Flow_AH_8</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_UnassignedLoop</bpmn:outgoing>
+      <bpmn:outgoing>Flow_AH_Complete</bpmn:outgoing>
+    </bpmn:exclusiveGateway>
+
+    <bpmn:serviceTask id="Task_CreateSnapshot" name="建立交班快照&#10;status = confirmed&#10;handoff_snapshots">
+      <bpmn:incoming>Flow_AH_Complete</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_9</bpmn:outgoing>
+    </bpmn:serviceTask>
+
+    <bpmn:userTask id="Task_ViewResult" name="查看交班結果&#10;/leader/allocation-result">
+      <bpmn:incoming>Flow_AH_9</bpmn:incoming>
+      <bpmn:outgoing>Flow_AH_10</bpmn:outgoing>
+    </bpmn:userTask>
+
+    <bpmn:endEvent id="End_AH" name="分床完成&#10;交班快照已封存">
+      <bpmn:incoming>Flow_AH_10</bpmn:incoming>
+    </bpmn:endEvent>
+
+    <bpmn:sequenceFlow id="Flow_AH_1" sourceRef="Start_AH" targetRef="Task_EnterAlloc" />
+    <bpmn:sequenceFlow id="Flow_AH_2" sourceRef="Task_EnterAlloc" targetRef="Task_LoadAll" />
+    <bpmn:sequenceFlow id="Flow_AH_3" sourceRef="Task_LoadAll" targetRef="Task_GenSuggest" />
+    <bpmn:sequenceFlow id="Flow_AH_4" sourceRef="Task_GenSuggest" targetRef="Task_ViewAdjust" />
+    <bpmn:sequenceFlow id="Flow_AH_5" sourceRef="Task_ViewAdjust" targetRef="GW_AdjOrConfirm" />
+    <bpmn:sequenceFlow id="Flow_AH_Adj" name="需要調整" sourceRef="GW_AdjOrConfirm" targetRef="Task_DragAdjust" />
+    <bpmn:sequenceFlow id="Flow_AH_Confirm" name="確認分床" sourceRef="GW_AdjOrConfirm" targetRef="Task_ConfirmAlloc" />
+    <bpmn:sequenceFlow id="Flow_AH_6" sourceRef="Task_DragAdjust" targetRef="Task_SaveDraftAlloc" />
+    <bpmn:sequenceFlow id="Flow_AH_AdjLoop" sourceRef="Task_SaveDraftAlloc" targetRef="Task_ViewAdjust" />
+    <bpmn:sequenceFlow id="Flow_AH_7" sourceRef="Task_ConfirmAlloc" targetRef="Task_Validate" />
+    <bpmn:sequenceFlow id="Flow_AH_8" sourceRef="Task_Validate" targetRef="GW_Unassigned" />
+    <bpmn:sequenceFlow id="Flow_AH_UnassignedLoop" name="有未分配" sourceRef="GW_Unassigned" targetRef="Task_ViewAdjust" />
+    <bpmn:sequenceFlow id="Flow_AH_Complete" name="全部已分配" sourceRef="GW_Unassigned" targetRef="Task_CreateSnapshot" />
+    <bpmn:sequenceFlow id="Flow_AH_9" sourceRef="Task_CreateSnapshot" targetRef="Task_ViewResult" />
+    <bpmn:sequenceFlow id="Flow_AH_10" sourceRef="Task_ViewResult" targetRef="End_AH" />
+  </bpmn:process>
+
+  <bpmndi:BPMNDiagram id="BPMNDiagram_AH">
+    <bpmndi:BPMNPlane id="BPMNPlane_AH" bpmnElement="Collab_AH">
+
+      <bpmndi:BPMNShape id="Pool_AH_di" bpmnElement="Pool_AH" isHorizontal="true">
+        <dc:Bounds x="150" y="80" width="1800" height="480" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Lane_Charge_di" bpmnElement="Lane_Charge" isHorizontal="true">
+        <dc:Bounds x="180" y="80" width="1770" height="240" />
+      </bpmndi:BPMNShape>
+
+      <bpmndi:BPMNShape id="Lane_System_AH_di" bpmnElement="Lane_System_AH" isHorizontal="true">
+        <dc:Bounds x="180" y="320" width="1770" height="240" />
+      </bpmndi:BPMNShape>
+
+      <!-- Start_AH: center (252, 200) -->
+      <bpmndi:BPMNShape id="Start_AH_di" bpmnElement="Start_AH">
+        <dc:Bounds x="234" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="220" y="225" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Task_EnterAlloc: center (390, 200) -->
+      <bpmndi:BPMNShape id="Task_EnterAlloc_di" bpmnElement="Task_EnterAlloc">
+        <dc:Bounds x="330" y="160" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_LoadAll (System): center (390, 440) -->
+      <bpmndi:BPMNShape id="Task_LoadAll_di" bpmnElement="Task_LoadAll">
+        <dc:Bounds x="330" y="400" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_GenSuggest (System): center (580, 440) -->
+      <bpmndi:BPMNShape id="Task_GenSuggest_di" bpmnElement="Task_GenSuggest">
+        <dc:Bounds x="520" y="400" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_ViewAdjust (Charge): center (760, 200) -->
+      <bpmndi:BPMNShape id="Task_ViewAdjust_di" bpmnElement="Task_ViewAdjust">
+        <dc:Bounds x="700" y="160" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- GW_AdjOrConfirm (Charge): center (930, 200) -->
+      <bpmndi:BPMNShape id="GW_AdjOrConfirm_di" bpmnElement="GW_AdjOrConfirm" isMarkerVisible="true">
+        <dc:Bounds x="905" y="175" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="896" y="232" width="68" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Task_DragAdjust (Charge): center (1080, 155) -->
+      <bpmndi:BPMNShape id="Task_DragAdjust_di" bpmnElement="Task_DragAdjust">
+        <dc:Bounds x="1020" y="115" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_SaveDraftAlloc (System): center (1080, 440) -->
+      <bpmndi:BPMNShape id="Task_SaveDraftAlloc_di" bpmnElement="Task_SaveDraftAlloc">
+        <dc:Bounds x="1020" y="400" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_ConfirmAlloc (Charge): center (1080, 250) -->
+      <bpmndi:BPMNShape id="Task_ConfirmAlloc_di" bpmnElement="Task_ConfirmAlloc">
+        <dc:Bounds x="1020" y="210" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_Validate (System): center (1280, 440) -->
+      <bpmndi:BPMNShape id="Task_Validate_di" bpmnElement="Task_Validate">
+        <dc:Bounds x="1220" y="400" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- GW_Unassigned (System): center (1460, 440) -->
+      <bpmndi:BPMNShape id="GW_Unassigned_di" bpmnElement="GW_Unassigned" isMarkerVisible="true">
+        <dc:Bounds x="1435" y="415" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1418" y="472" width="84" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Task_CreateSnapshot (System): center (1620, 440) -->
+      <bpmndi:BPMNShape id="Task_CreateSnapshot_di" bpmnElement="Task_CreateSnapshot">
+        <dc:Bounds x="1560" y="400" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- Task_ViewResult (Charge): center (1760, 200) -->
+      <bpmndi:BPMNShape id="Task_ViewResult_di" bpmnElement="Task_ViewResult">
+        <dc:Bounds x="1700" y="160" width="120" height="80" />
+      </bpmndi:BPMNShape>
+
+      <!-- End_AH (Charge): center (1890, 200) -->
+      <bpmndi:BPMNShape id="End_AH_di" bpmnElement="End_AH">
+        <dc:Bounds x="1872" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1848" y="225" width="84" height="27" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+
+      <!-- Edges -->
+      <bpmndi:BPMNEdge id="Flow_AH_1_di" bpmnElement="Flow_AH_1">
+        <di:waypoint x="270" y="200" />
+        <di:waypoint x="330" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_2_di" bpmnElement="Flow_AH_2">
+        <di:waypoint x="390" y="240" />
+        <di:waypoint x="390" y="400" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_3_di" bpmnElement="Flow_AH_3">
+        <di:waypoint x="450" y="440" />
+        <di:waypoint x="520" y="440" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_4_di" bpmnElement="Flow_AH_4">
+        <di:waypoint x="640" y="440" />
+        <di:waypoint x="760" y="440" />
+        <di:waypoint x="760" y="240" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_5_di" bpmnElement="Flow_AH_5">
+        <di:waypoint x="820" y="200" />
+        <di:waypoint x="905" y="200" />
+      </bpmndi:BPMNEdge>
+
+      <!-- GW → DragAdjust (upward): needs adjustment -->
+      <bpmndi:BPMNEdge id="Flow_AH_Adj_di" bpmnElement="Flow_AH_Adj">
+        <di:waypoint x="930" y="175" />
+        <di:waypoint x="930" y="155" />
+        <di:waypoint x="1020" y="155" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="940" y="138" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <!-- GW → ConfirmAlloc (downward within charge lane) -->
+      <bpmndi:BPMNEdge id="Flow_AH_Confirm_di" bpmnElement="Flow_AH_Confirm">
+        <di:waypoint x="930" y="225" />
+        <di:waypoint x="930" y="250" />
+        <di:waypoint x="1020" y="250" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="940" y="258" width="56" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_6_di" bpmnElement="Flow_AH_6">
+        <di:waypoint x="1080" y="195" />
+        <di:waypoint x="1080" y="400" />
+      </bpmndi:BPMNEdge>
+
+      <!-- Loop back: SaveDraftAlloc → ViewAdjust (left arrow above pool) -->
+      <bpmndi:BPMNEdge id="Flow_AH_AdjLoop_di" bpmnElement="Flow_AH_AdjLoop">
+        <di:waypoint x="1080" y="400" />
+        <di:waypoint x="1080" y="360" />
+        <di:waypoint x="760" y="360" />
+        <di:waypoint x="760" y="240" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_7_di" bpmnElement="Flow_AH_7">
+        <di:waypoint x="1080" y="290" />
+        <di:waypoint x="1280" y="290" />
+        <di:waypoint x="1280" y="400" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_8_di" bpmnElement="Flow_AH_8">
+        <di:waypoint x="1340" y="440" />
+        <di:waypoint x="1435" y="440" />
+      </bpmndi:BPMNEdge>
+
+      <!-- Loop back: GW_Unassigned → ViewAdjust (right-side detour) -->
+      <bpmndi:BPMNEdge id="Flow_AH_UnassignedLoop_di" bpmnElement="Flow_AH_UnassignedLoop">
+        <di:waypoint x="1460" y="415" />
+        <di:waypoint x="1460" y="360" />
+        <di:waypoint x="760" y="360" />
+        <di:waypoint x="760" y="240" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1070" y="343" width="42" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_Complete_di" bpmnElement="Flow_AH_Complete">
+        <di:waypoint x="1485" y="440" />
+        <di:waypoint x="1560" y="440" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="1488" y="423" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_9_di" bpmnElement="Flow_AH_9">
+        <di:waypoint x="1620" y="400" />
+        <di:waypoint x="1760" y="400" />
+        <di:waypoint x="1760" y="240" />
+      </bpmndi:BPMNEdge>
+
+      <bpmndi:BPMNEdge id="Flow_AH_10_di" bpmnElement="Flow_AH_10">
+        <di:waypoint x="1820" y="200" />
+        <di:waypoint x="1872" y="200" />
+      </bpmndi:BPMNEdge>
+
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
