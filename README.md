@@ -16,18 +16,75 @@
 **環境需求：** Node.js、PostgreSQL
 
 ```bash
-# 安裝套件並建立資料庫（含 Demo 資料）
+# 1. 安裝套件
 npm install
+
+# 2. 建立資料庫（含 Demo 資料）
 npm run db:setup
 
-# 啟動後端（port 8787）
+# 3. 啟動後端（port 8787）
 npm run api:dev
 
-# 另開終端機啟動前端
+# 4. 另開終端機啟動前端
 npm run dev
 ```
 
 > 如前端出現 `Failed to fetch`，請確認後端已啟動：`curl http://127.0.0.1:8787/api/v1/health`
+
+### PostgreSQL 初始化說明
+
+`npm run db:setup` 會建立並重置 demo database：`sad_frontend_v2`。此指令需要本機已啟動 PostgreSQL，且可以連到 admin database。
+
+預設連線值如下：
+
+```txt
+DATABASE_ADMIN_URL=postgresql://postgres@%2Ftmp/postgres
+DATABASE_URL=postgresql://postgres@%2Ftmp/sad_frontend_v2
+```
+
+如果本機 PostgreSQL 不是使用 `/tmp` Unix socket，或帳號密碼不是 `postgres`，請改用 TCP connection string：
+
+```bash
+DATABASE_ADMIN_URL=postgresql://postgres:password@localhost:5432/postgres \
+DATABASE_URL=postgresql://postgres:password@localhost:5432/sad_frontend_v2 \
+npm run db:setup
+```
+
+後端啟動時也要使用同一組 `DATABASE_URL`：
+
+```bash
+DATABASE_URL=postgresql://postgres:password@localhost:5432/sad_frontend_v2 npm run api:dev
+```
+
+若看到以下錯誤，代表 PostgreSQL 尚未啟動，或連線位置與 README 預設值不同：
+
+```txt
+connect ENOENT /tmp/.s.PGSQL.5432
+```
+
+請先啟動 PostgreSQL，或改用上方 TCP connection string。
+
+### 助教驗收建議流程
+
+重新 clone 或解壓縮 zip 後，可依序執行：
+
+```bash
+npm install
+npm run db:setup
+npm test
+npm run lint
+npm run build
+npm run api:dev
+```
+
+後端啟動後，另開終端機確認：
+
+```bash
+curl http://127.0.0.1:8787/api/v1/health
+curl http://127.0.0.1:8787/api/v1/me
+```
+
+`/api/v1/health` 回傳成功代表 server 已啟動；`/api/v1/me` 回傳成功代表資料庫也已初始化完成。
 
 ## 主要功能
 
@@ -45,8 +102,7 @@ npm run dev
 | — | [System Design Document](docs/system_design_doc/system_design.md) | 系統架構、資料庫設計、API 設計 |
 | 1 | [User Stories Mapping](docs/01_user-stories/01_user-stories.md) | 使用者故事對照表（29 stories，7 epics） |
 | 2 | [BPMN 流程圖](docs/02_BPMN/02_bpmn.md) | 業務流程模型 |
-| 3 | [使用者分析](docs/03_user-analysis/03_user-analysis.md) | 使用者角色、痛點分析、使用者旅程 |
-| 4 | [Tests](docs/04_tests/04a_tests.md) | 測試報告 |
+| 4 | [Tests](docs/04_tests/README.md) | 測試報告與測試程式碼副本 |
 | 5 | [Project Tracking](docs/05_Project_Tracking/05_project-tracking.md) | 專案管理追蹤 |
 | 6 | [API Documentation](docs/06_API_docs/06_api-docs.md) | Open API 文件 |
 | 8 | [EER Diagram](docs/08_ER_Diagram/08_er-diagram.md) | 資料庫關係圖 |
