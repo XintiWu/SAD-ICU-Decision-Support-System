@@ -1,4 +1,5 @@
 import http from 'node:http'
+import { runMigrations } from './src/db.mjs'
 import {
   ApiError,
   confirmAllocationRun,
@@ -37,6 +38,8 @@ const server = http.createServer((req, res) => {
     sendError(res, error)
   })
 })
+
+runMigrations().catch((err) => console.warn('migration warning:', err.message))
 
 server.listen(port, host, () => {
   console.log(`API listening on http://${host}:${port}`)

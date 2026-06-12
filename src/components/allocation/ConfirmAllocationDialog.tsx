@@ -6,6 +6,8 @@ type Props = {
   nurseNames?: Record<string, string>
   onConfirm: () => void
   onCancel: () => void
+  loading?: boolean
+  errorMsg?: string | null
 }
 
 function resolveName(nurseNames: Record<string, string> | undefined, nurseId: string | null) {
@@ -13,7 +15,7 @@ function resolveName(nurseNames: Record<string, string> | undefined, nurseId: st
   return nurseNames?.[nurseId] ?? nurseId.slice(-4)
 }
 
-export function ConfirmAllocationDialog({ stats, totalBeds, nurseNames, onConfirm, onCancel }: Props) {
+export function ConfirmAllocationDialog({ stats, totalBeds, nurseNames, onConfirm, onCancel, loading, errorMsg }: Props) {
   return (
     <div className="fixed inset-0 z-50 grid place-items-center bg-black/40 p-4" role="dialog" aria-modal="true">
       <div className="w-full max-w-md rounded-2xl bg-white p-5 shadow-xl ring-1 ring-black/10">
@@ -33,20 +35,27 @@ export function ConfirmAllocationDialog({ stats, totalBeds, nurseNames, onConfir
             </li>
           ) : null}
         </ul>
+        {errorMsg ? (
+          <div className="mt-3 rounded-xl bg-[#ffe8e1] px-3 py-2 text-xs font-semibold text-[#b3341f]">
+            {errorMsg}
+          </div>
+        ) : null}
         <div className="mt-5 flex gap-2">
           <button
             type="button"
             onClick={onCancel}
-            className="flex-1 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-800 ring-1 ring-black/10 hover:bg-black/5"
+            disabled={loading}
+            className="flex-1 rounded-xl bg-white px-4 py-2 text-sm font-semibold text-slate-800 ring-1 ring-black/10 hover:bg-black/5 disabled:opacity-50"
           >
             再調整
           </button>
           <button
             type="button"
             onClick={onConfirm}
-            className="flex-1 rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90"
+            disabled={loading}
+            className="flex-1 rounded-xl bg-black px-4 py-2 text-sm font-semibold text-white hover:bg-black/90 disabled:opacity-50"
           >
-            確認送出
+            {loading ? '送出中...' : '確認送出'}
           </button>
         </div>
       </div>
