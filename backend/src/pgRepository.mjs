@@ -359,11 +359,11 @@ export async function listBurdenAssessments({ shiftId, scope = 'all', userId = i
           and ai.allocation_run_id = (
             select id from allocation_runs
             where coalesce(target_shift_id, shift_id) = $1
-            order by (status = 'draft') desc, suggested_at desc
+            order by (status = 'confirmed') desc, confirmed_at desc nulls last, suggested_at desc
             limit 1
           )
       )
-    `
+        `
   }
   const result = await query(
     `
