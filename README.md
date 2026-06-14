@@ -96,18 +96,18 @@ curl http://127.0.0.1:8787/api/v1/me
 - **班表匯入**：支援 xlsx 護理師班表匯入，建立班別與出勤護理師
 
 ## 文件索引
-
 | # | 文件 | 說明 |
 |---|------|------|
-| — | [System Design Document](docs/system_design_doc/system_design.md) | 系統架構、資料庫設計、API 設計 |
-| 1 | [User Stories Mapping](docs/01_user-stories/01_user-stories.md) | 使用者故事對照表（29 stories，7 epics） |
-| 2 | [BPMN 流程圖](docs/02_BPMN/02_bpmn.md) | 業務流程模型 |
-| 4 | [Tests](docs/04_tests/README.md) | 測試報告與測試程式碼副本 |
-| 5 | [Project Tracking](docs/05_Project_Tracking/05_project-tracking.md) | 專案管理追蹤 |
-| 6 | [API Documentation](docs/06_API_docs/06_api-docs.md) | Open API 文件 |
-| 8 | [EER Diagram](docs/08_ER_Diagram/08_er-diagram.md) | 資料庫關係圖 |
-| — | [開發記錄](docs/00_develop_record/NOTES.md) | 後端開發進度與實作紀錄 |
-| — | [領域知識](docs/09_Domain_info/STAT519.md) | ICU 護理領域資訊 |
+| 00a | [System Design Document](docs/00_system_design_doc/00a_system_design.md) | 系統架構、資料庫設計、API 設計 |
+| 00b | [Deployment](docs/00_system_design_doc/00b_deployment.md) | 部署說明 |
+| 01a | [User Stories Mapping](docs/01_user-stories/01a_user-stories.md) | 使用者故事對照表（29 stories，7 epics） |
+| 01b | [User Research](docs/01_user-stories/01b_user-research.md) | 使用者研究 |
+| 01c | [使用者問卷調查與需求分析](docs/01_user-stories/04_使用者問卷調查與需求分析.pdf) | 問卷調查報告 PDF |
+| 02 | [BPMN 流程圖](docs/02_BPMN/02_bpmn.md) | 業務流程模型 |
+| 04 | [Tests](docs/04_tests/04_tests.md) | 測試報告與測試程式碼副本 |
+| 05 | [Project Tracking](docs/05_Project_Tracking/05_專案管理.pdf) | 專案管理追蹤 PDF |
+| 06 | [API Documentation](docs/06_API_docs/06_api-docs.md) | Open API 文件 |
+| 08 | [ER Diagram](docs/08_ER_Diagram/08_er-diagram.md) | 資料庫關係圖 |
 
 ## 資料
 
