@@ -31,6 +31,7 @@ import { AllocationBedChip } from '../components/allocation/AllocationBedChip'
 import { AllocationSidebar } from '../components/allocation/AllocationSidebar'
 import { ConfirmAllocationDialog } from '../components/allocation/ConfirmAllocationDialog'
 import { AllocationDecisionLogDialog } from '../components/allocation/AllocationDecisionLogDialog'
+import { AllocationTutorial } from '../components/allocation/AllocationTutorial'
 import {
   applyRunToCatalog,
   boardStateToItems,
@@ -73,7 +74,7 @@ export function ChargeAllocationPage() {
 
 function ChargeAllocationPageBody() {
   const navigate = useNavigate()
-  const { shiftId, selectedShift, shifts, setShiftId } = useShift()
+  const { shiftId, selectedShift, shifts } = useShift()
 
   const targetShiftId = useMemo(() => {
     const currentShift = shifts.find(s => s.id === shiftId)
@@ -128,6 +129,7 @@ function ChargeAllocationPageBody() {
   const [decisionLogs, setDecisionLogs] = useState<DecisionLog[] | null>(null)
   const [decisionLogOpen, setDecisionLogOpen] = useState(false)
   const [loadingLogs, setLoadingLogs] = useState(false)
+  const [tutorialForceOpen, setTutorialForceOpen] = useState(false)
 
   const nurseIds = useMemo(() => nurses.map((n) => n.id), [nurses])
   const chargeNurseIdFromShift = useChargeNurseId()
@@ -535,6 +537,13 @@ function ChargeAllocationPageBody() {
             ) : (
               <span className="ml-2 rounded-full bg-surface px-2 py-0.5 text-xs font-semibold text-slate-600">尚未分床</span>
             )}
+            <button
+              type="button"
+              onClick={() => setTutorialForceOpen(true)}
+              className="ml-auto flex items-center gap-1 rounded-xl bg-slate-50 border border-slate-200 px-3 py-1.5 text-xs font-bold text-slate-600 hover:bg-slate-100 transition cursor-pointer"
+            >
+              💡 說明引導
+            </button>
           </div>
         ) : null}
         {error ? (
@@ -629,6 +638,11 @@ function ChargeAllocationPageBody() {
           onClose={() => setDecisionLogOpen(false)}
         />
       )}
+
+      <AllocationTutorial
+        forceOpen={tutorialForceOpen}
+        onClose={() => setTutorialForceOpen(false)}
+      />
     </AllocationCatalogProvider>
   )
 }
