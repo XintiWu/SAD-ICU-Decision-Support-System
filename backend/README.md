@@ -72,11 +72,15 @@ It will:
    - `backend/db/migrations/001_core_schema.sql`
    - `backend/db/migrations/002_burden_tasks_schema.sql`
    - `backend/db/migrations/003_allocation_schema.sql`
+   - `backend/db/migrations/004_stat_orders_schema.sql`
+   - `backend/db/migrations/005_handoff_schema.sql`
+   - `backend/db/migrations/006_allocation_decision_logs.sql`
 4. Apply demo seeds:
    - `backend/db/seeds/001_demo_core_data.sql`
    - `backend/db/seeds/002_demo_burden_tasks_data.sql`
    - `backend/db/seeds/003_demo_allocation_data.sql`
-5. Fill complete demo data from the Step 1-3 data modules.
+   - `backend/db/seeds/004_demo_stat_orders_data.sql`
+5. Fill complete demo data from the Step 1-3 data modules and import bundled patient data.
 
 Default connection values:
 
@@ -84,6 +88,14 @@ Default connection values:
 DATABASE_ADMIN_URL=postgresql://postgres@%2Ftmp/postgres
 DATABASE_URL=postgresql://postgres@%2Ftmp/sad_frontend_v2
 ```
+
+The default values assume PostgreSQL is already running and exposes a Unix socket at `/tmp/.s.PGSQL.5432`. If `npm run db:setup` fails with this error:
+
+```txt
+connect ENOENT /tmp/.s.PGSQL.5432
+```
+
+PostgreSQL is not running at the default socket path. Start PostgreSQL first, or use TCP connection strings.
 
 You can override them:
 

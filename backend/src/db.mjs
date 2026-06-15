@@ -13,6 +13,10 @@ pool.on('error', (err) => {
   console.error('Unexpected error on idle client:', err.message || err)
 })
 
+export async function runMigrations() {
+  await pool.query(`ALTER TABLE stat_orders ADD COLUMN IF NOT EXISTS severity VARCHAR(2) DEFAULT '中'`)
+}
+
 export async function query(text, params = []) {
   const result = await pool.query(text, params)
   return result

@@ -369,11 +369,11 @@ export async function listBurdenAssessments({ shiftId, scope = 'all', userId = i
           and ai.allocation_run_id = (
             select id from allocation_runs
             where coalesce(target_shift_id, shift_id) = $1
-            order by (status = 'draft') desc, suggested_at desc
+            order by (status = 'confirmed') desc, confirmed_at desc nulls last, suggested_at desc
             limit 1
           )
       )
-    `
+        `
   }
   const result = await query(
     `
@@ -932,11 +932,44 @@ export async function getHandoffSheet({ shiftId } = {}) {
     `select * from handoff_rows where snapshot_id = $1 order by sort_order`,
     [snapshot.rows[0].id],
   )
+
+  // 動態查下一班已確認的分床，取得「下班護理師」（不凍結在快照裡）
+  const nextAllocResult = await query(
+    `
+    select ar.id as run_id
+    from allocation_runs ar
+    join shifts nxt on nxt.id = ar.target_shift_id
+    join shifts cur on cur.id = $1
+    where nxt.unit_name = cur.unit_name
+      and nxt.starts_at >= cur.ends_at
+      and ar.status = 'confirmed'
+    order by nxt.starts_at asc
+    limit 1
+    `,
+    [shiftId],
+  )
+  const nextNurseMap = new Map()
+  if (nextAllocResult.rows[0]) {
+    const items = await query(
+      `
+      select ai.admission_id, n.short_name
+      from allocation_items ai
+      join nurses n on n.id = ai.nurse_id
+      where ai.allocation_run_id = $1
+      `,
+      [nextAllocResult.rows[0].run_id],
+    )
+    for (const r of items.rows) nextNurseMap.set(r.admission_id, r.short_name)
+  }
+
   return {
     snapshotId: snapshot.rows[0].id,
     allocationRunId: snapshot.rows[0].allocation_run_id,
     createdAt: snapshot.rows[0].created_at,
-    rows: rowResult.rows.map(formatHandoffRowFromDb),
+    rows: rowResult.rows.map((row) => ({
+      ...formatHandoffRowFromDb(row),
+      nextNurse: nextNurseMap.get(row.admission_id) ?? '—',
+    })),
   }
 }
 
