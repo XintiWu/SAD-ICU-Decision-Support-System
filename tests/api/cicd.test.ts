@@ -7,6 +7,53 @@ const baseUrl = `http://127.0.0.1:${port}/api/v1`
 let server: ChildProcessWithoutNullStreams
 let serverStderr = ''
 
+interface Shift {
+  id: string
+  label: string
+  nurseIds: string[]
+  startsAt: string
+  endsAt: string
+  hidden?: boolean
+}
+
+interface Nurse {
+  id: string
+  shortName: string
+  role: string
+  isActive: boolean
+}
+
+interface Patient {
+  admissionId: string
+  score: number
+  bedLabel?: string
+  bedShort?: string
+  diagnosis?: string
+  tone?: string
+}
+
+interface AllocationRun {
+  allocationRunId: string
+  targetShiftId: string
+  byNurse: Array<{
+    nurseId: string
+    load: number
+    patients: Patient[]
+  }>
+  unassigned: Patient[]
+}
+
+interface BurdenAssessment {
+  assessmentId: string
+  admissionId: string
+  score: {
+    totalScore: number
+  }
+  subjective: {
+    dressingChangeFrequency: number
+  }
+}
+
 async function waitForHealth() {
   const deadline = Date.now() + 5000
   let lastError: unknown
@@ -59,8 +106,8 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     if (!server.killed) server.kill()
   })
 
-  let currentShift: any
-  let nextShift: any
+  let currentShift: Shift
+  let nextShift: Shift
   
   it('setup: fetch shifts and prepare test targets', async () => {
     const allShiftsRes = await fetch(`${baseUrl}/shifts`)
@@ -70,8 +117,8 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     // Use the seeded shifts that have allocations:
     // currentShift = 202 (day shift 5/19)
     // nextShift = 203 (evening shift 5/19)
-    currentShift = shifts.find((s: any) => s.id === '00000000-0000-0000-0000-000000000202')
-    nextShift = shifts.find((s: any) => s.id === '00000000-0000-0000-0000-000000000203')
+    currentShift = shifts.find((s: Shift) => s.id === '00000000-0000-0000-0000-000000000201') || currentShift
+    nextShift = shifts.find((s: Shift) => s.id === '00000000-0000-0000-0000-000000000202') || nextShift
     
     expect(currentShift).toBeDefined()
     expect(nextShift).toBeDefined()
@@ -107,7 +154,7 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     expect(dutyNurses.length).toBeGreaterThan(0)
     
     // 檢查每一個排定的護理師都在名單中，且沒有重複
-    const actualNurseIds = dutyNurses.map((n: any) => n.id)
+    const actualNurseIds = dutyNurses.map((n: Nurse) => n.id)
     const uniqueActualNurseIds = new Set(actualNurseIds)
     expect(actualNurseIds.length).toBe(uniqueActualNurseIds.size) // 無重複
     
@@ -120,10 +167,10 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     // 故此分床的 byNurse 護理師應與下班 (nextShift) 的值班護理師一致
     const allocRes = await fetch(`${baseUrl}/allocation-runs/current?shiftId=${currentShift.id}`)
     const allocData = await allocRes.json()
-    const allocation = allocData.data
+    const allocation: AllocationRun = allocData.data
     expect(allocation).toBeDefined()
     
-    const allocationNurseIds = allocation.byNurse.map((bn: any) => bn.nurseId)
+    const allocationNurseIds = allocation.byNurse.map((bn: { nurseId: string }) => bn.nurseId)
     const nextShiftNurseIdsSet = new Set(nextShift.nurseIds)
     
     // 確保分床清單中的護理師都是下一班的值班護理師
@@ -146,6 +193,8 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     testAdmissionId = firstAssessment.admissionId
     initialScore = firstAssessment.score.totalScore
     const assessmentId = firstAssessment.assessmentId
+
+    expect(initialScore).toBeGreaterThanOrEqual(0)
     
     // 2. 提交新的主觀分數 (換藥頻繁程度 = 2，合法範圍為 0, 1, 2)
     const patchRes = await fetch(`${baseUrl}/burden-assessments/${assessmentId}`, {
@@ -171,21 +220,21 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     // 3. 再次查詢確保資料持久化
     const verifyRes = await fetch(`${baseUrl}/burden-assessments?shiftId=${currentShift.id}`)
     const verifyData = await verifyRes.json()
-    const updatedAssessment = verifyData.data.find((a: any) => a.assessmentId === assessmentId)
+    const updatedAssessment = verifyData.data.find((a: BurdenAssessment) => a.assessmentId === assessmentId)
     expect(updatedAssessment.score.totalScore).toBe(updatedScore)
     expect(updatedAssessment.subjective.dressingChangeFrequency).toBe(2)
     
     // 4. 驗證分床結果中的護理師負擔總分計算與當前床位病人分數加總相符
     const allocRes = await fetch(`${baseUrl}/allocation-runs/current?shiftId=${currentShift.id}`)
     const allocData = await allocRes.json()
-    const allocation = allocData.data
+    const allocation: AllocationRun = allocData.data
     
     for (const row of allocation.byNurse) {
       let calculatedLoad = 0
       for (const p of row.patients) {
         calculatedLoad += p.score
       }
-      expect(row.load).toBe(calculatedLoad) // 確保護理師的負擔總分是旗下病人分數之總和
+      expect(row.load).toBe(calculatedLoad) // 確確保護理師的負擔總分是旗下病人分數之總和
     }
   })
 
@@ -207,7 +256,7 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     })
     expect(suggestRes.status).toBe(201)
     const suggestData = await suggestRes.json()
-    const suggestion = suggestData.data
+    const suggestion: AllocationRun = suggestData.data
     expect(suggestion).toBeDefined()
     suggestedRunId = suggestion.allocationRunId
     
@@ -217,7 +266,7 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     
     // B. 分配名單中的護理師必須完全是下班 (nextShift) 的值班人員，絕不能混入本班護理師！
     const nextShiftNurseIds = new Set(nextShift.nurseIds)
-    const suggestionNurseIds = suggestion.byNurse.map((bn: any) => bn.nurseId)
+    const suggestionNurseIds = suggestion.byNurse.map((bn: { nurseId: string }) => bn.nurseId)
     expect(suggestionNurseIds.length).toBeGreaterThan(0)
     for (const nurseId of suggestionNurseIds) {
       expect(nextShiftNurseIds.has(nurseId)).toBe(true)
@@ -230,14 +279,14 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
         assignedAdmissionIds.push(p.admissionId)
       }
     }
-    const unassignedAdmissionIds = suggestion.unassigned.map((p: any) => p.admissionId)
+    const unassignedAdmissionIds = suggestion.unassigned.map((p: Patient) => p.admissionId)
     const allAllocatedIds = [...assignedAdmissionIds, ...unassignedAdmissionIds]
     const uniqueAllocatedIds = new Set(allAllocatedIds)
     expect(allAllocatedIds.length).toBe(uniqueAllocatedIds.size) // 絕無重複病人
     
     // D. 驗證上一班修改的麻煩度是否有正確帶入到建議中
-    const suggestionTestPatient = [...suggestion.byNurse.flatMap((n: any) => n.patients), ...suggestion.unassigned]
-      .find((p: any) => p.admissionId === testAdmissionId)
+    const suggestionTestPatient = [...suggestion.byNurse.flatMap((n: { patients: Patient[] }) => n.patients), ...suggestion.unassigned]
+      .find((p: Patient) => p.admissionId === testAdmissionId)
     expect(suggestionTestPatient).toBeDefined()
     expect(suggestionTestPatient.score).toBe(updatedScore) // 確保分數與上一班提交的一致
     
@@ -255,7 +304,7 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     // 3. 查詢下一班的當前分床，確認剛才確認的建議已生效為正式分床
     const nextAllocRes = await fetch(`${baseUrl}/allocation-runs/current?shiftId=${nextShift.id}`)
     const nextAllocData = await nextAllocRes.json()
-    const nextAllocation = nextAllocData.data
+    const nextAllocation: AllocationRun = nextAllocData.data
     expect(nextAllocation).toBeDefined()
   })
 
@@ -271,11 +320,11 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     // 取得對應的分床資料 (為 Test 1 產生的 confirmed run)
     const allocRes = await fetch(`${baseUrl}/allocation-runs/current?shiftId=${currentShift.id}`)
     const allocData = await allocRes.json()
-    const allocation = allocData.data
+    const allocation: AllocationRun = allocData.data
     
     // 檢查戰情室的護理師負載與分床資料完全對齊
     for (const bn of allocation.byNurse) {
-      const wrNurse = warRoom.nurses.find((n: any) => n.nurseId === bn.nurseId)
+      const wrNurse = warRoom.nurses.find((n: { nurseId: string }) => n.nurseId === bn.nurseId)
       // 如果該護理師有被分配病人，戰情室應有其紀錄
       if (bn.patients.length > 0) {
         expect(wrNurse).toBeDefined()
@@ -283,8 +332,8 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
         expect(wrNurse.patients.length).toBe(bn.patients.length) // 病人數量必須完全一致
         
         // 逐一檢查病人 ID 是一致的
-        const bnPatientIds = bn.patients.map((p: any) => p.admissionId).sort()
-        const wrPatientIds = wrNurse.patients.map((p: any) => p.admissionId).sort()
+        const bnPatientIds = bn.patients.map((p: Patient) => p.admissionId).sort()
+        const wrPatientIds = wrNurse.patients.map((p: Patient) => p.admissionId).sort()
         expect(bnPatientIds).toEqual(wrPatientIds)
       }
     }
@@ -327,6 +376,8 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     const secondSuggestData = await secondSuggestRes.json()
     const draftRunId = secondSuggestData.data.allocationRunId
 
+    expect(draftRunId).toBeDefined()
+
     // 2. 分別查詢首頁 (getNurseOverview) 與麻煩度自填名單 (listBurdenAssessments)
     const [overviewRes, burdenRes] = await Promise.all([
       fetch(`${baseUrl}/nurse/overview?shiftId=${nextShift.id}`, {
@@ -343,8 +394,8 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     const overviewData = await overviewRes.json()
     const burdenData = await burdenRes.json()
 
-    const overviewPatientIds = overviewData.data.myPatients.map((p: any) => p.admissionId).sort()
-    const burdenPatientIds = burdenData.data.map((p: any) => p.admissionId).sort()
+    const overviewPatientIds = overviewData.data.myPatients.map((p: Patient) => p.admissionId).sort()
+    const burdenPatientIds = burdenData.data.map((p: Patient) => p.admissionId).sort()
 
     // 3. 斷言兩邊取得的分配病患必須完全一致 (這在此 Bug 修復前會失敗，因為首頁會拿到 draft 的名單，而麻煩度拿到 confirmed 的名單)
     expect(overviewPatientIds).toEqual(burdenPatientIds)

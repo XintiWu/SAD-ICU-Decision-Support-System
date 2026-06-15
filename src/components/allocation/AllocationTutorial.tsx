@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react'
+import { useState } from 'react'
 
 type Props = {
   onClose?: () => void
@@ -6,20 +6,20 @@ type Props = {
 }
 
 export function AllocationTutorial({ onClose, forceOpen = false }: Props) {
-  const [isOpen, setIsOpen] = useState(false)
+  const [isOpen, setIsOpen] = useState(() => {
+    if (forceOpen) return true
+    return !localStorage.getItem('sad_has_seen_tutorial_v1')
+  })
   const [step, setStep] = useState(1)
 
-  useEffect(() => {
+  const [prevForceOpen, setPrevForceOpen] = useState(forceOpen)
+  if (forceOpen !== prevForceOpen) {
+    setPrevForceOpen(forceOpen)
     if (forceOpen) {
       setIsOpen(true)
       setStep(1)
-      return
     }
-    const hasSeen = localStorage.getItem('sad_has_seen_tutorial_v1')
-    if (!hasSeen) {
-      setIsOpen(true)
-    }
-  }, [forceOpen])
+  }
 
   const handleClose = () => {
     localStorage.setItem('sad_has_seen_tutorial_v1', 'true')
