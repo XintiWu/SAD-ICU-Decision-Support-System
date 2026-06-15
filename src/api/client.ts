@@ -5,7 +5,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? '/api/v1'
 export const CURRENT_SHIFT_ID = '00000000-0000-0000-0000-000000000202'
 
 /** demo 護理師（nurse），一般 API 預設使用者 */
-export const CURRENT_NURSE_USER_ID = '00000000-0000-0000-0000-000000000101'
+export const CURRENT_NURSE_USER_ID = '00000000-0000-0000-0000-000000000104'
 
 /** demo 小組長（charge_nurse），呼叫分床 API 時帶入 */
 export const CHARGE_USER_ID = '00000000-0000-0000-0000-000000000110'
