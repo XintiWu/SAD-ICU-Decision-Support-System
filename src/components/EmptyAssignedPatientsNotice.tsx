@@ -27,13 +27,18 @@ export function EmptyAssignedPatientsNotice({
           <div className="text-lg font-extrabold text-slate-500 tracking-wide">
             休假中 非當班護士 無負責病患
           </div>
-          <div className="mx-auto max-w-[100%] overflow-x-auto scrollbar-none rounded-xl bg-slate-100 p-5 leading-relaxed ring-1 ring-black/5">
+          <div className="mx-auto max-w-[100%] rounded-xl bg-slate-100 p-4 leading-relaxed ring-1 ring-black/5">
             {dutyShifts.length > 0 ? (
-              <p className="text-[#1e4ea7] font-bold text-sm md:text-base whitespace-nowrap">
-                您的上班時間：{dutyShifts.map((s) => s.label).join('、')}
-              </p>
+              <div className="flex flex-wrap gap-2 justify-center items-center">
+                <span className="text-slate-600 font-bold text-sm">您的上班時間：</span>
+                {dutyShifts.map((s) => (
+                  <span key={s.id} className="inline-flex items-center rounded-lg bg-[#eaf1ff] px-3 py-1 text-xs font-semibold text-[#1e4ea7] ring-1 ring-[#1e4ea7]/20">
+                    {s.label}
+                  </span>
+                ))}
+              </div>
             ) : (
-              <p className="text-slate-500 font-bold text-sm md:text-base whitespace-nowrap">您的上班時間：本週暫無排班</p>
+              <p className="text-slate-500 font-bold text-sm text-center">您的上班時間：本週暫無排班</p>
             )}
           </div>
         </div>
