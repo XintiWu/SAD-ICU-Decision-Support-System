@@ -306,4 +306,47 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
       expect(row.currentNurse).not.toBe(row.nextNurse)
     }
   })
+
+  it('Test 7: 驗證當 confirmed 與 draft 共存時，首頁與麻煩度評估取得的病患名單完全一致且均優先選擇 confirmed', async () => {
+    const chargeNurseId = '00000000-0000-0000-0000-000000000110' // 陳O琪
+    
+    // 1. 產生第二個分床建議 (此時為 draft)
+    const secondSuggestRes = await fetch(`${baseUrl}/allocation-runs/suggest`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-user-id': chargeNurseId
+      },
+      body: JSON.stringify({
+        shiftId: currentShift.id,
+        targetShiftId: nextShift.id,
+        createdBy: chargeNurseId
+      })
+    })
+    expect(secondSuggestRes.status).toBe(201)
+    const secondSuggestData = await secondSuggestRes.json()
+    const draftRunId = secondSuggestData.data.allocationRunId
+
+    // 2. 分別查詢首頁 (getNurseOverview) 與麻煩度自填名單 (listBurdenAssessments)
+    const [overviewRes, burdenRes] = await Promise.all([
+      fetch(`${baseUrl}/nurse/overview?shiftId=${nextShift.id}`, {
+        headers: { 'x-user-id': chargeNurseId }
+      }),
+      fetch(`${baseUrl}/burden-assessments?shiftId=${nextShift.id}&scope=mine`, {
+        headers: { 'x-user-id': chargeNurseId }
+      })
+    ])
+
+    expect(overviewRes.status).toBe(200)
+    expect(burdenRes.status).toBe(200)
+
+    const overviewData = await overviewRes.json()
+    const burdenData = await burdenRes.json()
+
+    const overviewPatientIds = overviewData.data.myPatients.map((p: any) => p.admissionId).sort()
+    const burdenPatientIds = burdenData.data.map((p: any) => p.admissionId).sort()
+
+    // 3. 斷言兩邊取得的分配病患必須完全一致 (這在此 Bug 修復前會失敗，因為首頁會拿到 draft 的名單，而麻煩度拿到 confirmed 的名單)
+    expect(overviewPatientIds).toEqual(burdenPatientIds)
+  })
 })

@@ -53,7 +53,8 @@ export function EmptyAssignedPatientsNotice({
           {onRoster === true ? (
             <p className="mx-auto mt-3 max-w-lg text-xs leading-relaxed text-slate-600">
               {nurseName} <strong className="font-semibold text-slate-800">有在此班值班</strong>，但尚未完成分床分配。
-              請至「指派分床配對」套用系統建議分床，或請管理者執行 demo 分床 seed。
+              <br />
+              請至上一班的「指派分床配對」套用系統建議分床。
             </p>
           ) : (
             <p className="mx-auto mt-3 max-w-md text-xs leading-relaxed text-slate-600">

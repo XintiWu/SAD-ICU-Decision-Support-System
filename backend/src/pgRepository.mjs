@@ -71,7 +71,7 @@ export async function listStatOrders({ shiftId, includeCompleted = false, assign
           and ai.allocation_run_id = (
             select id from allocation_runs
             where coalesce(target_shift_id, shift_id) = $1
-            order by (status = 'draft') desc, suggested_at desc
+            order by (status = 'confirmed') desc, confirmed_at desc nulls last, suggested_at desc
             limit 1
           )
       )
@@ -281,7 +281,7 @@ export async function getNurseOverview({ shiftId, userId = ids.currentNurse } = 
       and ai.allocation_run_id = (
         select id from allocation_runs
         where coalesce(target_shift_id, shift_id) = $1
-        order by (status = 'draft') desc, suggested_at desc
+        order by (status = 'confirmed') desc, confirmed_at desc nulls last, suggested_at desc
         limit 1
       )
     order by ai.sort_order
@@ -933,43 +933,18 @@ export async function getHandoffSheet({ shiftId } = {}) {
     [snapshot.rows[0].id],
   )
 
-  // 動態查下一班已確認的分床，取得「下班護理師」（不凍結在快照裡）
-  const nextAllocResult = await query(
-    `
-    select ar.id as run_id
-    from allocation_runs ar
-    join shifts nxt on nxt.id = ar.target_shift_id
-    join shifts cur on cur.id = $1
-    where nxt.unit_name = cur.unit_name
-      and nxt.starts_at >= cur.ends_at
-      and ar.status = 'confirmed'
-    order by nxt.starts_at asc
-    limit 1
-    `,
-    [shiftId],
-  )
-  const nextNurseMap = new Map()
-  if (nextAllocResult.rows[0]) {
-    const items = await query(
-      `
-      select ai.admission_id, n.short_name
-      from allocation_items ai
-      join nurses n on n.id = ai.nurse_id
-      where ai.allocation_run_id = $1
-      `,
-      [nextAllocResult.rows[0].run_id],
-    )
-    for (const r of items.rows) nextNurseMap.set(r.admission_id, r.short_name)
-  }
-
   return {
     snapshotId: snapshot.rows[0].id,
     allocationRunId: snapshot.rows[0].allocation_run_id,
     createdAt: snapshot.rows[0].created_at,
-    rows: rowResult.rows.map((row) => ({
-      ...formatHandoffRowFromDb(row),
-      nextNurse: nextNurseMap.get(row.admission_id) ?? '—',
-    })),
+    rows: rowResult.rows.map((row) => {
+      const formatted = formatHandoffRowFromDb(row)
+      return {
+        ...formatted,
+        currentNurse: formatted.currentNurse,
+        nextNurse: formatted.nextNurse,
+      }
+    }),
   }
 }
 
@@ -1337,7 +1312,7 @@ async function latestConfirmedAllocation(shiftId) {
 
 async function latestAllocation(shiftId) {
   const result = await query(
-    `select id from allocation_runs where coalesce(target_shift_id, shift_id) = $1 order by (status = 'draft') desc, suggested_at desc limit 1`,
+    `select id from allocation_runs where coalesce(target_shift_id, shift_id) = $1 order by (status = 'confirmed') desc, confirmed_at desc nulls last, suggested_at desc limit 1`,
     [shiftId],
   )
   if (!result.rows[0]) return emptyAllocationForShift(shiftId)
@@ -1637,10 +1612,11 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
   const existing = await client.query('select id from handoff_snapshots where allocation_run_id = $1', [allocationRunId])
   if (existing.rows[0]) return existing.rows[0].id
 
-  const shiftId = run.targetShiftId ?? run.shiftId
-  const admissions = await listAdmissions({ shiftId, status: 'active' })
-  const burdens = await listBurdenAssessments({ shiftId, scope: 'all' })
-  const statOrders = await listStatOrders({ shiftId })
+  const snapshotShiftId = run.shiftId
+  const targetShiftId = run.targetShiftId ?? run.shiftId
+  const admissions = await listAdmissions({ shiftId: snapshotShiftId, status: 'active' })
+  const burdens = await listBurdenAssessments({ shiftId: targetShiftId, scope: 'all' })
+  const statOrders = await listStatOrders({ shiftId: snapshotShiftId })
   const burdenByAdmission = new Map(burdens.map((item) => [item.admissionId, item]))
   const nurseBlocks = buildNurseBlocks(run)
   const patientCount = run.byNurse.reduce((sum, nurse) => sum + nurse.patients.length, 0)
@@ -1657,7 +1633,7 @@ async function persistHandoffSnapshot(client, { allocationRunId, userId, run } =
     `,
     [
       allocationRunId,
-      shiftId,
+      snapshotShiftId,
       userId ?? null,
       patientCount,
       run.byNurse.length,

@@ -94,6 +94,19 @@ function ChargeAllocationPageBody() {
     return shifts.find(s => s.id === targetShiftId) || null
   }, [shifts, targetShiftId])
 
+  const hasNextShift = useMemo(() => {
+    const currentShift = shifts.find(s => s.id === shiftId)
+    if (!currentShift) return false
+    
+    // Sort shifts chronologically (startsAt asc)
+    const sorted = [...shifts]
+      .filter(s => !s.hidden)
+      .sort((a, b) => new Date(a.startsAt).getTime() - new Date(b.startsAt).getTime())
+      
+    const currentIndex = sorted.findIndex(s => s.id === shiftId)
+    return currentIndex !== -1 && currentIndex < sorted.length - 1
+  }, [shifts, shiftId])
+
   const [nurses, setNurses] = useState<ApiNurse[]>([])
   const [admissions, setAdmissions] = useState<ApiAdmission[]>([])
   const [catalog, setCatalog] = useState<Map<string, CatalogEntry>>(() => new Map())
@@ -419,7 +432,6 @@ function ChargeAllocationPageBody() {
     try {
       await apiPost<AllocationRun>(`/allocation-runs/${allocationRunId}/confirm`, {}, leaderOpts)
       setConfirmOpen(false)
-      setShiftId(targetShiftId)
       navigate('/leader/allocation-result', { replace: true })
     } catch (err) {
       setError(err instanceof Error ? err.message : '確認分床失敗')
@@ -470,6 +482,34 @@ function ChargeAllocationPageBody() {
 
   if (loading) {
     return <div className="rounded-2xl bg-white p-5 text-sm font-semibold text-slate-700 ring-1 ring-black/10">載入分床板…</div>
+  }
+
+  if (!hasNextShift) {
+    return (
+      <div className="grid gap-4">
+        {selectedShift ? (
+          <div className="rounded-2xl bg-white px-4 py-3 text-sm text-slate-700 ring-1 ring-black/10 flex flex-wrap items-center gap-2">
+            <div>
+              評估班別：<span className="font-semibold text-slate-900">{selectedShift.label}</span>
+            </div>
+            <span className="ml-2 rounded-full bg-[#ffe8e1] px-2 py-0.5 text-xs font-semibold text-[#b3341f]">目前沒有下個班別</span>
+          </div>
+        ) : null}
+        <div className="flex flex-col items-center justify-center min-h-[400px] rounded-2xl bg-white p-8 text-center ring-1 ring-black/10">
+          <div className="mb-4 text-4xl">⚠️</div>
+          <h3 className="mb-2 text-lg font-bold text-slate-800">目前沒有下個班別</h3>
+          <p className="mb-6 text-sm text-slate-500 max-w-md">
+            目前此班別為最後一班（無後續班別），無法進行下一班的分床指派。請先匯入後續的班表資料。
+          </p>
+          <button
+            onClick={() => navigate('/leader/roster-import')}
+            className="rounded-xl bg-sky-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-sky-500 transition-colors cursor-pointer"
+          >
+            前往匯入班表
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
