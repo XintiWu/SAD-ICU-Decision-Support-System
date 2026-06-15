@@ -117,8 +117,8 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     // Use the seeded shifts that have allocations:
     // currentShift = 202 (day shift 5/19)
     // nextShift = 203 (evening shift 5/19)
-    currentShift = shifts.find((s: Shift) => s.id === '00000000-0000-0000-0000-000000000201') || currentShift
-    nextShift = shifts.find((s: Shift) => s.id === '00000000-0000-0000-0000-000000000202') || nextShift
+    currentShift = shifts.find((s: Shift) => s.id === '00000000-0000-0000-0000-000000000202') || currentShift
+    nextShift = shifts.find((s: Shift) => s.id === '00000000-0000-0000-0000-000000000203') || nextShift
     
     expect(currentShift).toBeDefined()
     expect(nextShift).toBeDefined()
@@ -339,7 +339,7 @@ describe('CI/CD E2E Integration - Deep Data Validation', () => {
     }
     
     // 2. 取得總交班單資料
-    const handoffRes = await fetch(`${baseUrl}/handoff-sheets?shiftId=${nextShift.id}`)
+    const handoffRes = await fetch(`${baseUrl}/handoff-sheets?shiftId=${currentShift.id}`)
     const handoffData = await handoffRes.json()
     const handoff = handoffData.data
     

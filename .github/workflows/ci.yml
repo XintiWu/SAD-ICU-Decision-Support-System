@@ -18,6 +18,19 @@ jobs:
       fail-fast: false
       matrix:
         node: [20, 22]
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: sad_icu
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -37,5 +50,12 @@ jobs:
       - name: Build
         run: npm run build
 
+      - name: Setup Database Schema
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sad_icu
+        run: npm run db:setup:cloud
+
       - name: Test API Integration
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:5432/sad_icu
         run: npm run test:api
