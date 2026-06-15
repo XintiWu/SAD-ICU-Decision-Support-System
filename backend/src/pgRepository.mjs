@@ -1010,7 +1010,7 @@ async function currentShiftRow(unitName = 'ICU') {
     from shifts s
     left join nurses n on n.id = s.charge_nurse_id
     where s.unit_name = $1 and s.status <> 'closed'
-    order by s.starts_at desc
+    order by (s.status = 'open') desc, s.starts_at desc
     limit 1
     `,
     [unitName],
